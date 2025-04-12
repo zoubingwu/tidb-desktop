@@ -22,22 +22,21 @@ func main() {
 
 	err := wails.Run(&options.App{
 		Title:  "TiDB Desktop - Connect",
-		Width:  600,
-		Height: 400,
+		Width:  1024,
+		Height: 768,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 255},
+		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 0},
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
 		Bind: []interface{}{
 			app,
 		},
 		Mac: &mac.Options{
-			TitleBar: mac.TitleBarHiddenInset(),
 			About: &mac.AboutInfo{
 				Title:   fmt.Sprintf("%s %s", appName, version),
-				Message: "A modern lightweight cross-platform TiDB desktop client.\n\nCopyright © 2025",
+				Message: "A modern lightweight TiDB desktop client.\n\nCopyright © 2025",
 			},
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,
