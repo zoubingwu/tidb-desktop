@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Greet } from "../wailsjs/go/main/App";
 
+import { Button } from "@/components/ui/button";
+
 function App() {
   const [resultText, setResultText] = useState(
     "Please enter your name below 👇",
@@ -27,9 +29,9 @@ function App() {
           name="input"
           type="text"
         />
-        <button className="btn" onClick={greet}>
+        <Button className="btn" onClick={greet}>
           Greet
-        </button>
+        </Button>
       </div>
     </div>
   );
