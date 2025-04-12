@@ -5,3 +5,4 @@ build/bin/
 frontend/dist/
 frontend/wailsjs/
 frontend/package.json.md5
+.env
