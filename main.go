@@ -21,7 +21,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "TiDB Desktop - Connect",
+		Title:  appName,
 		Width:  1024,
 		Height: 768,
 		AssetServer: &assetserver.Options{
