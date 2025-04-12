@@ -1,4 +1,4 @@
-module myproject
+module github.com/zoubingwu/tidb-desktop
 
 go 1.24
 
