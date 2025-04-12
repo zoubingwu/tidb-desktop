@@ -108,7 +108,7 @@ func (s *DatabaseService) TestConnection(ctx context.Context, details Connection
 }
 
 // ExecuteSQL runs a query and returns results or execution status
-func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDetails, query string) (interface{}, error) {
+func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDetails, query string) (any, error) {
 	db, err := getDBConnection(ctx, details) // Use the helper
 	if err != nil {
 		// Wrap the error from getDBConnection
@@ -125,11 +125,11 @@ func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDeta
 			return nil, fmt.Errorf("failed to get columns: %w", err)
 		}
 
-		var results []map[string]interface{}
+		var results []map[string]any
 		for rows.Next() {
             // Create slices for scanning, handling various data types
-			values := make([]interface{}, len(columns))
-            scanArgs := make([]interface{}, len(columns))
+			values := make([]any, len(columns))
+            scanArgs := make([]any, len(columns))
             for i := range values {
                 scanArgs[i] = &values[i]
             }
@@ -139,7 +139,7 @@ func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDeta
 				return nil, fmt.Errorf("failed to scan row: %w", err)
 			}
 
-			rowMap := make(map[string]interface{})
+			rowMap := make(map[string]any)
 			for i, col := range columns {
                 // Handle potential nil values and convert byte slices (like strings)
                 val := values[i]
@@ -167,7 +167,7 @@ func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDeta
 	rowsAffected, _ := result.RowsAffected()
 	lastInsertId, _ := result.LastInsertId() // May not be relevant for TiDB often
 
-	return map[string]interface{}{
+	return map[string]any{
 		"rowsAffected": rowsAffected,
 		"lastInsertId": lastInsertId,
 	}, nil

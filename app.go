@@ -40,8 +40,8 @@ func (a *App) TestConnection(details services.ConnectionDetails) (bool, error) {
 }
 
 // ExecuteSQL connects to the DB and executes the given SQL query.
-// Returns results (e.g., as []map[string]interface{} for SELECT, or affected rows for others) or an error.
-func (a *App) ExecuteSQL(details services.ConnectionDetails, query string) (interface{}, error) {
+// Returns results (e.g., as []map[string]any for SELECT, or affected rows for others) or an error.
+func (a *App) ExecuteSQL(details services.ConnectionDetails, query string) (any, error) {
 	return a.dbService.ExecuteSQL(a.ctx, details, query)
 }
 
