@@ -7,8 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	// Import the MySQL driver (TiDB compatible)
-	_ "github.com/go-sql-driver/mysql"
+	mysql "github.com/go-sql-driver/mysql"
 )
 
 // ConnectionDetails defines the structure for DB connection info from the frontend
