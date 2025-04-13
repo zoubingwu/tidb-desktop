@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { toast } from "sonner";
+import { useState, useEffect, useMemo } from "react";
 import {
   ColumnDef,
   flexRender,
@@ -10,6 +9,7 @@ import {
   ColumnFiltersState,
   PaginationState,
 } from "@tanstack/react-table";
+import { useQuery } from "@tanstack/react-query";
 import {
   Table,
   TableBody,
@@ -17,15 +17,21 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"; // From your table.tsx
-import { DataTableFilter } from "@/components/ui/data-table-filter"; // From your data-table-filter.tsx
+} from "@/components/ui/table";
+import { DataTableFilter } from "@/components/ui/data-table-filter";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Database } from "lucide-react";
-import { ListTables, GetTableData } from "wailsjs/go/main/App"; // Wails bindings
+import { ListTables, GetTableData } from "wailsjs/go/main/App";
 
-// Type for the Go backend response
-type TableColumn = { name: string; type: string };
+// Type for the Go backend response from GetTableData
+// Assuming TableDataResponse structure defined in Go
+type TableDataResponse = {
+  columns: { name: string; type: string }[];
+  rows: Record<string, any>[];
+  totalRows?: number;
+};
+
 // Use `any` for row data initially, can be refined if needed
 type TableRowData = Record<string, any>;
 
@@ -34,145 +40,129 @@ interface MainDataViewProps {
   onDisconnect: () => void;
 }
 
-const MainDataView: React.FC<MainDataViewProps> = ({ onDisconnect }) => {
-  const [tables, setTables] = useState<string[]>([]);
+const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
+  // State managed by user interaction / table instance
   const [selectedTable, setSelectedTable] = useState<string>("");
-  const [columns, setColumns] = useState<ColumnDef<TableRowData>[]>([]);
-  const [data, setData] = useState<TableRowData[]>([]);
-  const [isLoadingTables, setIsLoadingTables] = useState(true);
-  const [isLoadingData, setIsLoadingData] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // --- Pagination State ---
   const [{ pageIndex, pageSize }, setPagination] = useState<PaginationState>({
-    pageIndex: 0, // Initial page index
-    pageSize: 50, // Default page size
+    pageIndex: 0,
+    pageSize: 50,
   });
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [rowSelection, setRowSelection] = useState({});
+
+  // --- TanStack Query for fetching tables ---
+  const {
+    data: tables = [],
+    isLoading: isLoadingTables,
+    error: tablesError,
+  } = useQuery<string[], Error>({
+    queryKey: ["tables"],
+    queryFn: ListTables,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false,
+  });
+
+  // --- Select first table when tables load ---
+  useEffect(() => {
+    if (!selectedTable && tables.length > 0) {
+      setSelectedTable(tables[0]);
+    }
+  }, [tables, selectedTable]);
+
+  // --- TanStack Query for fetching table data ---
+  const {
+    data: tableDataResponse,
+    isLoading: isLoadingData,
+    error: dataError,
+  } = useQuery<
+    TableDataResponse | null, // Can be null if GetTableData returns null
+    Error,
+    TableDataResponse | null
+  >({
+    queryKey: ["tableData", selectedTable, pageIndex, pageSize], // Query key includes dependencies
+    queryFn: async () => {
+      // Return null early if no table selected to avoid query execution
+      if (!selectedTable) return null;
+      // Fetch data from Go backend
+      return await GetTableData(selectedTable, pageSize, pageIndex * pageSize);
+    },
+    enabled: !!selectedTable, // Only run query if a table is selected
+    placeholderData: (previousData) => previousData ?? undefined, // Keep previous data while fetching new (v5 syntax)
+    staleTime: 1 * 60 * 1000, // Cache data for 1 minute
+    refetchOnWindowFocus: false,
+  });
+
+  // --- Derive columns and data from query result ---
+  const columns = useMemo<ColumnDef<TableRowData>[]>(() => {
+    if (!tableDataResponse?.columns) return [];
+
+    return [
+      // Select Checkbox Column
+      {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() && "indeterminate")
+            }
+            onCheckedChange={(value) =>
+              table.toggleAllPageRowsSelected(!!value)
+            }
+            aria-label="Select all"
+            className="translate-y-[2px]"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+            className="translate-y-[2px]"
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+      },
+      // Data Columns
+      ...(tableDataResponse.columns.map(
+        (col): ColumnDef<TableRowData> => ({
+          accessorKey: col.name,
+          header: col.name,
+          cell: (info) => String(info.getValue() ?? ""),
+          meta: {
+            displayName: col.name,
+            type: col.type.toLowerCase().includes("int")
+              ? "number"
+              : col.type.toLowerCase().includes("date") ||
+                  col.type.toLowerCase().includes("time")
+                ? "date"
+                : "text",
+            icon: Database,
+          },
+        }),
+      ) || []),
+    ];
+  }, [tableDataResponse?.columns]);
+
+  const data = useMemo(
+    () => tableDataResponse?.rows ?? [],
+    [tableDataResponse?.rows],
+  );
+
+  // --- Calculate pagination values ---
   const pagination = useMemo(
     () => ({ pageIndex, pageSize }),
     [pageIndex, pageSize],
   );
-  // We don't know total rows yet, so manual pagination
-  const [pageCount, setPageCount] = useState(-1); // -1 means unknown
-
-  // --- Filtering State ---
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  // --- Row Selection State ---
-  const [rowSelection, setRowSelection] = useState({});
-
-  // --- Fetch Table List ---
-  useEffect(() => {
-    const loadTables = async () => {
-      setIsLoadingTables(true);
-      setError(null);
-      try {
-        const tableList = await ListTables();
-        setTables(tableList || []);
-        if (tableList && tableList.length > 0) {
-          setSelectedTable(tableList[0]); // Select first table by default
-        } else {
-          setData([]); // No tables, clear data
-          setColumns([]);
-        }
-      } catch (err: any) {
-        console.error("Error listing tables:", err);
-        setError(err?.message || "Failed to load tables.");
-        toast.error("Error listing tables", { description: err?.message });
-      } finally {
-        setIsLoadingTables(false);
-      }
-    };
-    loadTables();
-  }, []); // Run once on mount
-
-  // --- Fetch Table Data ---
-  useEffect(() => {
-    if (!selectedTable) return; // Don't fetch if no table is selected
-
-    const loadData = async () => {
-      setIsLoadingData(true);
-      setError(null);
-      setRowSelection({}); // Clear selection on data change
-      try {
-        const offset = pageIndex * pageSize;
-        const response = await GetTableData(selectedTable, pageSize, offset);
-
-        if (!response) {
-          throw new Error("No data received from backend.");
-        }
-
-        // Dynamically create columns for TanStack Table
-        const dynamicColumns: ColumnDef<TableRowData>[] = [
-          // Select Checkbox Column
-          {
-            id: "select",
-            header: ({ table }) => (
-              <Checkbox
-                checked={
-                  table.getIsAllPageRowsSelected() ||
-                  (table.getIsSomePageRowsSelected() && "indeterminate")
-                }
-                onCheckedChange={(value) =>
-                  table.toggleAllPageRowsSelected(!!value)
-                }
-                aria-label="Select all"
-                className="translate-y-[2px]"
-              />
-            ),
-            cell: ({ row }) => (
-              <Checkbox
-                checked={row.getIsSelected()}
-                onCheckedChange={(value) => row.toggleSelected(!!value)}
-                aria-label="Select row"
-                className="translate-y-[2px]"
-              />
-            ),
-            enableSorting: false,
-            enableHiding: false,
-          },
-          // Data Columns
-          ...(response.columns?.map(
-            (col: TableColumn): ColumnDef<TableRowData> => ({
-              accessorKey: col.name,
-              header: col.name, // Simple header for now
-              cell: (info) => String(info.getValue() ?? ""), // Basic cell rendering
-              // --- Add meta for filtering ---
-              meta: {
-                displayName: col.name,
-                type: col.type.toLowerCase().includes("int")
-                  ? "number"
-                  : col.type.toLowerCase().includes("date") ||
-                      col.type.toLowerCase().includes("time")
-                    ? "date"
-                    : "text", // Basic type inference
-                icon: Database, // Assign the default icon here
-              },
-            }),
-          ) || []),
-        ];
-        setColumns(dynamicColumns);
-        setData(response.rows || []);
-
-        // TODO: Use response.totalRows if available to set pageCount accurately
-        // For now, assume there's a next page if we got a full page of results
-        setPageCount(
-          response.rows?.length === pageSize ? pageIndex + 1 : pageIndex,
-        );
-      } catch (err: any) {
-        console.error(`Error fetching data for ${selectedTable}:`, err);
-        setError(err?.message || `Failed to load data for ${selectedTable}.`);
-        toast.error(`Error loading ${selectedTable}`, {
-          description: err?.message,
-        });
-        setData([]);
-        setColumns([]);
-      } finally {
-        setIsLoadingData(false);
-      }
-    };
-
-    loadData();
-  }, [selectedTable, pageIndex, pageSize]); // Refetch when table or pagination changes
+  const pageCount = useMemo(() => {
+    if (tableDataResponse?.totalRows != null) {
+      return Math.ceil(tableDataResponse.totalRows / pageSize);
+    }
+    // If totalRows isn't provided, estimate based on current data
+    // This allows the "Next" button to be enabled if a full page was fetched.
+    return data.length < pageSize ? pageIndex + 1 : pageIndex + 2; // Indicate potentially more pages
+  }, [tableDataResponse?.totalRows, pageSize, data.length, pageIndex]);
 
   // --- TanStack Table Instance ---
   const table = useReactTable({
@@ -183,55 +173,51 @@ const MainDataView: React.FC<MainDataViewProps> = ({ onDisconnect }) => {
       pagination,
       rowSelection,
     },
-    manualPagination: true, // Control pagination manually
-    pageCount, // Set page count (-1 means unknown)
-    onPaginationChange: setPagination, // Update state on change
+    manualPagination: true,
+    pageCount, // Use calculated page count
+    onPaginationChange: setPagination,
     onColumnFiltersChange: setColumnFilters,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    // debugTable: true, // Uncomment for debugging
-    // debugHeaders: true,
-    // debugColumns: true,
+    // debugTable: true,
   });
+
+  // Handle and display errors
+  const error = tablesError || dataError;
+
+  // Combined loading state
+  const isLoading =
+    isLoadingTables || (isLoadingData && !table.getRowModel().rows.length); // Show loading if tables OR initial data is loading
 
   return (
     <div className="p-4 md:p-6 space-y-4 h-full flex flex-col">
-      {/* Header could include table selector, query editor, etc. */}
       <header className="flex items-center justify-between">
-        {/* TODO: Add a Select component to change selectedTable */}
+        {/* TODO: Replace h2 with a Select dropdown populated by `tables` state */}
         <h2 className="text-xl font-semibold">
-          Table: {selectedTable || "None"}
+          Table: {selectedTable || (isLoadingTables ? "Loading..." : "None")}
         </h2>
         <Button onClick={onDisconnect} variant="outline">
           Disconnect
         </Button>
       </header>
 
-      {/* Data Table Filter Component */}
       {columns.length > 0 && <DataTableFilter table={table} />}
 
-      {/* Loading / Error / Table Display */}
       <div className="border rounded-md overflow-hidden flex-grow flex flex-col">
-        {" "}
-        {/* Ensure table area grows */}
-        {isLoadingData && !data.length ? ( // Show loader only if data isn't already displayed
+        {isLoading ? (
           <div className="flex-grow flex items-center justify-center text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin mr-3" /> Loading data...
+            <Loader2 className="h-8 w-8 animate-spin mr-3" /> Loading...
           </div>
         ) : error ? (
           <div className="flex-grow flex items-center justify-center text-destructive p-4">
-            Error: {error}
+            Error: {error.message}
           </div>
         ) : (
           <div className="flex-grow overflow-auto">
-            {" "}
-            {/* Scrollable table content */}
             <Table>
               <TableHeader className="sticky top-0 bg-background z-10">
-                {" "}
-                {/* Sticky header */}
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
@@ -276,7 +262,7 @@ const MainDataView: React.FC<MainDataViewProps> = ({ onDisconnect }) => {
                       colSpan={columns.length}
                       className="h-24 text-center"
                     >
-                      No results.
+                      {selectedTable ? "No results." : "Select a table."}
                     </TableCell>
                   </TableRow>
                 )}
@@ -286,7 +272,6 @@ const MainDataView: React.FC<MainDataViewProps> = ({ onDisconnect }) => {
         )}
       </div>
 
-      {/* Pagination and Row Selection Info */}
       <div className="flex items-center justify-between pt-2">
         <div className="flex-1 text-sm text-muted-foreground">
           {table.getFilteredSelectedRowModel().rows.length} of{" "}
@@ -303,6 +288,7 @@ const MainDataView: React.FC<MainDataViewProps> = ({ onDisconnect }) => {
           </Button>
           <span className="text-sm">
             Page {table.getState().pagination.pageIndex + 1}
+            {/* Display total pages if known (pageCount > 0), otherwise show nothing extra */}
             {table.getPageCount() > 0 ? ` of ${table.getPageCount()}` : ""}
           </span>
           <Button
