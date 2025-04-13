@@ -224,3 +224,146 @@ func (a *App) InferConnectionDetailsFromClipboard() (*services.ConnectionDetails
 func (a *App) Greet(name string) string {
 	return fmt.Sprintf("Hello %s, It's show time!", name)
 }
+
+// TableColumn represents metadata for a table column
+type TableColumn struct {
+	Name string `json:"name"`
+	Type string `json:"type"` // e.g., "VARCHAR", "INT", "TIMESTAMP", etc. - simplified for now
+}
+
+// TableDataResponse holds data and column definitions
+type TableDataResponse struct {
+	Columns []TableColumn   `json:"columns"`
+	Rows    []map[string]any `json:"rows"`
+	TotalRows *int64         `json:"totalRows,omitempty"` // Optional: For pagination
+}
+
+// ListTables retrieves a list of table names from the active connection's database.
+func (a *App) ListTables() ([]string, error) {
+	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
+	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
+
+	// Example query (adjust for TiDB/MySQL if different)
+	query := "SHOW TABLES;"
+	if a.activeConnection.DBName != "" {
+		// If a specific DB is selected in the connection, use it
+		query = fmt.Sprintf("SHOW TABLES FROM `%s`;", a.activeConnection.DBName)
+		// Alternatively connect to that specific DB first if ExecuteSQL doesn't handle it
+	} else {
+		// Maybe return error or default DB's tables? Needs decision.
+		return nil, fmt.Errorf("no database selected in the active connection")
+	}
+
+	result, err := a.ExecuteSQL(query) // Use the existing ExecuteSQL
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tables: %w", err)
+	}
+
+	tableRows, ok := result.([]map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected result format when listing tables")
+	}
+
+	var tableNames []string
+	// The column name might vary depending on the DB (e.g., 'Tables_in_db', 'TABLE_NAME')
+	// Inspect the actual result of SHOW TABLES; to find the correct key
+	columnKey := ""
+	if len(tableRows) > 0 {
+		for k := range tableRows[0] {
+			// Assume the first column contains the table name
+			columnKey = k
+			break
+		}
+	}
+	if columnKey == "" && len(tableRows) > 0 {
+		return nil, fmt.Errorf("could not determine table name column key from SHOW TABLES result")
+	}
+
+	for _, row := range tableRows {
+		if name, ok := row[columnKey].(string); ok {
+			tableNames = append(tableNames, name)
+		}
+	}
+
+	return tableNames, nil
+}
+
+// GetTableData retrieves paginated data and column info for a specific table.
+func (a *App) GetTableData(tableName string, limit int, offset int) (*TableDataResponse, error) {
+	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
+	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
+	if tableName == "" { return nil, fmt.Errorf("table name cannot be empty") }
+
+	// 1. Get Column Info (Example using information_schema - adjust if needed)
+	// Ensure the DBName is handled correctly (either part of connection or table name)
+	dbName := a.activeConnection.DBName
+	if dbName == "" {
+		// Attempt to infer from active connection or return error
+		// This part needs refinement based on how you manage DB context
+		return nil, fmt.Errorf("database name is required to fetch column info")
+	}
+	colQuery := fmt.Sprintf(
+		"SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' ORDER BY ORDINAL_POSITION;",
+		dbName, tableName,
+	)
+
+	colResult, err := a.ExecuteSQL(colQuery)
+	if err != nil { return nil, fmt.Errorf("failed to get column info for table '%s': %w", tableName, err) }
+
+	colRows, ok := colResult.([]map[string]any)
+	if !ok { return nil, fmt.Errorf("unexpected result format for column info") }
+
+	var columns []TableColumn
+	for _, row := range colRows {
+		colName, nameOk := row["COLUMN_NAME"].(string)
+		colType, typeOk := row["DATA_TYPE"].(string)
+		if nameOk && typeOk {
+			columns = append(columns, TableColumn{Name: colName, Type: colType})
+		}
+	}
+	if len(columns) == 0 {
+		// Check if table exists first might be better
+		existsQuery := fmt.Sprintf("SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'", dbName, tableName)
+		existsResult, err := a.ExecuteSQL(existsQuery)
+		// Process existsResult... if count is 0, return specific error
+		if err == nil {
+			if rows, ok := existsResult.([]map[string]any); ok && len(rows) > 0 {
+				if count, ok := rows[0]["count"].(int64); ok { // Type might be int64, int, etc. depending on DB driver
+					if count == 0 {
+						return nil, fmt.Errorf("table '%s' does not exist in schema '%s'", tableName, dbName)
+					}
+				}
+				// If count extraction fails, fall through to the generic "no columns found" error
+			}
+		} // If error fetching count, also fall through
+
+		// If table exists but no columns were found (or count check failed)
+		return nil, fmt.Errorf("no columns found for table '%s' in schema '%s'", tableName, dbName)
+	}
+
+	// 2. Get Table Data
+	// IMPORTANT: Properly escape the table name to prevent SQL injection if tableName comes from user input anywhere
+	// Using backticks is typical for MySQL/TiDB
+	dataQuery := fmt.Sprintf("SELECT * FROM `%s` LIMIT %d OFFSET %d;", tableName, limit, offset)
+	dataResult, err := a.ExecuteSQL(dataQuery)
+	if err != nil { return nil, fmt.Errorf("failed to get data for table '%s': %w", tableName, err) }
+
+	dataRows, ok := dataResult.([]map[string]any)
+	if !ok {
+		// Handle cases where the result isn't rows (e.g., row count from DELETE/UPDATE)
+		// For a SELECT *, this shouldn't happen unless the table is empty or error occurred.
+		// Check if dataResult is nil maybe?
+		fmt.Printf("Debug: Unexpected dataResult format for SELECT: %T\n", dataResult)
+		// If the table might legitimately be empty, return empty rows instead of erroring
+		if dataResult == nil || len(dataRows) == 0 { // Assuming empty table returns nil or empty slice
+			dataRows = []map[string]any{} // Ensure it's an empty slice
+		} else {
+			return nil, fmt.Errorf("unexpected result format for table data")
+		}
+	}
+
+	return &TableDataResponse{
+		Columns: columns,
+		Rows:    dataRows,
+	}, nil
+}
