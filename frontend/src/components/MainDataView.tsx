@@ -44,23 +44,40 @@ type TableDataResponse = {
 // Use `any` for row data initially, can be refined if needed
 type TableRowData = Record<string, any>;
 
-const SystemDatabases = ["PERFORMANCE_SCHEMA", "INFORMATION_SCHEMA"];
-
-type DatabaseTree = Array<{
+type DatabaseTreeItem = {
   name: string;
   tables: string[];
-}>;
+  isLoadingTables?: boolean; // Track loading state per DB
+};
+type DatabaseTree = DatabaseTreeItem[];
+
+const SystemDatabases = [
+  "PERFORMANCE_SCHEMA",
+  "INFORMATION_SCHEMA",
+  "mysql",
+  "sys",
+]; // Add others if needed
+
+// Define the structure for the unified selection state
+type SelectionState =
+  | { type: "database"; dbName: string; tableName?: null } // Database selected, no table yet
+  | { type: "table"; dbName: string; tableName: string } // Specific table selected
+  | null; // Nothing selected
 
 const MainDataView = () => {
   const [databaseTree, setDatabaseTree] = useState<DatabaseTree>([]);
-  const [selectedDatabase, setSelectedDatabase] = useState<string>("");
-  const [selectedTable, setSelectedTable] = useState<string>("");
+  const [selection, setSelection] = useState<SelectionState>(null);
   const [{ pageIndex, pageSize }, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 50,
   });
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [rowSelection, setRowSelection] = useState({});
+
+  // Convenience accessors (optional, but can make code clearer)
+  const selectedDbName = selection?.dbName;
+  const selectedTableName =
+    selection?.type === "table" ? selection.tableName : null;
 
   // --- TanStack Query for fetching databases ---
   const {
@@ -72,6 +89,9 @@ const MainDataView = () => {
     queryFn: ListDatabases,
     staleTime: 15 * 60 * 1000, // Cache for 15 minutes
     refetchOnWindowFocus: false,
+    // Filter out system databases immediately
+    select: (data) =>
+      data.filter((db) => !SystemDatabases.includes(db.toUpperCase())),
   });
 
   // --- TanStack Query for fetching tables ---
@@ -80,19 +100,12 @@ const MainDataView = () => {
     isLoading: isLoadingTables,
     error: tablesError,
   } = useQuery<string[], Error>({
-    queryKey: ["tables", selectedDatabase],
-    queryFn: () => ListTables(selectedDatabase),
-    enabled: !!selectedDatabase,
+    queryKey: ["tables", selectedDbName],
+    queryFn: () => ListTables(selectedDbName!),
+    enabled: !!selectedDbName,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     refetchOnWindowFocus: false,
   });
-
-  // --- Select first table when tables load ---
-  useEffect(() => {
-    if (!selectedTable && tables?.length) {
-      setSelectedTable(tables[0]);
-    }
-  }, [tables, selectedTable]);
 
   // --- TanStack Query for fetching table data ---
   const {
@@ -106,20 +119,86 @@ const MainDataView = () => {
   >({
     queryKey: [
       "tableData",
-      selectedDatabase,
-      selectedTable,
+      selectedDbName,
+      selectedTableName,
       pageIndex,
       pageSize,
     ],
     queryFn: async () => {
-      if (!selectedTable || !selectedDatabase) return null;
-      return await GetTableData(selectedTable, pageSize, pageIndex * pageSize);
+      if (!selectedTableName || !selectedDbName) return null;
+      return await GetTableData(
+        selectedTableName,
+        pageSize,
+        pageIndex * pageSize,
+      );
     },
-    enabled: !!selectedDatabase && !!selectedTable,
+    enabled: !!selectedDbName && !!selectedTableName,
     placeholderData: (previousData) => previousData ?? undefined,
     staleTime: 1 * 60 * 1000, // Cache data for 1 minute
     refetchOnWindowFocus: false,
   });
+
+  // --- Effects ---
+
+  // Initialize/Update databaseTree when databases load
+  useEffect(() => {
+    setDatabaseTree((currentTree) => {
+      const newTree: DatabaseTree = databases.map((dbName) => {
+        const existingItem = currentTree.find((item) => item.name === dbName);
+        return {
+          name: dbName,
+          tables: existingItem?.tables ?? [],
+          isLoadingTables: existingItem?.isLoadingTables ?? false,
+        };
+      });
+      return newTree;
+    });
+
+    // Handle case where selected DB is no longer in the list
+    if (
+      selectedDbName &&
+      databases.length > 0 &&
+      !databases.includes(selectedDbName)
+    ) {
+      setSelection(null); // Reset selection entirely
+    }
+    // Handle case where there are no databases at all
+    else if (databases.length === 0 && !isLoadingDatabases) {
+      setSelection(null);
+    }
+  }, [databases, isLoadingDatabases, selectedDbName]); // Depend on selectedDbName
+
+  // Update the tree with fetched tables for the *selected* database
+  useEffect(() => {
+    if (selectedDbName && !isLoadingTables) {
+      setDatabaseTree((currentTree) => {
+        return currentTree.map((item) => {
+          if (item.name === selectedDbName) {
+            return { ...item, tables: tables ?? [], isLoadingTables: false };
+          }
+          return item;
+        });
+      });
+
+      // Reset table part of selection if the loaded tables for the selected DB are empty
+      // or if the currently selected table is no longer in the list
+      if (selection?.type === "table" && tables) {
+        if (!tables.includes(selection.tableName) || tables.length === 0) {
+          // Revert selection to just the database
+          setSelection({ type: "database", dbName: selectedDbName });
+        }
+      }
+    } else if (selectedDbName && isLoadingTables) {
+      setDatabaseTree((currentTree) => {
+        return currentTree.map((item) => {
+          if (item.name === selectedDbName) {
+            return { ...item, isLoadingTables: true };
+          }
+          return item;
+        });
+      });
+    }
+  }, [selectedDbName, tables, isLoadingTables, selection]); // Depend on selection
 
   // --- Derive columns and data from query result ---
   const columns = useMemo<ColumnDef<TableRowData>[]>(() => {
@@ -219,40 +298,95 @@ const MainDataView = () => {
   // Combined loading state
   const isLoading =
     isLoadingDatabases ||
-    (selectedDatabase && isLoadingTables) ||
-    (selectedTable && isLoadingData && !table.getRowModel().rows.length);
+    (selectedDbName && isLoadingTables) ||
+    (selectedTableName && isLoadingData && !table.getRowModel().rows.length);
+
+  // Function to handle database selection from tree
+  const handleSelectDatabase = (dbName: string) => {
+    if (dbName !== selectedDbName) {
+      setSelection({ type: "database", dbName: dbName }); // Select the database
+      setPagination({ pageIndex: 0, pageSize }); // Reset pagination
+      // Table fetching will be triggered by the tablesQuery enabling
+    }
+  };
+
+  // Function to handle table selection from tree
+  const handleSelectTable = (dbName: string, tableName: string) => {
+    if (
+      selection?.type !== "table" ||
+      selection.dbName !== dbName ||
+      selection.tableName !== tableName
+    ) {
+      setSelection({ type: "table", dbName: dbName, tableName: tableName });
+      setPagination({ pageIndex: 0, pageSize }); // Reset pagination
+    }
+  };
 
   return (
     <div className="h-full flex">
-      <ScrollArea className="w-[240px] h-full">
-        <Tree
-          openIcon={<Database className="size-4" />}
-          closeIcon={<Database className="size-4" />}
-        >
-          {databases.map((db) => (
-            <Folder key={db} element={db} value={db}>
-              {tables?.length ? (
-                tables?.map((tbl) => (
+      <ScrollArea className="w-[240px] h-full border-r bg-muted/40">
+        {isLoadingDatabases ? (
+          <div className="p-4 text-center text-muted-foreground">
+            Loading Databases...
+          </div>
+        ) : databasesError ? (
+          <div className="p-4 text-center text-destructive">
+            Error loading DBs
+          </div>
+        ) : (
+          <Tree className="p-2">
+            {databaseTree.map((dbItem) => (
+              <Folder
+                key={dbItem.name}
+                element={dbItem.name}
+                value={dbItem.name}
+                isSelectable={true}
+                isSelect={selection?.dbName === dbItem.name}
+                onClick={() => handleSelectDatabase(dbItem.name)}
+              >
+                {dbItem.isLoadingTables ? (
                   <File
-                    key={tbl}
-                    value={tbl}
-                    onClick={() => {
-                      setSelectedDatabase(db);
-                      setSelectedTable(tbl);
-                    }}
-                    fileIcon={<Table2Icon className="size-4" />}
+                    isSelectable={false}
+                    value={".loading"}
+                    className="text-muted-foreground italic"
                   >
-                    {tbl}
+                    <Loader2 className="size-4 mr-2 animate-spin" /> Loading...
                   </File>
-                ))
-              ) : (
-                <File isSelectable={false} isSelect={false} value="No tables">
-                  No tables
-                </File>
-              )}
-            </Folder>
-          ))}
-        </Tree>
+                ) : dbItem.tables.length > 0 ? (
+                  dbItem.tables.map((tbl) => (
+                    <File
+                      key={tbl}
+                      value={tbl}
+                      isSelect={
+                        selection?.type === "table" &&
+                        selection.tableName === tbl &&
+                        selection.dbName === dbItem.name
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectTable(dbItem.name, tbl);
+                      }}
+                      fileIcon={<Table2Icon className="size-4" />}
+                    >
+                      {tbl}
+                    </File>
+                  ))
+                ) : (
+                  dbItem.name === selectedDbName &&
+                  !dbItem.isLoadingTables && (
+                    <File
+                      isSelectable={false}
+                      value=".no-tables"
+                      className="text-muted-foreground italic"
+                    >
+                      No tables
+                    </File>
+                  )
+                )}
+              </Folder>
+            ))}
+          </Tree>
+        )}
       </ScrollArea>
 
       <div className="flex-grow flex flex-col overflow-hidden">
@@ -268,11 +402,11 @@ const MainDataView = () => {
                 ? error.message
                 : "An unknown error occurred"}
             </div>
-          ) : !selectedDatabase ? (
+          ) : !selectedDbName ? (
             <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
               Please select a database.
             </div>
-          ) : !selectedTable && tables?.length ? (
+          ) : !selectedTableName && tables?.length ? (
             <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
               Please select a table.
             </div>
@@ -328,7 +462,7 @@ const MainDataView = () => {
                       >
                         {isLoadingData
                           ? "Loading data..."
-                          : selectedTable
+                          : selectedTableName
                             ? "No results found."
                             : "Select a table."}
                       </TableCell>
