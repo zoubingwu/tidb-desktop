@@ -77,7 +77,7 @@ export const ConnectionCard = ({
           onClick={() => onConnect(name)}
           disabled={isConnecting || isDeleting}
         >
-          {isConnecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isConnecting && <Loader2 className="h-4 w-4 animate-spin" />}
           Connect
         </Button>
 
