@@ -5,7 +5,6 @@ import {
   flexRender,
   getCoreRowModel,
   useReactTable,
-  getFilteredRowModel,
   getPaginationRowModel,
   ColumnFiltersState,
   PaginationState,
@@ -67,8 +66,6 @@ const MainDataView = () => {
   const [tableData, setTableData] = useState<TableDataResponse | null>(null);
   const [loadingTableData, setLoadingTableData] = useState<boolean>(false);
   const [tableDataError, setTableDataError] = useState<Error | null>(null);
-
-  console.log("tableData", tableData);
 
   // Convenience accessors
   const selectedDbName = selection?.dbName;
@@ -385,7 +382,6 @@ const MainDataView = () => {
     onColumnFiltersChange: setColumnFilters,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
   });
 
