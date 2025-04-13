@@ -46,17 +46,9 @@ type DatabaseTreeItem = {
 };
 type DatabaseTree = DatabaseTreeItem[];
 
-const SystemDatabases = [
-  "PERFORMANCE_SCHEMA",
-  "INFORMATION_SCHEMA",
-  "mysql",
-  "sys",
-]; // Add others if needed
-
 // Define the structure for the unified selection state
 type SelectionState =
-  | { type: "database"; dbName: string; tableName?: null } // Database selected, no table yet
-  | { type: "table"; dbName: string; tableName: string } // Specific table selected
+  | { dbName: string; tableName: string } // Specific table selected
   | null; // Nothing selected
 
 const MainDataView = () => {
@@ -71,8 +63,7 @@ const MainDataView = () => {
 
   // Convenience accessors (optional, but can make code clearer)
   const selectedDbName = selection?.dbName;
-  const selectedTableName =
-    selection?.type === "table" ? selection.tableName : null;
+  const selectedTableName = selection?.tableName;
 
   // --- TanStack Query for fetching databases ---
   const {
@@ -84,9 +75,6 @@ const MainDataView = () => {
     queryFn: ListDatabases,
     staleTime: 15 * 60 * 1000, // Cache for 15 minutes
     refetchOnWindowFocus: false,
-    // Filter out system databases immediately
-    select: (data) =>
-      data.filter((db) => !SystemDatabases.includes(db.toUpperCase())),
   });
 
   // --- TanStack Query for fetching tables ---
@@ -136,30 +124,24 @@ const MainDataView = () => {
   });
 
   // --- Effects ---
+  console.log("databases", databases);
 
   // Effect 1: Initialize/Update databaseTree when databases load & handle DB selection validity
   useEffect(() => {
-    setDatabaseTree((currentTree) => {
-      const newTree: DatabaseTree = databases.map((dbName) => {
-        const existingItem = currentTree.find((item) => item.name === dbName);
-        return {
-          name: dbName,
-          tables: existingItem?.tables ?? [],
-          isLoadingTables: existingItem?.isLoadingTables ?? false,
-        };
+    if (databases?.length) {
+      setDatabaseTree((currentTree) => {
+        const newTree: DatabaseTree = databases.map((dbName) => {
+          const existingItem = currentTree.find((item) => item.name === dbName);
+          return {
+            name: dbName,
+            tables: existingItem?.tables ?? [],
+            isLoadingTables: existingItem?.isLoadingTables ?? false,
+          };
+        });
+        return newTree;
       });
-      return newTree;
-    });
-    if (
-      selectedDbName &&
-      databases.length > 0 &&
-      !databases.includes(selectedDbName)
-    ) {
-      setSelection(null);
-    } else if (databases.length === 0 && !isLoadingDatabases) {
-      setSelection(null);
     }
-  }, [databases, isLoadingDatabases, selectedDbName]);
+  }, [databases]);
 
   // Effect 2: Update the tree with fetched tables for the *selected* database
   useEffect(() => {
@@ -188,22 +170,6 @@ const MainDataView = () => {
     // This effect ONLY updates the tree, doesn't set selection.
     // Removed `selection` from dependencies.
   }, [selectedDbName, tables, isLoadingTables]);
-
-  // Effect 3: Validate table selection based on loaded tables
-  useEffect(() => {
-    // Only run validation if a specific table is selected and tables for that DB have loaded
-    if (selection?.type === "table" && selectedDbName && !isLoadingTables) {
-      const currentTables = tables ?? []; // Use the latest tables data
-      const tableStillExists = currentTables.includes(selection.tableName);
-
-      // If selected table doesn't exist in the loaded list, revert to DB selection
-      if (!tableStillExists) {
-        setSelection({ type: "database", dbName: selectedDbName });
-      }
-    }
-    // If selection is just 'database', no validation needed here.
-    // This depends on selection, selectedDbName, tables list, and its loading state.
-  }, [selection, tables, isLoadingTables, selectedDbName]);
 
   // --- Derived State & Calculations ---
   // ... columns, data, pagination, pageCount, table, combinedError ...
@@ -282,7 +248,8 @@ const MainDataView = () => {
     ];
   }, [tableDataResponse?.columns]);
 
-  console.log(columns);
+  console.log("tableDataResponse", tableDataResponse);
+  console.log("columns", columns);
 
   const data = useMemo(
     () => tableDataResponse?.rows ?? [],
@@ -327,26 +294,17 @@ const MainDataView = () => {
   // Handle and display errors
   const error = databasesError || tablesError || dataError;
 
-  // --- Event Handlers ---
-  // ... handleSelectDatabase, handleSelectTable, handleRefresh ...
-
   // Function to handle database selection from tree
   const handleSelectDatabase = (dbName: string) => {
     if (dbName !== selectedDbName) {
-      setSelection({ type: "database", dbName: dbName }); // Select the database
-      setPagination({ pageIndex: 0, pageSize }); // Reset pagination
-      // Table fetching will be triggered by the tablesQuery enabling
+      setSelection({ dbName: dbName, tableName: "" });
     }
   };
 
   // Function to handle table selection from tree
   const handleSelectTable = (dbName: string, tableName: string) => {
-    if (
-      selection?.type !== "table" ||
-      selection.dbName !== dbName ||
-      selection.tableName !== tableName
-    ) {
-      setSelection({ type: "table", dbName: dbName, tableName: tableName });
+    if (selection?.dbName !== dbName || selection?.tableName !== tableName) {
+      setSelection({ dbName: dbName, tableName: tableName });
       setPagination({ pageIndex: 0, pageSize }); // Reset pagination
     }
   };
@@ -376,8 +334,6 @@ const MainDataView = () => {
                 key={dbItem.name}
                 element={dbItem.name}
                 value={dbItem.name}
-                isSelectable={true}
-                isSelect={selection?.dbName === dbItem.name}
                 onClick={() => handleSelectDatabase(dbItem.name)}
               >
                 {dbItem.isLoadingTables ? (
@@ -394,9 +350,8 @@ const MainDataView = () => {
                       key={tbl}
                       value={tbl}
                       isSelect={
-                        selection?.type === "table" &&
-                        selection.tableName === tbl &&
-                        selection.dbName === dbItem.name
+                        selection?.tableName === tbl &&
+                        selection?.dbName === dbItem.name
                       }
                       onClick={(e) => {
                         e.stopPropagation();
@@ -426,7 +381,7 @@ const MainDataView = () => {
       </ScrollArea>
 
       <div className="flex-grow flex flex-col overflow-hidden">
-        {selection?.type === "table" && columns.length > 1 && (
+        {selection?.tableName && columns.length > 1 && (
           <div className="p-2 flex items-center gap-2 sticky top-0 bg-background z-20">
             <Button
               variant="ghost"
@@ -482,11 +437,11 @@ const MainDataView = () => {
                 <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
                   Please select a database or table from the sidebar.
                 </div>
-              ) : selection.type === "database" && !isFetchingTables ? (
+              ) : selection.tableName === "" && !isFetchingTables ? (
                 <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
                   Please select a table from the sidebar.
                 </div>
-              ) : selection.type === "table" ? (
+              ) : (
                 <Table>
                   <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
                     {table.getHeaderGroups().map((headerGroup) => (
@@ -545,12 +500,12 @@ const MainDataView = () => {
                     )}
                   </TableBody>
                 </Table>
-              ) : null}
+              )}
             </div>
           )}
         </div>
 
-        {selection?.type === "table" && !isLoadingData && !error && (
+        {selection?.tableName && !isLoadingData && !error && (
           <DataTablePagination table={table} totalRowCount={totalRowCount} />
         )}
       </div>
