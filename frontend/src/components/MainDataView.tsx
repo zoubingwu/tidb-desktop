@@ -237,7 +237,21 @@ const MainDataView = () => {
         (col): ColumnDef<TableRowData> => ({
           accessorKey: col.name,
           header: col.name,
-          cell: (info) => String(info.getValue() ?? ""),
+          cell: (info) => {
+            const value = info.getValue();
+            if (value === null || value === undefined) {
+              // Style NULL values
+              return <span className="text-muted-foreground italic">NULL</span>;
+            }
+            if (value === "") {
+              // Style empty strings differently
+              return (
+                <span className="text-muted-foreground italic">(empty)</span>
+              );
+            }
+            // Render other values as strings
+            return String(value);
+          },
           meta: {
             displayName: col.name,
             type: col.type.toLowerCase().includes("int")
@@ -444,7 +458,7 @@ const MainDataView = () => {
                           <TableCell
                             key={cell.id}
                             style={{ width: cell.column.getSize() }}
-                            className="px-4"
+                            className="max-w-[250px] truncate px-4"
                           >
                             {flexRender(
                               cell.column.columnDef.cell,
