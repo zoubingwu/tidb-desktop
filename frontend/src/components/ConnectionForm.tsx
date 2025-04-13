@@ -17,6 +17,7 @@ import { services } from "wailsjs/go/models";
 import {
   TestConnection,
   InferConnectionDetailsFromClipboard,
+  EstablishConnection,
 } from "wailsjs/go/main/App";
 import { Loader2 } from "lucide-react";
 
@@ -93,19 +94,20 @@ export function ConnectionFormDialog() {
   const handleConnect = async () => {
     setIsConnecting(true);
     try {
-      const success = await TestConnection(formState);
+      const success = await EstablishConnection(formState);
       if (success) {
         setIsOpen(false);
-        toast.info("Connecting...", {
-          description: "Connection established, loading main view.",
+        toast.success("Connection Established", {
+          description: "Loading main application view...",
         });
       } else {
         toast.error("Connection Failed", {
-          description: "Failed to establish connection (unknown reason).",
+          description:
+            "Failed to establish connection (unknown reason). Check details or logs.",
         });
       }
     } catch (error: any) {
-      console.error("Connect Error:", error);
+      console.error("Establish Connection Error:", error);
       toast.error("Connection Error", {
         description:
           typeof error === "string"
