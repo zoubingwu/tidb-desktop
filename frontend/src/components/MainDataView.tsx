@@ -21,12 +21,13 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tree, Folder, File } from "@/components/ui/file-tree";
-
-import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DataTablePagination } from "./DataTablePagination";
 import { DataTableFilter } from "@/components/ui/data-table-filter";
 import { Button } from "@/components/ui/button";
+import { filterFn } from "@/lib/filters";
+import { mapDbColumnTypeToFilterType } from "@/lib/utils";
+import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
 
 // Type for the Go backend response from GetTableData
 // Assuming TableDataResponse structure defined in Go
@@ -230,14 +231,10 @@ const MainDataView = () => {
             // Render other values as strings
             return String(value);
           },
+          filterFn: filterFn(mapDbColumnTypeToFilterType(col.type)),
           meta: {
             displayName: col.name,
-            type: col.type.toLowerCase().includes("int")
-              ? "number"
-              : col.type.toLowerCase().includes("date") ||
-                  col.type.toLowerCase().includes("time")
-                ? "date"
-                : "text",
+            type: mapDbColumnTypeToFilterType(col.type),
             icon: Database,
           },
         }),
