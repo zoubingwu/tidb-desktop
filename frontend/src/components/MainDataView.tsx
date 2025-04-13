@@ -515,9 +515,8 @@ const MainDataView = () => {
           )}
         </div>
 
-        {/* --- NEW PAGINATION FOOTER --- */}
         {selection?.type === "table" && !isLoading && !error && (
-          <div className="flex items-center justify-between p-2 border-t bg-background">
+          <div className="flex items-center justify-between p-2 bg-background">
             <div className="flex-1 text-sm text-muted-foreground whitespace-nowrap">
               {table.getFilteredSelectedRowModel().rows.length} selected
             </div>
