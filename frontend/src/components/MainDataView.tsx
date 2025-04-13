@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { Loader2, Database, Table2Icon } from "lucide-react";
 import {
   ColumnDef,
   flexRender,
@@ -21,8 +22,7 @@ import {
 import { DataTableFilter } from "@/components/ui/data-table-filter";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Database } from "lucide-react";
-import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
+import { Tree, Folder, File } from "@/components/ui/file-tree";
 import {
   Select,
   SelectContent,
@@ -30,6 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Type for the Go backend response from GetTableData
 // Assuming TableDataResponse structure defined in Go
@@ -42,13 +44,15 @@ type TableDataResponse = {
 // Use `any` for row data initially, can be refined if needed
 type TableRowData = Record<string, any>;
 
-// Define expected props (e.g., disconnect handler)
-interface MainDataViewProps {
-  onDisconnect: () => void;
-}
+const SystemDatabases = ["PERFORMANCE_SCHEMA", "INFORMATION_SCHEMA"];
 
-const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
-  // State managed by user interaction / table instance
+type DatabaseTree = Array<{
+  name: string;
+  tables: string[];
+}>;
+
+const MainDataView = () => {
+  const [databaseTree, setDatabaseTree] = useState<DatabaseTree>([]);
   const [selectedDatabase, setSelectedDatabase] = useState<string>("");
   const [selectedTable, setSelectedTable] = useState<string>("");
   const [{ pageIndex, pageSize }, setPagination] = useState<PaginationState>({
@@ -57,19 +61,6 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
   });
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [rowSelection, setRowSelection] = useState({});
-
-  // --- TanStack Query for fetching tables ---
-  const {
-    data: tables = [],
-    isLoading: isLoadingTables,
-    error: tablesError,
-  } = useQuery<string[], Error>({
-    queryKey: ["tables", selectedDatabase],
-    queryFn: () => ListTables(selectedDatabase),
-    enabled: !!selectedDatabase,
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-    refetchOnWindowFocus: false,
-  });
 
   // --- TanStack Query for fetching databases ---
   const {
@@ -83,9 +74,22 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
     refetchOnWindowFocus: false,
   });
 
+  // --- TanStack Query for fetching tables ---
+  const {
+    data: tables,
+    isLoading: isLoadingTables,
+    error: tablesError,
+  } = useQuery<string[], Error>({
+    queryKey: ["tables", selectedDatabase],
+    queryFn: () => ListTables(selectedDatabase),
+    enabled: !!selectedDatabase,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false,
+  });
+
   // --- Select first table when tables load ---
   useEffect(() => {
-    if (!selectedTable && tables.length > 0) {
+    if (!selectedTable && tables?.length) {
       setSelectedTable(tables[0]);
     }
   }, [tables, selectedTable]);
@@ -218,96 +222,38 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
     (selectedDatabase && isLoadingTables) ||
     (selectedTable && isLoadingData && !table.getRowModel().rows.length);
 
-  // --- Effects to handle selection changes ---
-
-  // Auto-select first database when list loads
-  useEffect(() => {
-    if (!selectedDatabase && databases.length > 0) {
-      setSelectedDatabase(databases[0]);
-    }
-    // If the current selected DB disappears from the list, reset
-    if (
-      selectedDatabase &&
-      databases.length > 0 &&
-      !databases.includes(selectedDatabase)
-    ) {
-      setSelectedDatabase(databases[0] || "");
-      setSelectedTable(""); // Reset table too
-    }
-  }, [databases, selectedDatabase]);
-
-  // Auto-select first table when list loads or DB changes
-  useEffect(() => {
-    if (selectedDatabase && tables.length > 0) {
-      // If current table is not in the new list, select the first one
-      if (!selectedTable || !tables.includes(selectedTable)) {
-        setSelectedTable(tables[0]);
-      }
-    } else if (selectedDatabase && !isLoadingTables && tables.length === 0) {
-      setSelectedTable(""); // Reset table if DB has no tables
-    }
-    // Don't reset if selectedDatabase is cleared, wait for DB selection effect
-  }, [tables, selectedDatabase, selectedTable, isLoadingTables]);
-
   return (
-    <div className="h-full flex flex-col">
-      <header className="p-4 flex items-center justify-between  sticky top-0 bg-background z-20">
-        <div className="flex items-center gap-4">
-          <Select
-            value={selectedDatabase}
-            onValueChange={(value) => {
-              setSelectedDatabase(value);
-              setSelectedTable("");
-              setPagination({ pageIndex: 0, pageSize });
-            }}
-            disabled={isLoadingDatabases}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue
-                placeholder={
-                  isLoadingDatabases ? "Loading DBs..." : "Select Database"
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {databases.map((db) => (
-                <SelectItem key={db} value={db}>
-                  {db}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={selectedTable}
-            onValueChange={setSelectedTable}
-            disabled={
-              !selectedDatabase || isLoadingTables || tables.length === 0
-            }
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue
-                placeholder={
-                  isLoadingTables ? "Loading Tables..." : "Select Table"
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {tables.map((tbl) => (
-                <SelectItem key={tbl} value={tbl}>
-                  {tbl}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {columns.length > 1 && <DataTableFilter table={table} />}
-        </div>
-
-        <Button onClick={onDisconnect} variant="outline">
-          Disconnect
-        </Button>
-      </header>
+    <div className="h-full flex">
+      <ScrollArea className="w-[240px] h-full">
+        <Tree
+          openIcon={<Database className="size-4" />}
+          closeIcon={<Database className="size-4" />}
+        >
+          {databases.map((db) => (
+            <Folder key={db} element={db} value={db}>
+              {tables?.length ? (
+                tables?.map((tbl) => (
+                  <File
+                    key={tbl}
+                    value={tbl}
+                    onClick={() => {
+                      setSelectedDatabase(db);
+                      setSelectedTable(tbl);
+                    }}
+                    fileIcon={<Table2Icon className="size-4" />}
+                  >
+                    {tbl}
+                  </File>
+                ))
+              ) : (
+                <File isSelectable={false} isSelect={false} value="No tables">
+                  No tables
+                </File>
+              )}
+            </Folder>
+          ))}
+        </Tree>
+      </ScrollArea>
 
       <div className="flex-grow flex flex-col overflow-hidden">
         <div className="rounded-none overflow-hidden flex-grow flex flex-col">
@@ -326,7 +272,7 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
             <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
               Please select a database.
             </div>
-          ) : !selectedTable && tables.length > 0 ? (
+          ) : !selectedTable && tables?.length ? (
             <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
               Please select a table.
             </div>
