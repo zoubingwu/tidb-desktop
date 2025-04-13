@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Loader2, Database, Table2Icon } from "lucide-react";
+import { Loader2, Database, Table2Icon, RefreshCw } from "lucide-react";
 import {
   ColumnDef,
   flexRender,
@@ -25,6 +25,8 @@ import { Tree, Folder, File } from "@/components/ui/file-tree";
 import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DataTablePagination } from "./DataTablePagination";
+import { DataTableFilter } from "@/components/ui/data-table-filter";
+import { Button } from "@/components/ui/button";
 
 // Type for the Go backend response from GetTableData
 // Assuming TableDataResponse structure defined in Go
@@ -89,8 +91,9 @@ const MainDataView = () => {
 
   // --- TanStack Query for fetching tables ---
   const {
-    data: tables,
+    data: tables = [],
     isLoading: isLoadingTables,
+    isFetching: isFetchingTables,
     error: tablesError,
   } = useQuery<string[], Error>({
     queryKey: ["tables", selectedDbName],
@@ -104,7 +107,9 @@ const MainDataView = () => {
   const {
     data: tableDataResponse,
     isLoading: isLoadingData,
+    isFetching: isFetchingData,
     error: dataError,
+    refetch: refetchTableData,
   } = useQuery<
     TableDataResponse | null, // Can be null if GetTableData returns null
     Error,
@@ -130,8 +135,6 @@ const MainDataView = () => {
     staleTime: 1 * 60 * 1000, // Cache data for 1 minute
     refetchOnWindowFocus: false,
   });
-
-  // --- Effects ---
 
   // Initialize/Update databaseTree when databases load
   useEffect(() => {
@@ -274,6 +277,8 @@ const MainDataView = () => {
     ];
   }, [tableDataResponse?.columns]);
 
+  console.log(columns);
+
   const data = useMemo(
     () => tableDataResponse?.rows ?? [],
     [tableDataResponse?.rows],
@@ -323,6 +328,18 @@ const MainDataView = () => {
     (selectedDbName && isLoadingTables) ||
     (selectedTableName && isLoadingData && !table.getRowModel().rows.length);
 
+  // Specific loading state for the refresh button/indicator
+  // Loading if tables for the selected DB are loading OR if data for the selected table is loading
+  const isRefreshingIndicator =
+    (!!selectedDbName && isFetchingTables) ||
+    (!!selectedTableName && isFetchingData);
+
+  // Loading state for the main content area placeholder (initial loads)
+  const isInitialLoading =
+    isLoadingDatabases ||
+    (!!selectedDbName && isLoadingTables) ||
+    (!!selectedTableName && isLoadingData);
+
   // Function to handle database selection from tree
   const handleSelectDatabase = (dbName: string) => {
     if (dbName !== selectedDbName) {
@@ -341,6 +358,12 @@ const MainDataView = () => {
     ) {
       setSelection({ type: "table", dbName: dbName, tableName: tableName });
       setPagination({ pageIndex: 0, pageSize }); // Reset pagination
+    }
+  };
+
+  const handleRefresh = () => {
+    if (selectedTableName && selectedDbName) {
+      refetchTableData();
     }
   };
 
@@ -412,17 +435,40 @@ const MainDataView = () => {
       </ScrollArea>
 
       <div className="flex-grow flex flex-col overflow-hidden">
+        {selection?.type === "table" && columns.length > 1 && (
+          <div className="p-2 flex items-center gap-2 sticky top-0 bg-background z-20">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleRefresh}
+              disabled={
+                isRefreshingIndicator || (!selectedDbName && !selectedTableName)
+              }
+            >
+              {isRefreshingIndicator ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              <span className="sr-only">Refresh</span>
+            </Button>
+
+            <DataTableFilter table={table} />
+          </div>
+        )}
+
         <div className="rounded-none overflow-hidden flex-grow flex flex-col">
-          {isLoading && !tableDataResponse ? (
+          {isInitialLoading ? (
             <div className="flex-grow flex items-center justify-center text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin mr-3" /> Loading...
             </div>
           ) : error ? (
             <div className="flex-grow flex items-center justify-center text-destructive p-4">
               Error:{" "}
-              {error instanceof Error
-                ? error.message
-                : "An unknown error occurred"}
+              {(error as any) instanceof Error
+                ? (error as Error).message
+                : String(error ?? "An unknown error occurred")}
             </div>
           ) : !selectedDbName ? (
             <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
@@ -434,64 +480,81 @@ const MainDataView = () => {
             </div>
           ) : (
             <div className="flex-grow overflow-auto relative">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <TableHead
-                          key={header.id}
-                          style={{ width: header.getSize() }}
-                          className="px-4"
-                        >
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext(),
-                              )}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {table.getRowModel().rows?.length ? (
-                    table.getRowModel().rows.map((row) => (
-                      <TableRow
-                        key={row.id}
-                        data-state={row.getIsSelected() && "selected"}
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell
-                            key={cell.id}
-                            style={{ width: cell.column.getSize() }}
-                            className="max-w-[250px] truncate px-4"
+              {error ? (
+                <div className="flex-grow flex items-center justify-center text-destructive p-4">
+                  Error:{" "}
+                  {(error as any) instanceof Error
+                    ? (error as Error).message
+                    : String(error ?? "An unknown error occurred")}
+                </div>
+              ) : !selection ? (
+                <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
+                  Please select a database or table from the sidebar.
+                </div>
+              ) : selection.type === "database" && !isFetchingTables ? (
+                <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
+                  Please select a table from the sidebar.
+                </div>
+              ) : selection.type === "table" ? (
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <TableRow key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <TableHead
+                            key={header.id}
+                            style={{ width: header.getSize() }}
+                            className="px-4"
                           >
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext(),
-                            )}
-                          </TableCell>
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext(),
+                                )}
+                          </TableHead>
                         ))}
                       </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        colSpan={columns.length}
-                        className="h-24 text-center px-4"
-                      >
-                        {isLoadingData
-                          ? "Loading data..."
-                          : selectedTableName
-                            ? "No results found."
-                            : "Select a table."}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                    ))}
+                  </TableHeader>
+                  <TableBody>
+                    {table.getRowModel().rows?.length ? (
+                      table.getRowModel().rows.map((row) => (
+                        <TableRow
+                          key={row.id}
+                          data-state={row.getIsSelected() && "selected"}
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell
+                              key={cell.id}
+                              style={{ width: cell.column.getSize() }}
+                              className="max-w-[250px] truncate px-4"
+                            >
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext(),
+                              )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={columns.length}
+                          className="h-24 text-center px-4"
+                        >
+                          {isLoadingData
+                            ? "Loading data..."
+                            : selectedTableName
+                              ? "No results found."
+                              : "Select a table."}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              ) : null}
             </div>
           )}
         </div>
