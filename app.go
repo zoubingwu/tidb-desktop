@@ -11,9 +11,10 @@ import (
 
 // App struct holds application context and services
 type App struct {
-	ctx       context.Context
-	dbService *services.DatabaseService
-	aiService *services.AIService
+	ctx              context.Context
+	dbService        *services.DatabaseService
+	aiService        *services.AIService
+	activeConnection *services.ConnectionDetails // Store active connection details
 }
 
 // NewApp creates a new App application struct
@@ -28,6 +29,7 @@ func NewApp() *App {
 	return &App{
 		dbService: dbService,
 		aiService: aiService,
+		// activeConnection starts as nil
 	}
 }
 
@@ -53,13 +55,55 @@ func (a *App) TestConnection(details services.ConnectionDetails) (bool, error) {
 	return a.dbService.TestConnection(a.ctx, details)
 }
 
-// ExecuteSQL connects to the DB and executes the given SQL query.
-// Returns results (e.g., as []map[string]any for SELECT, or affected rows for others) or an error.
-func (a *App) ExecuteSQL(details services.ConnectionDetails, query string) (any, error) {
+// EstablishConnection tests the connection and saves details on success.
+// It also emits an event for the frontend.
+func (a *App) EstablishConnection(details services.ConnectionDetails) (bool, error) {
+	if a.ctx == nil {
+		return false, fmt.Errorf("app context not initialized")
+	}
+	// Test the connection first
+	success, err := a.dbService.TestConnection(a.ctx, details)
+	if err != nil {
+		return false, fmt.Errorf("connection test failed: %w", err)
+	}
+	if !success {
+		return false, fmt.Errorf("connection test reported failure, please check details")
+	}
+
+	// Store the details on successful test
+	a.activeConnection = &details
+	fmt.Printf("Connection details stored: %+v\n", *a.activeConnection) // Log for debugging
+
+	// Emit event to notify frontend
+	runtime.EventsEmit(a.ctx, "connection:established", details)
+
+	return true, nil
+}
+
+// Disconnect clears the active connection details.
+func (a *App) Disconnect() {
+	fmt.Println("Disconnecting...")
+	a.activeConnection = nil
+	// Optionally emit an event if the frontend needs to react specifically
+	// runtime.EventsEmit(a.ctx, "connection:disconnected")
+}
+
+// GetActiveConnection returns the currently stored connection details (if any).
+// Useful if the frontend needs to re-fetch details on reload.
+func (a *App) GetActiveConnection() *services.ConnectionDetails {
+	return a.activeConnection
+}
+
+// ExecuteSQL uses the *stored* active connection details to execute a query.
+func (a *App) ExecuteSQL(query string) (any, error) {
 	if a.ctx == nil {
 		return nil, fmt.Errorf("app context not initialized")
 	}
-	return a.dbService.ExecuteSQL(a.ctx, details, query)
+	if a.activeConnection == nil {
+		return nil, fmt.Errorf("no active database connection established")
+	}
+	fmt.Printf("Executing SQL with stored connection: %+v\n", *a.activeConnection) // Log for debugging
+	return a.dbService.ExecuteSQL(a.ctx, *a.activeConnection, query)
 }
 
 // --- AI Related Methods ---
