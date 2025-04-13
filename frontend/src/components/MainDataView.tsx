@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { Loader2, Table2Icon, RefreshCw, Columns3 } from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
+import { Loader2, RefreshCw, Columns3 } from "lucide-react";
 import {
   ColumnDef,
   flexRender,
@@ -9,8 +9,9 @@ import {
   getPaginationRowModel,
   ColumnFiltersState,
   PaginationState,
+  Updater,
 } from "@tanstack/react-table";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Table,
   TableBody,
@@ -20,8 +21,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tree, Folder, File } from "@/components/ui/file-tree";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import {
   DataTableFilter,
@@ -31,6 +30,11 @@ import { Button } from "@/components/ui/button";
 import { filterFn } from "@/lib/filters";
 import { mapDbColumnTypeToFilterType } from "@/lib/utils";
 import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
+import {
+  DatabaseTree,
+  DatabaseTreeItem,
+  SelectionState as TreeSelectionState,
+} from "@/components/DatabaseTree";
 
 // Type for the Go backend response from GetTableData
 // Assuming TableDataResponse structure defined in Go
@@ -43,20 +47,13 @@ type TableDataResponse = {
 // Use `any` for row data initially, can be refined if needed
 type TableRowData = Record<string, any>;
 
-type DatabaseTreeItem = {
-  name: string;
-  tables: string[];
-  isLoadingTables?: boolean; // Track loading state per DB
-};
-type DatabaseTree = DatabaseTreeItem[];
-
-// Define the structure for the unified selection state
-type SelectionState =
-  | { dbName: string; tableName: string } // Specific table selected
-  | null; // Nothing selected
+// Rename to avoid conflict with the imported component
+type DatabaseTreeData = DatabaseTreeItem[];
+// Reuse the SelectionState from the DatabaseTree component
+type SelectionState = TreeSelectionState;
 
 const MainDataView = () => {
-  const [databaseTree, setDatabaseTree] = useState<DatabaseTree>([]);
+  const [databaseTree, setDatabaseTree] = useState<DatabaseTreeData>([]);
   const [selection, setSelection] = useState<SelectionState>(null);
   const [{ pageIndex, pageSize }, setPagination] = useState<PaginationState>({
     pageIndex: 0,
@@ -64,14 +61,20 @@ const MainDataView = () => {
   });
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [rowSelection, setRowSelection] = useState({});
-  // New state for server-side filters
   const [serverFilters, setServerFilters] = useState<ServerSideFilter[]>([]);
 
-  // Convenience accessors (optional, but can make code clearer)
+  // Store table data in state
+  const [tableData, setTableData] = useState<TableDataResponse | null>(null);
+  const [loadingTableData, setLoadingTableData] = useState<boolean>(false);
+  const [tableDataError, setTableDataError] = useState<Error | null>(null);
+
+  console.log("tableData", tableData);
+
+  // Convenience accessors
   const selectedDbName = selection?.dbName;
   const selectedTableName = selection?.tableName;
 
-  // --- TanStack Query for fetching databases ---
+  // --- Databases Query (keeps automatic fetching for initial page load) ---
   const {
     data: databases = [],
     isLoading: isLoadingDatabases,
@@ -83,122 +86,99 @@ const MainDataView = () => {
     refetchOnWindowFocus: false,
   });
 
-  // --- TanStack Query for fetching tables ---
+  // --- Convert Tables Query to a Mutation ---
   const {
-    data: tables = [],
-    isLoading: isLoadingTables,
-    isFetching: isFetchingTables,
+    mutate: fetchTables,
+    isPending: isLoadingTables,
     error: tablesError,
-  } = useQuery<string[], Error>({
-    queryKey: ["tables", selectedDbName],
-    queryFn: () => ListTables(selectedDbName!),
-    enabled: !!selectedDbName,
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-    refetchOnWindowFocus: false,
-  });
-
-  // --- TanStack Query for fetching table data ---
-  const {
-    data: tableDataResponse,
-    isLoading: isLoadingData,
-    error: dataError,
-    refetch: refetchTableData,
-  } = useQuery<
-    TableDataResponse | null, // Can be null if GetTableData returns null
-    Error,
-    TableDataResponse | null
-  >({
-    queryKey: [
-      "tableData",
-      selectedDbName,
-      selectedTableName,
-      pageIndex,
-      pageSize,
-      // Include serverFilters in the query key
-      serverFilters,
-    ],
-    queryFn: async () => {
-      if (!selectedTableName || !selectedDbName) return null;
-
-      // Pass filters to the backend as the fourth parameter
-      const filterObject =
-        serverFilters.length > 0 ? { filters: serverFilters } : null;
-      return await GetTableData(
-        selectedTableName,
-        pageSize,
-        pageIndex * pageSize,
-        filterObject, // Pass filterObject as the 4th parameter
+  } = useMutation({
+    mutationFn: (dbName: string) => ListTables(dbName),
+    onSuccess: (tables, dbName) => {
+      // Update database tree with fetched tables
+      setDatabaseTree((currentTree) =>
+        currentTree.map((item) => {
+          if (item.name === dbName) {
+            return { ...item, tables: tables || [], isLoadingTables: false };
+          }
+          return item;
+        }),
       );
     },
-    enabled: !!selectedDbName && !!selectedTableName,
-    placeholderData: (previousData) => previousData ?? undefined,
-    staleTime: 1 * 60 * 1000, // Cache data for 1 minute
-    refetchOnWindowFocus: false,
+    onError: (error) => {
+      console.error("Error fetching tables:", error);
+    },
   });
 
-  // Effect 1: Initialize/Update databaseTree when databases load & handle DB selection validity
-  useEffect(() => {
-    if (databases?.length) {
-      setDatabaseTree((currentTree) => {
-        const newTree: DatabaseTree = databases.map((dbName) => {
-          const existingItem = currentTree.find((item) => item.name === dbName);
-          return {
-            name: dbName,
-            tables: existingItem?.tables ?? [],
-            isLoadingTables: existingItem?.isLoadingTables ?? false,
-          };
-        });
-        return newTree;
-      });
-    }
-  }, [databases]);
-
-  // Effect 2: Update the tree with fetched tables for the *selected* database
-  useEffect(() => {
-    if (selectedDbName && !isLoadingTables && tables.length > 0) {
-      setDatabaseTree((currentTree) => {
-        return currentTree.map((item) => {
-          if (item.name === selectedDbName) {
-            return { ...item, tables: tables ?? [], isLoadingTables: false };
-          }
-          return item;
-        });
-      });
-    } else if (selectedDbName && isLoadingTables) {
-      setDatabaseTree((currentTree) => {
-        let changed = false;
-        const newTree = currentTree.map((item) => {
-          if (item.name === selectedDbName && !item.isLoadingTables) {
-            changed = true;
-            return { ...item, isLoadingTables: true };
-          }
-          return item;
-        });
-        return changed ? newTree : currentTree;
-      });
-    }
-  }, [selectedDbName, tables, isLoadingTables]);
+  // --- Convert Table Data Query to a Mutation ---
+  const { mutate: fetchTableData, isPending: isFetchingTableData } =
+    useMutation({
+      mutationFn: ({
+        tableName,
+        dbName,
+        pageSize,
+        pageIndex,
+        filters,
+      }: {
+        tableName: string;
+        dbName: string;
+        pageSize: number;
+        pageIndex: number;
+        filters: ServerSideFilter[];
+      }) => {
+        const filterObject = filters.length > 0 ? { filters } : null;
+        return GetTableData(
+          dbName,
+          tableName,
+          pageSize,
+          pageIndex * pageSize,
+          filterObject,
+        );
+      },
+      onMutate: () => {
+        setLoadingTableData(true);
+        setTableDataError(null);
+      },
+      onSuccess: (data) => {
+        console.log("onSuccess data", data);
+        setTableData(data);
+        setLoadingTableData(false);
+      },
+      onError: (error) => {
+        setTableDataError(error as Error);
+        setLoadingTableData(false);
+        console.error("Error fetching table data:", error);
+      },
+    });
 
   // --- Handle server-side filter changes ---
-  const handleFilterChange = (filters: ServerSideFilter[]) => {
-    // Update the server filters state
-    setServerFilters(filters);
-    // Reset pagination when filters change
-    setPagination({ pageIndex: 0, pageSize });
-  };
+  const handleFilterChange = useCallback(
+    (filters: ServerSideFilter[]) => {
+      setServerFilters(filters);
+      setPagination({ pageIndex: 0, pageSize });
+
+      // Refetch data with new filters if we have a selection
+      if (selectedTableName && selectedDbName) {
+        fetchTableData({
+          tableName: selectedTableName,
+          dbName: selectedDbName,
+          pageSize,
+          pageIndex: 0, // Reset to first page
+          filters,
+        });
+      }
+    },
+    [selectedTableName, selectedDbName, pageSize],
+  );
 
   // --- Derived State & Calculations ---
-  const isRefreshingIndicator =
-    (!!selectedDbName && isLoadingTables) ||
-    (!!selectedTableName && isLoadingData);
+  const isRefreshingIndicator = isLoadingTables || isFetchingTableData;
   const isInitialLoading =
-    isLoadingDatabases ||
-    (!!selectedDbName && isLoadingTables) ||
-    (!!selectedTableName && isLoadingData);
+    isLoadingDatabases || isLoadingTables || loadingTableData;
+  const error = databasesError || tablesError || tableDataError;
 
-  // --- Derive columns and data from query result ---
+  // --- Derive columns and data from table data ---
   const columns = useMemo<ColumnDef<TableRowData>[]>(() => {
-    if (!tableDataResponse?.columns) return [];
+    if (!tableData?.columns) return [];
 
     return [
       // Select Checkbox Column
@@ -229,7 +209,7 @@ const MainDataView = () => {
         enableHiding: false,
       },
       // Data Columns
-      ...(tableDataResponse.columns.map(
+      ...(tableData.columns.map(
         (col): ColumnDef<TableRowData> => ({
           accessorKey: col.name,
           header: col.name,
@@ -257,27 +237,137 @@ const MainDataView = () => {
         }),
       ) || []),
     ];
-  }, [tableDataResponse?.columns]);
+  }, [tableData?.columns]);
 
-  const data = useMemo(
-    () => tableDataResponse?.rows ?? [],
-    [tableDataResponse?.rows],
-  );
+  const data = useMemo(() => tableData?.rows ?? [], [tableData?.rows]);
+  const totalRowCount = tableData?.totalRows;
 
   // --- Calculate pagination values ---
   const pagination = useMemo(
     () => ({ pageIndex, pageSize }),
     [pageIndex, pageSize],
   );
-  const totalRowCount = tableDataResponse?.totalRows;
+
   const pageCount = useMemo(() => {
     if (totalRowCount != null && totalRowCount >= 0) {
       return Math.ceil(totalRowCount / pageSize);
     }
-    // Fallback estimation if totalRowCount is not available
-    // -1 tells the table instance pagination controls might be inaccurate
     return -1;
   }, [totalRowCount, pageSize]);
+
+  // --- Initialize database tree when databases load ---
+  useMemo(() => {
+    if (databases?.length) {
+      // Only set database tree if it's empty or if databases have changed
+      const currentDbNames = databaseTree.map((item) => item.name);
+      const newDbNames = databases;
+
+      // Check if the database list has changed
+      const hasChanges =
+        currentDbNames.length !== newDbNames.length ||
+        newDbNames.some((dbName) => !currentDbNames.includes(dbName));
+
+      if (hasChanges) {
+        setDatabaseTree((prevTree) => {
+          // Preserve existing tree data when possible
+          return databases.map((dbName) => {
+            const existingItem = prevTree.find((item) => item.name === dbName);
+            // Keep existing table data if we had it
+            if (existingItem) {
+              return existingItem;
+            }
+            // Create new item if this database is new
+            return {
+              name: dbName,
+              tables: [],
+              isLoadingTables: false,
+            };
+          });
+        });
+      }
+    }
+    // Don't include databaseTree in dependencies to avoid re-render loops
+  }, [databases]);
+
+  // Safely update database tree for selected DB
+  const handleSelectDatabase = (dbName: string) => {
+    if (dbName !== selectedDbName) {
+      // First set the selection
+      setSelection({ dbName, tableName: "" });
+
+      // Update the loading state for the specific DB without triggering a loop
+      setDatabaseTree((prevTree) =>
+        prevTree.map((item) => {
+          if (item.name === dbName && !item.isLoadingTables) {
+            return { ...item, isLoadingTables: true };
+          }
+          return item;
+        }),
+      );
+
+      // Fetch tables for the selected database
+      fetchTables(dbName);
+    }
+  };
+
+  // --- Function to handle table selection from tree ---
+  const handleSelectTable = (dbName: string, tableName: string) => {
+    if (selection?.dbName !== dbName || selection?.tableName !== tableName) {
+      // First set the selection
+      setSelection({ dbName, tableName });
+
+      // Reset filters and pagination
+      const newFilters: ServerSideFilter[] = [];
+      setServerFilters(newFilters);
+      setColumnFilters([]);
+
+      const newPageIndex = 0;
+      setPagination({ pageIndex: newPageIndex, pageSize });
+
+      // Only fetch table data if tableName is provided
+      if (tableName) {
+        fetchTableData({
+          tableName,
+          dbName,
+          pageSize,
+          pageIndex: newPageIndex,
+          filters: newFilters,
+        });
+      }
+    }
+  };
+
+  const handleRefresh = () => {
+    if (selectedTableName && selectedDbName) {
+      fetchTableData({
+        tableName: selectedTableName,
+        dbName: selectedDbName,
+        pageSize,
+        pageIndex,
+        filters: serverFilters,
+      });
+    }
+  };
+
+  const handlePaginationChange = (updaterOrValue: Updater<PaginationState>) => {
+    // Handle both function updater and direct value
+    const newPagination =
+      typeof updaterOrValue === "function"
+        ? updaterOrValue(pagination)
+        : updaterOrValue;
+
+    setPagination(newPagination);
+
+    if (selectedTableName && selectedDbName) {
+      fetchTableData({
+        tableName: selectedTableName,
+        dbName: selectedDbName,
+        pageSize: newPagination.pageSize,
+        pageIndex: newPagination.pageIndex,
+        filters: serverFilters,
+      });
+    }
+  };
 
   // --- TanStack Table Instance ---
   const table = useReactTable({
@@ -289,109 +379,32 @@ const MainDataView = () => {
       rowSelection,
     },
     manualPagination: true,
-    // Add manualFiltering to indicate we're handling filtering on the server
     manualFiltering: true,
-    pageCount, // Use accurate or estimated page count
-    onPaginationChange: setPagination,
+    pageCount,
+    onPaginationChange: handlePaginationChange,
     onColumnFiltersChange: setColumnFilters,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    // debugTable: true,
   });
 
-  // Handle and display errors
-  const error = databasesError || tablesError || dataError;
-
-  // Function to handle database selection from tree
-  const handleSelectDatabase = (dbName: string) => {
-    if (dbName !== selectedDbName) {
-      setSelection({ dbName: dbName, tableName: "" });
-    }
+  // Also fix the render condition for tables
+  const getTablesForCurrentDb = () => {
+    const currentDb = databaseTree.find((db) => db.name === selectedDbName);
+    return currentDb?.tables || [];
   };
 
-  // Function to handle table selection from tree
-  const handleSelectTable = (dbName: string, tableName: string) => {
-    if (selection?.dbName !== dbName || selection?.tableName !== tableName) {
-      setSelection({ dbName: dbName, tableName: tableName });
-      setPagination({ pageIndex: 0, pageSize }); // Reset pagination
-      // Reset filters when selecting a new table
-      setServerFilters([]);
-      setColumnFilters([]);
-    }
-  };
-
-  const handleRefresh = () => {
-    if (selectedTableName && selectedDbName) {
-      refetchTableData();
-    }
-  };
-
-  // --- Render Logic ---
   return (
     <div className="h-full flex">
-      <ScrollArea className="w-[240px] h-full bg-muted/40">
-        {isLoadingDatabases ? (
-          <div className="p-4 text-center text-muted-foreground">
-            Loading Databases...
-          </div>
-        ) : databasesError ? (
-          <div className="p-4 text-center text-destructive">
-            Error loading DBs
-          </div>
-        ) : (
-          <Tree className="p-2">
-            {databaseTree.map((dbItem) => (
-              <Folder
-                key={dbItem.name}
-                element={dbItem.name}
-                value={dbItem.name}
-                onClick={() => handleSelectDatabase(dbItem.name)}
-              >
-                {dbItem.isLoadingTables ? (
-                  <File
-                    isSelectable={false}
-                    value={".loading"}
-                    className="text-muted-foreground italic"
-                  >
-                    <Loader2 className="size-4 mr-2 animate-spin" /> Loading...
-                  </File>
-                ) : dbItem.tables.length > 0 ? (
-                  dbItem.tables.map((tbl) => (
-                    <File
-                      key={tbl}
-                      value={tbl}
-                      isSelect={
-                        selection?.tableName === tbl &&
-                        selection?.dbName === dbItem.name
-                      }
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelectTable(dbItem.name, tbl);
-                      }}
-                      fileIcon={<Table2Icon className="size-4" />}
-                    >
-                      {tbl}
-                    </File>
-                  ))
-                ) : (
-                  dbItem.name === selectedDbName &&
-                  !dbItem.isLoadingTables && (
-                    <File
-                      isSelectable={false}
-                      value=".no-tables"
-                      className="text-muted-foreground italic"
-                    >
-                      No tables
-                    </File>
-                  )
-                )}
-              </Folder>
-            ))}
-          </Tree>
-        )}
-      </ScrollArea>
+      <DatabaseTree
+        databaseTree={databaseTree}
+        selection={selection}
+        isLoadingDatabases={isLoadingDatabases}
+        databasesError={databasesError}
+        onSelectDatabase={handleSelectDatabase}
+        onSelectTable={handleSelectTable}
+      />
 
       <div className="flex-grow flex flex-col overflow-hidden">
         {selection?.tableName && columns.length > 1 && (
@@ -433,7 +446,7 @@ const MainDataView = () => {
             <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
               Please select a database.
             </div>
-          ) : !selectedTableName && tables?.length ? (
+          ) : !selectedTableName && getTablesForCurrentDb().length ? (
             <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
               Please select a table.
             </div>
@@ -450,7 +463,7 @@ const MainDataView = () => {
                 <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
                   Please select a database or table from the sidebar.
                 </div>
-              ) : selection.tableName === "" && !isFetchingTables ? (
+              ) : selection.tableName === "" ? (
                 <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
                   Please select a table from the sidebar.
                 </div>
@@ -503,7 +516,7 @@ const MainDataView = () => {
                           colSpan={columns.length}
                           className="h-24 text-center px-4"
                         >
-                          {isLoadingData
+                          {loadingTableData
                             ? "Loading data..."
                             : selectedTableName
                               ? "No results found."
@@ -518,7 +531,7 @@ const MainDataView = () => {
           )}
         </div>
 
-        {selection?.tableName && !isLoadingData && !error && (
+        {selection?.tableName && !loadingTableData && !error && (
           <DataTablePagination table={table} totalRowCount={totalRowCount} />
         )}
       </div>
