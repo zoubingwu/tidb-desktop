@@ -222,7 +222,7 @@ export function FilterSelector<TData>({
     >
       <PopoverTrigger asChild>
         <Button
-          variant="outline"
+          variant="ghost"
           className={cn("h-7", hasFilters && "w-fit !px-2")}
         >
           <Filter className="size-4" />
