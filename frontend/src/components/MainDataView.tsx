@@ -22,7 +22,14 @@ import { DataTableFilter } from "@/components/ui/data-table-filter";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Database } from "lucide-react";
-import { ListTables, GetTableData } from "wailsjs/go/main/App";
+import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Type for the Go backend response from GetTableData
 // Assuming TableDataResponse structure defined in Go
@@ -42,6 +49,7 @@ interface MainDataViewProps {
 
 const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
   // State managed by user interaction / table instance
+  const [selectedDatabase, setSelectedDatabase] = useState<string>("");
   const [selectedTable, setSelectedTable] = useState<string>("");
   const [{ pageIndex, pageSize }, setPagination] = useState<PaginationState>({
     pageIndex: 0,
@@ -56,9 +64,22 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
     isLoading: isLoadingTables,
     error: tablesError,
   } = useQuery<string[], Error>({
-    queryKey: ["tables"],
-    queryFn: ListTables,
+    queryKey: ["tables", selectedDatabase],
+    queryFn: () => ListTables(selectedDatabase),
+    enabled: !!selectedDatabase,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false,
+  });
+
+  // --- TanStack Query for fetching databases ---
+  const {
+    data: databases = [],
+    isLoading: isLoadingDatabases,
+    error: databasesError,
+  } = useQuery<string[], Error>({
+    queryKey: ["databases"],
+    queryFn: ListDatabases,
+    staleTime: 15 * 60 * 1000, // Cache for 15 minutes
     refetchOnWindowFocus: false,
   });
 
@@ -79,15 +100,19 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
     Error,
     TableDataResponse | null
   >({
-    queryKey: ["tableData", selectedTable, pageIndex, pageSize], // Query key includes dependencies
+    queryKey: [
+      "tableData",
+      selectedDatabase,
+      selectedTable,
+      pageIndex,
+      pageSize,
+    ],
     queryFn: async () => {
-      // Return null early if no table selected to avoid query execution
-      if (!selectedTable) return null;
-      // Fetch data from Go backend
+      if (!selectedTable || !selectedDatabase) return null;
       return await GetTableData(selectedTable, pageSize, pageIndex * pageSize);
     },
-    enabled: !!selectedTable, // Only run query if a table is selected
-    placeholderData: (previousData) => previousData ?? undefined, // Keep previous data while fetching new (v5 syntax)
+    enabled: !!selectedDatabase && !!selectedTable,
+    placeholderData: (previousData) => previousData ?? undefined,
     staleTime: 1 * 60 * 1000, // Cache data for 1 minute
     refetchOnWindowFocus: false,
   });
@@ -185,120 +210,215 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
   });
 
   // Handle and display errors
-  const error = tablesError || dataError;
+  const error = databasesError || tablesError || dataError;
 
   // Combined loading state
   const isLoading =
-    isLoadingTables || (isLoadingData && !table.getRowModel().rows.length); // Show loading if tables OR initial data is loading
+    isLoadingDatabases ||
+    (selectedDatabase && isLoadingTables) ||
+    (selectedTable && isLoadingData && !table.getRowModel().rows.length);
+
+  // --- Effects to handle selection changes ---
+
+  // Auto-select first database when list loads
+  useEffect(() => {
+    if (!selectedDatabase && databases.length > 0) {
+      setSelectedDatabase(databases[0]);
+    }
+    // If the current selected DB disappears from the list, reset
+    if (
+      selectedDatabase &&
+      databases.length > 0 &&
+      !databases.includes(selectedDatabase)
+    ) {
+      setSelectedDatabase(databases[0] || "");
+      setSelectedTable(""); // Reset table too
+    }
+  }, [databases, selectedDatabase]);
+
+  // Auto-select first table when list loads or DB changes
+  useEffect(() => {
+    if (selectedDatabase && tables.length > 0) {
+      // If current table is not in the new list, select the first one
+      if (!selectedTable || !tables.includes(selectedTable)) {
+        setSelectedTable(tables[0]);
+      }
+    } else if (selectedDatabase && !isLoadingTables && tables.length === 0) {
+      setSelectedTable(""); // Reset table if DB has no tables
+    }
+    // Don't reset if selectedDatabase is cleared, wait for DB selection effect
+  }, [tables, selectedDatabase, selectedTable, isLoadingTables]);
 
   return (
-    <div className="p-4 md:p-6 space-y-4 h-full flex flex-col">
-      <header className="flex items-center justify-between">
-        {/* TODO: Replace h2 with a Select dropdown populated by `tables` state */}
-        <h2 className="text-xl font-semibold">
-          Table: {selectedTable || (isLoadingTables ? "Loading..." : "None")}
-        </h2>
+    <div className="h-full flex flex-col">
+      <header className="p-4 flex items-center justify-between border-b sticky top-0 bg-background z-20">
+        <div className="flex items-center gap-4">
+          <Select
+            value={selectedDatabase}
+            onValueChange={(value) => {
+              setSelectedDatabase(value);
+              setSelectedTable("");
+              setPagination({ pageIndex: 0, pageSize });
+            }}
+            disabled={isLoadingDatabases}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue
+                placeholder={
+                  isLoadingDatabases ? "Loading DBs..." : "Select Database"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {databases.map((db) => (
+                <SelectItem key={db} value={db}>
+                  {db}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={selectedTable}
+            onValueChange={setSelectedTable}
+            disabled={
+              !selectedDatabase || isLoadingTables || tables.length === 0
+            }
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue
+                placeholder={
+                  isLoadingTables ? "Loading Tables..." : "Select Table"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {tables.map((tbl) => (
+                <SelectItem key={tbl} value={tbl}>
+                  {tbl}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {columns.length > 1 && <DataTableFilter table={table} />}
+        </div>
+
         <Button onClick={onDisconnect} variant="outline">
           Disconnect
         </Button>
       </header>
 
-      {columns.length > 0 && <DataTableFilter table={table} />}
-
-      <div className="border rounded-md overflow-hidden flex-grow flex flex-col">
-        {isLoading ? (
-          <div className="flex-grow flex items-center justify-center text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin mr-3" /> Loading...
-          </div>
-        ) : error ? (
-          <div className="flex-grow flex items-center justify-center text-destructive p-4">
-            Error: {error.message}
-          </div>
-        ) : (
-          <div className="flex-grow overflow-auto">
-            <Table>
-              <TableHeader className="sticky top-0 bg-background z-10">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <TableHead
-                        key={header.id}
-                        style={{ width: header.getSize() }}
-                      >
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows?.length ? (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      data-state={row.getIsSelected() && "selected"}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell
-                          key={cell.id}
-                          style={{ width: cell.column.getSize() }}
+      <div className="flex-grow flex flex-col overflow-hidden p-4">
+        <div className="border rounded-md overflow-hidden flex-grow flex flex-col">
+          {isLoading && !tableDataResponse ? (
+            <div className="flex-grow flex items-center justify-center text-muted-foreground">
+              <Loader2 className="h-8 w-8 animate-spin mr-3" /> Loading...
+            </div>
+          ) : error ? (
+            <div className="flex-grow flex items-center justify-center text-destructive p-4">
+              Error:{" "}
+              {error instanceof Error
+                ? error.message
+                : "An unknown error occurred"}
+            </div>
+          ) : !selectedDatabase ? (
+            <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
+              Please select a database.
+            </div>
+          ) : !selectedTable && tables.length > 0 ? (
+            <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
+              Please select a table.
+            </div>
+          ) : (
+            <div className="flex-grow overflow-auto relative">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <TableHead
+                          key={header.id}
+                          style={{ width: header.getSize() }}
                         >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
-                        </TableCell>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext(),
+                              )}
+                        </TableHead>
                       ))}
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={columns.length}
-                      className="h-24 text-center"
-                    >
-                      {selectedTable ? "No results." : "Select a table."}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between pt-2">
-        <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows?.length ? (
+                    table.getRowModel().rows.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        data-state={row.getIsSelected() && "selected"}
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell
+                            key={cell.id}
+                            style={{ width: cell.column.getSize() }}
+                          >
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext(),
+                            )}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={columns.length}
+                        className="h-24 text-center"
+                      >
+                        {isLoadingData
+                          ? "Loading data..."
+                          : selectedTable
+                            ? "No results found."
+                            : "Select a table."}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </div>
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            Previous
-          </Button>
-          <span className="text-sm">
-            Page {table.getState().pagination.pageIndex + 1}
-            {/* Display total pages if known (pageCount > 0), otherwise show nothing extra */}
-            {table.getPageCount() > 0 ? ` of ${table.getPageCount()}` : ""}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Next
-          </Button>
+
+        <div className="flex items-center justify-between pt-4">
+          <div className="flex-1 text-sm text-muted-foreground">
+            {table.getFilteredSelectedRowModel().rows.length} of{" "}
+            {table.getFilteredRowModel().rows.length} row(s) selected.
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              Previous
+            </Button>
+            <span className="text-sm">
+              Page {table.getState().pagination.pageIndex + 1}
+              {table.getPageCount() > 0 ? ` of ${table.getPageCount()}` : ""}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       </div>
     </div>
