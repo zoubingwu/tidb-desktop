@@ -2,7 +2,7 @@ import WelcomeScreen from "@/components/WelcomeScreen";
 
 function App() {
   return (
-    <div id="App" className="container mx-auto p-4">
+    <div id="App" className="h-screen w-screen">
       <WelcomeScreen />
     </div>
   );
