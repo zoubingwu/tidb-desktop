@@ -1,5 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
-import { Loader2, Database, Table2Icon } from "lucide-react";
+import {
+  Loader2,
+  Database,
+  Table2Icon,
+  ChevronsLeft,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsRight,
+} from "lucide-react";
 import {
   ColumnDef,
   flexRender,
@@ -170,35 +178,49 @@ const MainDataView = () => {
 
   // Update the tree with fetched tables for the *selected* database
   useEffect(() => {
+    // We update the tree based on the DB derived from the query key, which is selectedDbName
     if (selectedDbName && !isLoadingTables) {
       setDatabaseTree((currentTree) => {
         return currentTree.map((item) => {
           if (item.name === selectedDbName) {
+            // Ensure tables is always an array here
             return { ...item, tables: tables ?? [], isLoadingTables: false };
           }
           return item;
         });
       });
 
-      // Reset table part of selection if the loaded tables for the selected DB are empty
-      // or if the currently selected table is no longer in the list
-      if (selection?.type === "table" && tables) {
-        if (!tables.includes(selection.tableName) || tables.length === 0) {
-          // Revert selection to just the database
+      // Check if the current TABLE selection is still valid within the *updated* tables list
+      if (selection?.type === "table") {
+        const currentTables = tables ?? []; // Use the fetched tables
+        const tableStillExists = currentTables.includes(selection.tableName);
+
+        if (!tableStillExists || currentTables.length === 0) {
+          // Table is no longer valid, revert selection to only the database
+          // This state change is okay, it reflects reality and won't immediately loop
+          // because the condition !tableStillExists depends on `tables` data changing.
           setSelection({ type: "database", dbName: selectedDbName });
         }
       }
+      // If selection is 'database', no need to check table validity here
     } else if (selectedDbName && isLoadingTables) {
+      // Mark the selected database as loading tables (only update if needed)
       setDatabaseTree((currentTree) => {
-        return currentTree.map((item) => {
-          if (item.name === selectedDbName) {
+        let changed = false;
+        const newTree = currentTree.map((item) => {
+          if (item.name === selectedDbName && !item.isLoadingTables) {
+            changed = true;
             return { ...item, isLoadingTables: true };
           }
           return item;
         });
+        return changed ? newTree : currentTree; // Avoid state update if already loading
       });
     }
-  }, [selectedDbName, tables, isLoadingTables, selection]); // Depend on selection
+
+    // Dependencies: selectedDbName triggers fetch, tables/isLoadingTables process results,
+    // selection is needed to check validity of selected table *after* tables load.
+  }, [selectedDbName, tables, isLoadingTables, selection]);
 
   // --- Derive columns and data from query result ---
   const columns = useMemo<ColumnDef<TableRowData>[]>(() => {
@@ -296,7 +318,7 @@ const MainDataView = () => {
       rowSelection,
     },
     manualPagination: true,
-    pageCount, // Use calculated page count
+    pageCount: pageCount > 0 ? pageCount : -1, // Ensure pageCount is -1 if unknown
     onPaginationChange: setPagination,
     onColumnFiltersChange: setColumnFilters,
     onRowSelectionChange: setRowSelection,
@@ -335,6 +357,11 @@ const MainDataView = () => {
       setPagination({ pageIndex: 0, pageSize }); // Reset pagination
     }
   };
+
+  // Calculate display range for footer
+  const totalRowCount = tableDataResponse?.totalRows ?? 0;
+  const firstRowIndex = pageIndex * pageSize + 1;
+  const lastRowIndex = Math.min(firstRowIndex + pageSize - 1, totalRowCount);
 
   return (
     <div className="h-full flex">
@@ -488,34 +515,86 @@ const MainDataView = () => {
           )}
         </div>
 
-        <div className="flex items-center justify-between p-4">
-          <div className="flex-1 text-sm text-muted-foreground">
-            {table.getFilteredSelectedRowModel().rows.length} of{" "}
-            {table.getFilteredRowModel().rows.length} row(s) selected.
+        {/* --- NEW PAGINATION FOOTER --- */}
+        {selection?.type === "table" && !isLoading && !error && (
+          <div className="flex items-center justify-between p-2 border-t bg-background">
+            <div className="flex-1 text-sm text-muted-foreground whitespace-nowrap">
+              {table.getFilteredSelectedRowModel().rows.length} selected
+            </div>
+
+            <div className="flex items-center space-x-6 lg:space-x-8">
+              <div className="flex items-center space-x-2">
+                <p className="text-sm font-medium whitespace-nowrap">
+                  Rows per page
+                </p>
+                <Select
+                  value={`${table.getState().pagination.pageSize}`}
+                  onValueChange={(value) => {
+                    table.setPageSize(Number(value));
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[70px]">
+                    <SelectValue
+                      placeholder={table.getState().pagination.pageSize}
+                    />
+                  </SelectTrigger>
+                  <SelectContent side="top">
+                    {[10, 20, 50, 100, 250].map((size) => (
+                      <SelectItem key={size} value={`${size}`}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex w-[120px] items-center justify-center text-sm font-medium whitespace-nowrap">
+                {totalRowCount > 0
+                  ? `${firstRowIndex} - ${lastRowIndex} of ${totalRowCount}`
+                  : `Page ${pageIndex + 1}`}
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  className="hidden h-8 w-8 p-0 lg:flex"
+                  onClick={() => table.setPageIndex(0)}
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  <span className="sr-only">Go to first page</span>
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-8 w-8 p-0"
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  <span className="sr-only">Go to previous page</span>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-8 w-8 p-0"
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                >
+                  <span className="sr-only">Go to next page</span>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="hidden h-8 w-8 p-0 lg:flex"
+                  onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                  disabled={!table.getCanNextPage()}
+                >
+                  <span className="sr-only">Go to last page</span>
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              Previous
-            </Button>
-            <span className="text-sm">
-              Page {table.getState().pagination.pageIndex + 1}
-              {table.getPageCount() > 0 ? ` of ${table.getPageCount()}` : ""}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
