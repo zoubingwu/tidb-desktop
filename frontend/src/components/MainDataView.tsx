@@ -23,7 +23,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tree, Folder, File } from "@/components/ui/file-tree";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DataTablePagination } from "@/components/DataTablePagination";
-import { DataTableFilter } from "@/components/ui/data-table-filter";
+import {
+  DataTableFilter,
+  ServerSideFilter,
+} from "@/components/ui/data-table-filter";
 import { Button } from "@/components/ui/button";
 import { filterFn } from "@/lib/filters";
 import { mapDbColumnTypeToFilterType } from "@/lib/utils";
@@ -61,6 +64,8 @@ const MainDataView = () => {
   });
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [rowSelection, setRowSelection] = useState({});
+  // New state for server-side filters
+  const [serverFilters, setServerFilters] = useState<ServerSideFilter[]>([]);
 
   // Convenience accessors (optional, but can make code clearer)
   const selectedDbName = selection?.dbName;
@@ -109,13 +114,20 @@ const MainDataView = () => {
       selectedTableName,
       pageIndex,
       pageSize,
+      // Include serverFilters in the query key
+      serverFilters,
     ],
     queryFn: async () => {
       if (!selectedTableName || !selectedDbName) return null;
+
+      // Pass filters to the backend as the fourth parameter
+      const filterObject =
+        serverFilters.length > 0 ? { filters: serverFilters } : null;
       return await GetTableData(
         selectedTableName,
         pageSize,
         pageIndex * pageSize,
+        filterObject, // Pass filterObject as the 4th parameter
       );
     },
     enabled: !!selectedDbName && !!selectedTableName,
@@ -143,7 +155,7 @@ const MainDataView = () => {
 
   // Effect 2: Update the tree with fetched tables for the *selected* database
   useEffect(() => {
-    if (selectedDbName && !isLoadingTables) {
+    if (selectedDbName && !isLoadingTables && tables.length > 0) {
       setDatabaseTree((currentTree) => {
         return currentTree.map((item) => {
           if (item.name === selectedDbName) {
@@ -165,12 +177,17 @@ const MainDataView = () => {
         return changed ? newTree : currentTree;
       });
     }
-    // This effect ONLY updates the tree, doesn't set selection.
-    // Removed `selection` from dependencies.
   }, [selectedDbName, tables, isLoadingTables]);
 
+  // --- Handle server-side filter changes ---
+  const handleFilterChange = (filters: ServerSideFilter[]) => {
+    // Update the server filters state
+    setServerFilters(filters);
+    // Reset pagination when filters change
+    setPagination({ pageIndex: 0, pageSize });
+  };
+
   // --- Derived State & Calculations ---
-  // ... columns, data, pagination, pageCount, table, combinedError ...
   const isRefreshingIndicator =
     (!!selectedDbName && isLoadingTables) ||
     (!!selectedTableName && isLoadingData);
@@ -272,6 +289,8 @@ const MainDataView = () => {
       rowSelection,
     },
     manualPagination: true,
+    // Add manualFiltering to indicate we're handling filtering on the server
+    manualFiltering: true,
     pageCount, // Use accurate or estimated page count
     onPaginationChange: setPagination,
     onColumnFiltersChange: setColumnFilters,
@@ -297,6 +316,9 @@ const MainDataView = () => {
     if (selection?.dbName !== dbName || selection?.tableName !== tableName) {
       setSelection({ dbName: dbName, tableName: tableName });
       setPagination({ pageIndex: 0, pageSize }); // Reset pagination
+      // Reset filters when selecting a new table
+      setServerFilters([]);
+      setColumnFilters([]);
     }
   };
 
@@ -391,7 +413,7 @@ const MainDataView = () => {
               <span className="sr-only">Refresh</span>
             </Button>
 
-            <DataTableFilter table={table} />
+            <DataTableFilter table={table} onChange={handleFilterChange} />
           </div>
         )}
 

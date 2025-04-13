@@ -386,7 +386,7 @@ func (a *App) ListTables(dbName string) ([]string, error) {
 }
 
 // GetTableData retrieves paginated data and column info for a specific table.
-func (a *App) GetTableData(tableName string, limit int, offset int) (*TableDataResponse, error) {
+func (a *App) GetTableData(tableName string, limit int, offset int, filterParams *map[string]interface{}) (*TableDataResponse, error) {
 	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
 	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
 	if tableName == "" { return nil, fmt.Errorf("table name cannot be empty") }
@@ -438,10 +438,137 @@ func (a *App) GetTableData(tableName string, limit int, offset int) (*TableDataR
 		return nil, fmt.Errorf("no columns found for table '%s' in schema '%s'", tableName, dbName)
 	}
 
-	// 2. Get Table Data
-	// IMPORTANT: Properly escape the table name to prevent SQL injection if tableName comes from user input anywhere
-	// Using backticks is typical for MySQL/TiDB
-	dataQuery := fmt.Sprintf("SELECT * FROM `%s` LIMIT %d OFFSET %d;", tableName, limit, offset)
+	// 2. Build query with filters
+	var whereClause string
+
+	// Process filters if they exist
+	if filterParams != nil {
+		filters, filtersExist := (*filterParams)["filters"]
+		if filtersExist {
+			// Cast filters to expected type (array of filter objects)
+			if filtersArr, ok := filters.([]interface{}); ok && len(filtersArr) > 0 {
+				conditions := []string{}
+
+				for _, filter := range filtersArr {
+					if filterMap, ok := filter.(map[string]interface{}); ok {
+						columnId, hasColumnId := filterMap["columnId"].(string)
+						operator, hasOperator := filterMap["operator"].(string)
+						filterType, hasType := filterMap["type"].(string)
+						values, hasValues := filterMap["values"].([]interface{})
+
+						if hasColumnId && hasOperator && hasType && hasValues && len(values) > 0 {
+							condition := ""
+
+							// Map frontend filter operators to SQL operators
+							switch filterType {
+							case "text":
+								if operator == "contains" {
+									condition = fmt.Sprintf("`%s` LIKE '%%%s%%'", columnId, values[0])
+								} else if operator == "does not contain" {
+									condition = fmt.Sprintf("`%s` NOT LIKE '%%%s%%'", columnId, values[0])
+								}
+							case "number":
+								switch operator {
+								case "is":
+									condition = fmt.Sprintf("`%s` = %v", columnId, values[0])
+								case "is not":
+									condition = fmt.Sprintf("`%s` != %v", columnId, values[0])
+								case "is greater than":
+									condition = fmt.Sprintf("`%s` > %v", columnId, values[0])
+								case "is greater than or equal to":
+									condition = fmt.Sprintf("`%s` >= %v", columnId, values[0])
+								case "is less than":
+									condition = fmt.Sprintf("`%s` < %v", columnId, values[0])
+								case "is less than or equal to":
+									condition = fmt.Sprintf("`%s` <= %v", columnId, values[0])
+								case "is between":
+									if len(values) >= 2 {
+										condition = fmt.Sprintf("`%s` BETWEEN %v AND %v", columnId, values[0], values[1])
+									}
+								case "is not between":
+									if len(values) >= 2 {
+										condition = fmt.Sprintf("`%s` NOT BETWEEN %v AND %v", columnId, values[0], values[1])
+									}
+								}
+							case "date":
+								// Date handling requires converting the string date to proper format
+								// This is simplified and may need adjustment based on your DB type
+								switch operator {
+								case "is":
+									condition = fmt.Sprintf("DATE(`%s`) = DATE('%s')", columnId, values[0])
+								case "is not":
+									condition = fmt.Sprintf("DATE(`%s`) != DATE('%s')", columnId, values[0])
+								case "is before":
+									condition = fmt.Sprintf("DATE(`%s`) < DATE('%s')", columnId, values[0])
+								case "is on or after":
+									condition = fmt.Sprintf("DATE(`%s`) >= DATE('%s')", columnId, values[0])
+								case "is after":
+									condition = fmt.Sprintf("DATE(`%s`) > DATE('%s')", columnId, values[0])
+								case "is on or before":
+									condition = fmt.Sprintf("DATE(`%s`) <= DATE('%s')", columnId, values[0])
+								case "is between":
+									if len(values) >= 2 {
+										condition = fmt.Sprintf("DATE(`%s`) BETWEEN DATE('%s') AND DATE('%s')",
+											columnId, values[0], values[1])
+									}
+								case "is not between":
+									if len(values) >= 2 {
+										condition = fmt.Sprintf("DATE(`%s`) NOT BETWEEN DATE('%s') AND DATE('%s')",
+											columnId, values[0], values[1])
+									}
+								}
+							case "option":
+								switch operator {
+								case "is", "is any of":
+									if strVal, ok := values[0].(string); ok {
+										condition = fmt.Sprintf("`%s` = '%s'", columnId, strVal)
+									}
+								case "is not", "is none of":
+									if strVal, ok := values[0].(string); ok {
+										condition = fmt.Sprintf("`%s` != '%s'", columnId, strVal)
+									}
+								}
+							case "multiOption":
+								if multiValues, ok := values[0].([]interface{}); ok && len(multiValues) > 0 {
+									valueStrings := make([]string, len(multiValues))
+									for i, v := range multiValues {
+										if strVal, ok := v.(string); ok {
+											valueStrings[i] = fmt.Sprintf("'%s'", strVal)
+										}
+									}
+
+									if len(valueStrings) > 0 {
+										valuesStr := strings.Join(valueStrings, ", ")
+										switch operator {
+										case "include", "include any of":
+											condition = fmt.Sprintf("`%s` IN (%s)", columnId, valuesStr)
+										case "exclude", "exclude if any of":
+											condition = fmt.Sprintf("`%s` NOT IN (%s)", columnId, valuesStr)
+										// For other operators like "include all of", "exclude if all",
+										// more complex logic would be needed
+										}
+									}
+								}
+							}
+
+							if condition != "" {
+								conditions = append(conditions, condition)
+							}
+						}
+					}
+				}
+
+				if len(conditions) > 0 {
+					whereClause = " WHERE " + strings.Join(conditions, " AND ")
+				}
+			}
+		}
+	}
+
+	// 2. Get Table Data with filters applied
+	dataQuery := fmt.Sprintf("SELECT * FROM `%s`%s LIMIT %d OFFSET %d;",
+		tableName, whereClause, limit, offset)
+
 	dataResult, err := a.ExecuteSQL(dataQuery)
 	if err != nil { return nil, fmt.Errorf("failed to get data for table '%s': %w", tableName, err) }
 
@@ -460,7 +587,8 @@ func (a *App) GetTableData(tableName string, limit int, offset int) (*TableDataR
 	}
 
 	// 3. Get Total Row Count for Pagination
-	countQuery := fmt.Sprintf("SELECT COUNT(*) as total FROM `%s`;", tableName)
+	// Apply the same filters to the count query
+	countQuery := fmt.Sprintf("SELECT COUNT(*) as total FROM `%s`%s;", tableName, whereClause)
 	countResult, countErr := a.ExecuteSQL(countQuery) // Execute count query separately
 	var totalRows *int64 = nil // Use pointer to distinguish 0 from not fetched
 

@@ -55,17 +55,57 @@ import {
 } from "react";
 import type { DateRange } from "react-day-picker";
 
+// Type to represent a serializable filter that can be sent to the server
+export type ServerSideFilter = {
+  columnId: string;
+  operator: string;
+  type: ColumnDataType;
+  values: any[];
+};
+
+type DataTableFilterProps<TData> = {
+  table: Table<TData>;
+  // New onChange prop to notify parent when filters change
+  onChange?: (filters: ServerSideFilter[]) => void;
+};
+
 export function DataTableFilter<TData, TValue>({
   table,
-}: { table: Table<TData> }) {
+  onChange,
+}: DataTableFilterProps<TData>) {
   const isMobile = useIsMobile();
+
+  // Sync table filters with server-side filters when they change
+  useEffect(() => {
+    if (!onChange) return;
+
+    const tableFilters = table.getState().columnFilters;
+    const serverFilters: ServerSideFilter[] = tableFilters
+      .map((filter) => {
+        const column = table.getColumn(filter.id);
+        if (!column?.columnDef.meta) return null;
+
+        const meta = column.columnDef.meta as ColumnMeta<TData, unknown>;
+        const type = meta.type as ColumnDataType;
+
+        return {
+          columnId: filter.id,
+          type,
+          operator: (filter.value as any)?.operator || "",
+          values: (filter.value as any)?.values || [],
+        };
+      })
+      .filter(Boolean) as ServerSideFilter[];
+
+    onChange(serverFilters);
+  }, [table.getState().columnFilters, onChange]);
 
   if (isMobile) {
     return (
       <div className="flex w-full items-start justify-between gap-2">
         <div className="flex gap-1">
           <FilterSelector table={table} />
-          <FilterActions table={table} />
+          <FilterActions table={table} onChange={onChange} />
         </div>
         <ActiveFiltersMobileContainer>
           <ActiveFilters table={table} />
@@ -80,7 +120,7 @@ export function DataTableFilter<TData, TValue>({
         <FilterSelector table={table} />
         <ActiveFilters table={table} />
       </div>
-      <FilterActions table={table} />
+      <FilterActions table={table} onChange={onChange} />
     </div>
   );
 }
@@ -154,12 +194,23 @@ export function ActiveFiltersMobileContainer({
   );
 }
 
-export function FilterActions<TData>({ table }: { table: Table<TData> }) {
+export function FilterActions<TData>({
+  table,
+  onChange,
+}: {
+  table: Table<TData>;
+  onChange?: (filters: ServerSideFilter[]) => void;
+}) {
   const hasFilters = table.getState().columnFilters.length > 0;
 
   function clearFilters() {
     table.setColumnFilters([]);
     table.setGlobalFilter("");
+
+    // Notify parent that filters were cleared
+    if (onChange) {
+      onChange([]);
+    }
   }
 
   return (
