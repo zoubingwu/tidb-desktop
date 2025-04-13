@@ -17,7 +17,8 @@ import { services } from "wailsjs/go/models";
 import {
   TestConnection,
   InferConnectionDetailsFromClipboard,
-  EstablishConnection,
+  ConnectUsingDetails,
+  SaveConnection,
 } from "wailsjs/go/main/App";
 import { Loader2 } from "lucide-react";
 
@@ -37,16 +38,18 @@ export function ConnectionFormDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [formState, setFormState] =
     useState<ConnectionFormState>(initialFormState);
+  const [connectionName, setConnectionName] = useState<string>("");
   const [isTesting, setIsTesting] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isInferring, setIsInferring] = useState(false);
 
   // Reset form when dialog opens
   useEffect(() => {
     if (isOpen) {
       setFormState(initialFormState);
+      setConnectionName("");
       setIsTesting(false);
-      setIsConnecting(false);
+      setIsSaving(false);
       setIsInferring(false);
     }
   }, [isOpen]);
@@ -63,6 +66,10 @@ export function ConnectionFormDialog() {
     } else {
       setFormState((prev) => ({ ...prev, [name]: value }));
     }
+  };
+
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setConnectionName(e.target.value);
   };
 
   const handleTestConnection = async () => {
@@ -91,31 +98,43 @@ export function ConnectionFormDialog() {
     }
   };
 
-  const handleConnect = async () => {
-    setIsConnecting(true);
+  const handleSaveAndConnect = async () => {
+    if (!connectionName.trim()) {
+      toast.error("Missing Connection Name", {
+        description: "Please provide a name to save this connection.",
+      });
+      return;
+    }
+    setIsSaving(true);
     try {
-      const success = await EstablishConnection(formState);
-      if (success) {
+      await SaveConnection(connectionName, formState);
+      toast.success("Connection Saved", {
+        description: `Connection '${connectionName}' saved successfully.`,
+      });
+
+      const connectedDetails = await ConnectUsingDetails(formState);
+
+      if (connectedDetails) {
         setIsOpen(false);
-        toast.success("Connection Established", {
-          description: "Loading main application view...",
+        toast.info("Connecting Session...", {
+          description: "Connection established, loading main view.",
         });
       } else {
-        toast.error("Connection Failed", {
+        toast.error("Session Connection Failed", {
           description:
-            "Failed to establish connection (unknown reason). Check details or logs.",
+            "Saved successfully, but failed to activate the session.",
         });
       }
     } catch (error: any) {
-      console.error("Establish Connection Error:", error);
-      toast.error("Connection Error", {
+      console.error("Save/Connect Error:", error);
+      toast.error("Save or Connect Error", {
         description:
           typeof error === "string"
             ? error
             : error?.message || "An unknown error occurred.",
       });
     } finally {
-      setIsConnecting(false);
+      setIsSaving(false);
     }
   };
 
@@ -125,9 +144,24 @@ export function ConnectionFormDialog() {
       const inferredDetails = await InferConnectionDetailsFromClipboard();
       if (inferredDetails) {
         console.log("inferredDetails", inferredDetails);
-        setFormState((prev) => ({ ...prev, ...inferredDetails }));
+        setFormState((prev) => {
+          const updated = { ...prev };
+          if (inferredDetails.host) updated.host = inferredDetails.host;
+          if (inferredDetails.port) updated.port = inferredDetails.port;
+          if (inferredDetails.user) updated.user = inferredDetails.user;
+          if (inferredDetails.password)
+            updated.password = inferredDetails.password;
+          if (inferredDetails.dbName) updated.dbName = inferredDetails.dbName;
+          if (inferredDetails.useTLS) updated.useTLS = inferredDetails.useTLS;
+          return updated;
+        });
+        if (inferredDetails.host && !connectionName) {
+          const suggestedName = `${inferredDetails.user || "user"}@${inferredDetails.host.split(".")[0]}`;
+          setConnectionName(suggestedName);
+        }
         toast.success("Details Inferred", {
-          description: "Form updated from clipboard.",
+          description:
+            "Form updated from clipboard. Please verify and name the connection.",
         });
       } else {
         toast.error("Inference Failed", {
@@ -156,12 +190,27 @@ export function ConnectionFormDialog() {
         {" "}
         {/* Wider dialog */}
         <DialogHeader>
-          <DialogTitle>Database Connection Details</DialogTitle>
+          <DialogTitle>Database Connection</DialogTitle>
           <DialogDescription>
-            Enter the information needed to connect to your TiDB database.
+            Enter details to connect. Provide a name to save the connection for
+            later use.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
+          {/* Connection Name Input */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="connectionName" className="text-right">
+              Name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="connectionName"
+              name="connectionName"
+              value={connectionName}
+              onChange={handleNameChange}
+              className="col-span-3"
+              placeholder="e.g., My TiDB Cloud Dev, Local Test"
+            />
+          </div>
           {/* Host */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="host" className="text-right">
@@ -262,7 +311,7 @@ export function ConnectionFormDialog() {
           <Button
             variant="outline"
             onClick={handleReadFromClipboard}
-            disabled={isTesting || isConnecting || isInferring}
+            disabled={isTesting || isSaving || isInferring}
           >
             {isInferring && <Loader2 className="h-4 w-4 animate-spin" />}
             {isInferring ? "Inferring..." : "Read from Clipboard"}
@@ -271,18 +320,19 @@ export function ConnectionFormDialog() {
             <Button
               variant="secondary"
               onClick={handleTestConnection}
-              disabled={isTesting || isConnecting || isInferring}
+              disabled={isTesting || isSaving || isInferring}
             >
               {isTesting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isTesting ? "Testing..." : "Test Connection"}
+              {isTesting ? "Testing..." : "Test"}
             </Button>
             <Button
-              type="submit" // Technically not submitting a form, but standard practice
-              onClick={handleConnect}
-              disabled={isTesting || isConnecting || isInferring}
+              onClick={handleSaveAndConnect}
+              disabled={
+                isTesting || isSaving || isInferring || !connectionName.trim()
+              }
             >
-              {isConnecting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isConnecting ? "Connecting..." : "Connect"}
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isSaving ? "Connecting..." : "Save & Connect"}
             </Button>
           </div>
         </DialogFooter>
