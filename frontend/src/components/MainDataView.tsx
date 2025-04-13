@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Loader2, Database, Table2Icon, RefreshCw } from "lucide-react";
+import { Loader2, Table2Icon, RefreshCw, Columns3 } from "lucide-react";
 import {
   ColumnDef,
   flexRender,
@@ -22,7 +22,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tree, Folder, File } from "@/components/ui/file-tree";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { DataTablePagination } from "./DataTablePagination";
+import { DataTablePagination } from "@/components/DataTablePagination";
 import { DataTableFilter } from "@/components/ui/data-table-filter";
 import { Button } from "@/components/ui/button";
 import { filterFn } from "@/lib/filters";
@@ -235,7 +235,7 @@ const MainDataView = () => {
           meta: {
             displayName: col.name,
             type: mapDbColumnTypeToFilterType(col.type),
-            icon: Database,
+            icon: Columns3,
           },
         }),
       ) || []),
