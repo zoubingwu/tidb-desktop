@@ -14,7 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { services } from "wailsjs/go/models";
-import { TestConnection } from "wailsjs/go/main/App";
+import {
+  TestConnection,
+  InferConnectionDetailsFromClipboard,
+} from "wailsjs/go/main/App";
+import { Loader2 } from "lucide-react";
 
 // Type definition for the connection details state
 type ConnectionFormState = Omit<services.ConnectionDetails, "toJSON">; // Exclude toJSON if present
@@ -63,14 +67,12 @@ export function ConnectionFormDialog() {
   const handleTestConnection = async () => {
     setIsTesting(true);
     try {
-      // Ensure TestConnection exists and is bound in your Go app.go
       const success = await TestConnection(formState);
       if (success) {
         toast.success("Connection Successful", {
           description: "Successfully connected to the database.",
         });
       } else {
-        // This case might mean Ping failed but no Go error occurred
         toast.error("Connection Test Failed", {
           description: "Could not ping the database.",
         });
@@ -93,9 +95,7 @@ export function ConnectionFormDialog() {
     try {
       const success = await TestConnection(formState);
       if (success) {
-        // Connection successful, Go backend handles window transition/event.
-        // The event listener in App.tsx should handle UI change.
-        setIsOpen(false); // Close the dialog on success
+        setIsOpen(false);
         toast.info("Connecting...", {
           description: "Connection established, loading main view.",
         });
@@ -119,35 +119,22 @@ export function ConnectionFormDialog() {
 
   const handleReadFromClipboard = async () => {
     setIsInferring(true);
-    toast.info("Reading Clipboard...", {
-      description: "Attempting to infer connection details.",
-    });
     try {
-      // TODO: Implement ReadClipboard and InferConnectionDetails in Go
-      // const clipboardText = await ReadClipboard();
-      // if (!clipboardText) {
-      //     toast({ title: "Clipboard Empty", variant: "destructive" });
-      //     return;
-      // }
-      // const inferredDetails = await InferConnectionDetails(clipboardText);
-      // setFormState(prev => ({ ...prev, ...inferredDetails })); // Merge inferred details
-      // toast({ title: "Details Inferred", description: "Form updated from clipboard." });
-
-      // --- Mock Implementation ---
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate delay
-      const mockDetails: Partial<ConnectionFormState> = {
-        host: "clip.example.com",
-        user: "clip_user",
-        dbName: "clip_db",
-      };
-      setFormState((prev) => ({ ...prev, ...mockDetails }));
-      toast.success("Mock Details Inferred", {
-        description: "Form updated with mock clipboard data.",
-      });
-      // --- End Mock ---
+      const inferredDetails = await InferConnectionDetailsFromClipboard();
+      if (inferredDetails) {
+        console.log("inferredDetails", inferredDetails);
+        setFormState((prev) => ({ ...prev, ...inferredDetails }));
+        toast.success("Details Inferred", {
+          description: "Form updated from clipboard.",
+        });
+      } else {
+        toast.error("Inference Failed", {
+          description: "Could not infer details from clipboard content.",
+        });
+      }
     } catch (error: any) {
       console.error("Clipboard/Infer Error:", error);
-      toast.error("Inference Error", {
+      toast.error("Clipboard/Inference Error", {
         description:
           typeof error === "string"
             ? error
@@ -275,6 +262,7 @@ export function ConnectionFormDialog() {
             onClick={handleReadFromClipboard}
             disabled={isTesting || isConnecting || isInferring}
           >
+            {isInferring && <Loader2 className="h-4 w-4 animate-spin" />}
             {isInferring ? "Inferring..." : "Read from Clipboard"}
           </Button>
           <div className="flex gap-2">
@@ -283,6 +271,7 @@ export function ConnectionFormDialog() {
               onClick={handleTestConnection}
               disabled={isTesting || isConnecting || isInferring}
             >
+              {isTesting && <Loader2 className="h-4 w-4 animate-spin" />}
               {isTesting ? "Testing..." : "Test Connection"}
             </Button>
             <Button
@@ -290,6 +279,7 @@ export function ConnectionFormDialog() {
               onClick={handleConnect}
               disabled={isTesting || isConnecting || isInferring}
             >
+              {isConnecting && <Loader2 className="h-4 w-4 animate-spin" />}
               {isConnecting ? "Connecting..." : "Connect"}
             </Button>
           </div>
