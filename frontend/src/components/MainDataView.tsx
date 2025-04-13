@@ -107,7 +107,6 @@ const MainDataView = () => {
   const {
     data: tableDataResponse,
     isLoading: isLoadingData,
-    isFetching: isFetchingData,
     error: dataError,
     refetch: refetchTableData,
   } = useQuery<
@@ -136,7 +135,9 @@ const MainDataView = () => {
     refetchOnWindowFocus: false,
   });
 
-  // Initialize/Update databaseTree when databases load
+  // --- Effects ---
+
+  // Effect 1: Initialize/Update databaseTree when databases load & handle DB selection validity
   useEffect(() => {
     setDatabaseTree((currentTree) => {
       const newTree: DatabaseTree = databases.map((dbName) => {
@@ -149,50 +150,29 @@ const MainDataView = () => {
       });
       return newTree;
     });
-
-    // Handle case where selected DB is no longer in the list
     if (
       selectedDbName &&
       databases.length > 0 &&
       !databases.includes(selectedDbName)
     ) {
-      setSelection(null); // Reset selection entirely
-    }
-    // Handle case where there are no databases at all
-    else if (databases.length === 0 && !isLoadingDatabases) {
+      setSelection(null);
+    } else if (databases.length === 0 && !isLoadingDatabases) {
       setSelection(null);
     }
-  }, [databases, isLoadingDatabases, selectedDbName]); // Depend on selectedDbName
+  }, [databases, isLoadingDatabases, selectedDbName]);
 
-  // Update the tree with fetched tables for the *selected* database
+  // Effect 2: Update the tree with fetched tables for the *selected* database
   useEffect(() => {
-    // We update the tree based on the DB derived from the query key, which is selectedDbName
     if (selectedDbName && !isLoadingTables) {
       setDatabaseTree((currentTree) => {
         return currentTree.map((item) => {
           if (item.name === selectedDbName) {
-            // Ensure tables is always an array here
             return { ...item, tables: tables ?? [], isLoadingTables: false };
           }
           return item;
         });
       });
-
-      // Check if the current TABLE selection is still valid within the *updated* tables list
-      if (selection?.type === "table") {
-        const currentTables = tables ?? []; // Use the fetched tables
-        const tableStillExists = currentTables.includes(selection.tableName);
-
-        if (!tableStillExists || currentTables.length === 0) {
-          // Table is no longer valid, revert selection to only the database
-          // This state change is okay, it reflects reality and won't immediately loop
-          // because the condition !tableStillExists depends on `tables` data changing.
-          setSelection({ type: "database", dbName: selectedDbName });
-        }
-      }
-      // If selection is 'database', no need to check table validity here
     } else if (selectedDbName && isLoadingTables) {
-      // Mark the selected database as loading tables (only update if needed)
       setDatabaseTree((currentTree) => {
         let changed = false;
         const newTree = currentTree.map((item) => {
@@ -202,13 +182,38 @@ const MainDataView = () => {
           }
           return item;
         });
-        return changed ? newTree : currentTree; // Avoid state update if already loading
+        return changed ? newTree : currentTree;
       });
     }
+    // This effect ONLY updates the tree, doesn't set selection.
+    // Removed `selection` from dependencies.
+  }, [selectedDbName, tables, isLoadingTables]);
 
-    // Dependencies: selectedDbName triggers fetch, tables/isLoadingTables process results,
-    // selection is needed to check validity of selected table *after* tables load.
-  }, [selectedDbName, tables, isLoadingTables, selection]);
+  // Effect 3: Validate table selection based on loaded tables
+  useEffect(() => {
+    // Only run validation if a specific table is selected and tables for that DB have loaded
+    if (selection?.type === "table" && selectedDbName && !isLoadingTables) {
+      const currentTables = tables ?? []; // Use the latest tables data
+      const tableStillExists = currentTables.includes(selection.tableName);
+
+      // If selected table doesn't exist in the loaded list, revert to DB selection
+      if (!tableStillExists) {
+        setSelection({ type: "database", dbName: selectedDbName });
+      }
+    }
+    // If selection is just 'database', no validation needed here.
+    // This depends on selection, selectedDbName, tables list, and its loading state.
+  }, [selection, tables, isLoadingTables, selectedDbName]);
+
+  // --- Derived State & Calculations ---
+  // ... columns, data, pagination, pageCount, table, combinedError ...
+  const isRefreshingIndicator =
+    (!!selectedDbName && isLoadingTables) ||
+    (!!selectedTableName && isLoadingData);
+  const isInitialLoading =
+    isLoadingDatabases ||
+    (!!selectedDbName && isLoadingTables) ||
+    (!!selectedTableName && isLoadingData);
 
   // --- Derive columns and data from query result ---
   const columns = useMemo<ColumnDef<TableRowData>[]>(() => {
@@ -322,23 +327,8 @@ const MainDataView = () => {
   // Handle and display errors
   const error = databasesError || tablesError || dataError;
 
-  // Combined loading state
-  const isLoading =
-    isLoadingDatabases ||
-    (selectedDbName && isLoadingTables) ||
-    (selectedTableName && isLoadingData && !table.getRowModel().rows.length);
-
-  // Specific loading state for the refresh button/indicator
-  // Loading if tables for the selected DB are loading OR if data for the selected table is loading
-  const isRefreshingIndicator =
-    (!!selectedDbName && isFetchingTables) ||
-    (!!selectedTableName && isFetchingData);
-
-  // Loading state for the main content area placeholder (initial loads)
-  const isInitialLoading =
-    isLoadingDatabases ||
-    (!!selectedDbName && isLoadingTables) ||
-    (!!selectedTableName && isLoadingData);
+  // --- Event Handlers ---
+  // ... handleSelectDatabase, handleSelectTable, handleRefresh ...
 
   // Function to handle database selection from tree
   const handleSelectDatabase = (dbName: string) => {
@@ -367,6 +357,7 @@ const MainDataView = () => {
     }
   };
 
+  // --- Render Logic ---
   return (
     <div className="h-full flex">
       <ScrollArea className="w-[240px] h-full bg-muted/40">
@@ -559,7 +550,7 @@ const MainDataView = () => {
           )}
         </div>
 
-        {selection?.type === "table" && !isLoading && !error && (
+        {selection?.type === "table" && !isLoadingData && !error && (
           <DataTablePagination table={table} totalRowCount={totalRowCount} />
         )}
       </div>
