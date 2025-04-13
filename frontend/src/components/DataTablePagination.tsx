@@ -1,13 +1,6 @@
 import { Table } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   ChevronsLeft,
   ChevronLeft,
   ChevronRight,
@@ -47,28 +40,6 @@ export function DataTablePagination<TData>({
 
       {/* Pagination Controls */}
       <div className="flex items-center space-x-6 lg:space-x-8">
-        {/* Rows per page */}
-        <div className="flex items-center space-x-2">
-          <p className="text-sm font-medium whitespace-nowrap">Rows per page</p>
-          <Select
-            value={`${pageSize}`}
-            onValueChange={(value) => {
-              table.setPageSize(Number(value));
-            }}
-          >
-            <SelectTrigger className="h-8 w-[70px] border-0 bg-transparent shadow-none hover:bg-accent hover:text-accent-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2">
-              <SelectValue placeholder={pageSize} />
-            </SelectTrigger>
-            <SelectContent side="top">
-              {[10, 20, 50, 100, 250].map((size) => (
-                <SelectItem key={size} value={`${size}`}>
-                  {size}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         {/* Row range display */}
         <div className="flex w-[120px] items-center justify-center text-sm font-medium whitespace-nowrap">
           {totalRowCount != null && totalRowCount > 0 // Check if totalRowCount is known and > 0
