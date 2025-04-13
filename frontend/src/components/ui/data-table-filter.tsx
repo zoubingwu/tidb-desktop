@@ -19,7 +19,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { take, uniq } from "@/lib/array";
 import {
@@ -69,12 +68,10 @@ type DataTableFilterProps<TData> = {
   onChange?: (filters: ServerSideFilter[]) => void;
 };
 
-export function DataTableFilter<TData, TValue>({
+export const DataTableFilter = <TData, TValue>({
   table,
   onChange,
-}: DataTableFilterProps<TData>) {
-  const isMobile = useIsMobile();
-
+}: DataTableFilterProps<TData>) => {
   // Sync table filters with server-side filters when they change
   useEffect(() => {
     if (!onChange) return;
@@ -100,20 +97,6 @@ export function DataTableFilter<TData, TValue>({
     onChange(serverFilters);
   }, [table.getState().columnFilters, onChange]);
 
-  if (isMobile) {
-    return (
-      <div className="flex w-full items-start justify-between gap-2">
-        <div className="flex gap-1">
-          <FilterSelector table={table} />
-          <FilterActions table={table} onChange={onChange} />
-        </div>
-        <ActiveFiltersMobileContainer>
-          <ActiveFilters table={table} />
-        </ActiveFiltersMobileContainer>
-      </div>
-    );
-  }
-
   return (
     <div className="flex w-full items-start justify-between gap-2">
       <div className="flex md:flex-wrap gap-2 w-full flex-1">
@@ -123,76 +106,7 @@ export function DataTableFilter<TData, TValue>({
       <FilterActions table={table} onChange={onChange} />
     </div>
   );
-}
-
-export function ActiveFiltersMobileContainer({
-  children,
-}: { children: React.ReactNode }) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [showLeftBlur, setShowLeftBlur] = useState(false);
-  const [showRightBlur, setShowRightBlur] = useState(true);
-
-  // Check if there's content to scroll and update blur states
-  const checkScroll = () => {
-    if (scrollContainerRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } =
-        scrollContainerRef.current;
-
-      // Show left blur if scrolled to the right
-      setShowLeftBlur(scrollLeft > 0);
-
-      // Show right blur if there's more content to scroll to the right
-      // Add a small buffer (1px) to account for rounding errors
-      setShowRightBlur(scrollLeft + clientWidth < scrollWidth - 1);
-    }
-  };
-
-  // Log blur states for debugging
-  // useEffect(() => {
-  //   console.log('left:', showLeftBlur, '  right:', showRightBlur)
-  // }, [showLeftBlur, showRightBlur])
-
-  // Set up ResizeObserver to monitor container size
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-      const resizeObserver = new ResizeObserver(() => {
-        checkScroll();
-      });
-      resizeObserver.observe(scrollContainerRef.current);
-      return () => {
-        resizeObserver.disconnect();
-      };
-    }
-  }, []);
-
-  // Update blur states when children change
-  useEffect(() => {
-    checkScroll();
-  }, [children]);
-
-  return (
-    <div className="relative w-full overflow-x-hidden">
-      {/* Left blur effect */}
-      {showLeftBlur && (
-        <div className="absolute left-0 top-0 bottom-0 w-16 z-10 pointer-events-none bg-gradient-to-r from-background to-transparent animate-in fade-in-0" />
-      )}
-
-      {/* Scrollable container */}
-      <div
-        ref={scrollContainerRef}
-        className="flex gap-2 overflow-x-scroll no-scrollbar"
-        onScroll={checkScroll}
-      >
-        {children}
-      </div>
-
-      {/* Right blur effect */}
-      {showRightBlur && (
-        <div className="absolute right-0 top-0 bottom-0 w-16 z-10 pointer-events-none bg-gradient-to-l from-background to-transparent animate-in fade-in-0 " />
-      )}
-    </div>
-  );
-}
+};
 
 export function FilterActions<TData>({
   table,
