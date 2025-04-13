@@ -8,7 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +17,6 @@ import { services } from "wailsjs/go/models";
 import {
   TestConnection,
   InferConnectionDetailsFromClipboard,
-  ConnectUsingDetails,
   SaveConnection,
 } from "wailsjs/go/main/App";
 import { Loader2 } from "lucide-react";
@@ -34,8 +33,19 @@ const initialFormState: ConnectionFormState = {
   useTLS: true,
 };
 
-export function ConnectionFormDialog() {
-  const [isOpen, setIsOpen] = useState(false);
+// Add props to control open state and notify on save
+type ConnectionFormDialogProps = {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConnectionSaved: () => void; // Callback after saving
+};
+
+export function ConnectionFormDialog({
+  isOpen,
+  onOpenChange,
+  onConnectionSaved,
+}: ConnectionFormDialogProps) {
+  // Remove local isOpen state, use prop instead
   const [formState, setFormState] =
     useState<ConnectionFormState>(initialFormState);
   const [connectionName, setConnectionName] = useState<string>("");
@@ -43,7 +53,7 @@ export function ConnectionFormDialog() {
   const [isSaving, setIsSaving] = useState(false);
   const [isInferring, setIsInferring] = useState(false);
 
-  // Reset form when dialog opens
+  // Reset form when dialog opens (using prop)
   useEffect(() => {
     if (isOpen) {
       setFormState(initialFormState);
@@ -98,7 +108,8 @@ export function ConnectionFormDialog() {
     }
   };
 
-  const handleSaveAndConnect = async () => {
+  // Updated save function (doesn't connect anymore)
+  const handleSave = async () => {
     if (!connectionName.trim()) {
       toast.error("Missing Connection Name", {
         description: "Please provide a name to save this connection.",
@@ -111,27 +122,15 @@ export function ConnectionFormDialog() {
       toast.success("Connection Saved", {
         description: `Connection '${connectionName}' saved successfully.`,
       });
-
-      const connectedDetails = await ConnectUsingDetails(formState);
-
-      if (connectedDetails) {
-        setIsOpen(false);
-        toast.info("Connecting Session...", {
-          description: "Connection established, loading main view.",
-        });
-      } else {
-        toast.error("Session Connection Failed", {
-          description:
-            "Saved successfully, but failed to activate the session.",
-        });
-      }
+      onConnectionSaved(); // Notify parent to refetch
+      onOpenChange(false); // Close dialog on successful save
     } catch (error: any) {
-      console.error("Save/Connect Error:", error);
-      toast.error("Save or Connect Error", {
+      console.error("Save Error:", error);
+      toast.error("Save Error", {
         description:
           typeof error === "string"
             ? error
-            : error?.message || "An unknown error occurred.",
+            : error?.message || "Could not save connection.",
       });
     } finally {
       setIsSaving(false);
@@ -182,13 +181,8 @@ export function ConnectionFormDialog() {
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button size="lg">Add New Connection</Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[525px]">
-        {" "}
-        {/* Wider dialog */}
         <DialogHeader>
           <DialogTitle>Database Connection</DialogTitle>
           <DialogDescription>
@@ -306,8 +300,6 @@ export function ConnectionFormDialog() {
           </div>
         </div>
         <DialogFooter className="gap-2 sm:justify-between">
-          {" "}
-          {/* Adjust footer layout */}
           <Button
             variant="outline"
             onClick={handleReadFromClipboard}
@@ -317,6 +309,9 @@ export function ConnectionFormDialog() {
             {isInferring ? "Inferring..." : "Read from Clipboard"}
           </Button>
           <div className="flex gap-2">
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
             <Button
               variant="secondary"
               onClick={handleTestConnection}
@@ -326,13 +321,13 @@ export function ConnectionFormDialog() {
               {isTesting ? "Testing..." : "Test"}
             </Button>
             <Button
-              onClick={handleSaveAndConnect}
+              onClick={handleSave}
               disabled={
                 isTesting || isSaving || isInferring || !connectionName.trim()
               }
             >
               {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isSaving ? "Connecting..." : "Save & Connect"}
+              {isSaving ? "Saving..." : "Save"}
             </Button>
           </div>
         </DialogFooter>
