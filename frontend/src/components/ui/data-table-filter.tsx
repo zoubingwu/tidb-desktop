@@ -36,9 +36,16 @@ import {
   numberFilterDetails,
   optionFilterDetails,
   textFilterDetails,
+  type DateFilterOperator,
 } from "@/lib/filters";
 import type { ColumnOption, ElementType } from "@/lib/filters";
-import type { Column, ColumnMeta, RowData, Table } from "@tanstack/react-table";
+import type {
+  Column,
+  ColumnMeta,
+  RowData,
+  Table,
+  ColumnFilter,
+} from "@tanstack/react-table";
 import { format, isEqual } from "date-fns";
 import { FilterXIcon } from "lucide-react";
 import { ArrowRight, Filter } from "lucide-react";
@@ -62,6 +69,34 @@ export type ServerSideFilter = {
   values: any[];
 };
 
+// Helper function to compute server-side filters from table state
+function computeServerFilters<TData>(
+  table: Table<TData>,
+  updatedFilters: ColumnFilter[],
+): ServerSideFilter[] {
+  return updatedFilters
+    .map((filter) => {
+      const column = table.getColumn(filter.id);
+      if (!column?.columnDef.meta) return null;
+
+      const meta = column.columnDef.meta as ColumnMeta<TData, unknown>;
+      const type = meta.type as ColumnDataType;
+
+      // Ensure filter.value is treated correctly, accessing .operator and .values safely
+      const filterValue = filter.value as any; // Cast to any to access properties dynamically
+      const operator = filterValue?.operator || "";
+      const values = filterValue?.values || [];
+
+      return {
+        columnId: filter.id,
+        type,
+        operator: operator,
+        values: values,
+      };
+    })
+    .filter(Boolean) as ServerSideFilter[];
+}
+
 type DataTableFilterProps<TData> = {
   table: Table<TData>;
   // New onChange prop to notify parent when filters change
@@ -72,36 +107,11 @@ export const DataTableFilter = <TData, TValue>({
   table,
   onChange,
 }: DataTableFilterProps<TData>) => {
-  // Sync table filters with server-side filters when they change
-  useEffect(() => {
-    if (!onChange) return;
-
-    const tableFilters = table.getState().columnFilters;
-    const serverFilters: ServerSideFilter[] = tableFilters
-      .map((filter) => {
-        const column = table.getColumn(filter.id);
-        if (!column?.columnDef.meta) return null;
-
-        const meta = column.columnDef.meta as ColumnMeta<TData, unknown>;
-        const type = meta.type as ColumnDataType;
-
-        return {
-          columnId: filter.id,
-          type,
-          operator: (filter.value as any)?.operator || "",
-          values: (filter.value as any)?.values || [],
-        };
-      })
-      .filter(Boolean) as ServerSideFilter[];
-
-    onChange(serverFilters);
-  }, [table.getState().columnFilters, onChange]);
-
   return (
     <div className="flex w-full items-start justify-between gap-2">
       <div className="flex md:flex-wrap gap-2 w-full flex-1">
-        <FilterSelector table={table} />
-        <ActiveFilters table={table} />
+        <FilterSelector table={table} onChange={onChange} />
+        <ActiveFilters table={table} onChange={onChange} />
       </div>
       <FilterActions table={table} onChange={onChange} />
     </div>
@@ -139,7 +149,10 @@ export function FilterActions<TData>({
   );
 }
 
-export function FilterSelector<TData>({ table }: { table: Table<TData> }) {
+export function FilterSelector<TData>({
+  table,
+  onChange,
+}: { table: Table<TData>; onChange?: (filters: ServerSideFilter[]) => void }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [property, setProperty] = useState<string | undefined>(undefined);
@@ -171,6 +184,7 @@ export function FilterSelector<TData>({ table }: { table: Table<TData> }) {
           column={column}
           columnMeta={columnMeta}
           table={table}
+          onChange={onChange}
         />
       ) : (
         <Command loop>
@@ -195,7 +209,7 @@ export function FilterSelector<TData>({ table }: { table: Table<TData> }) {
           </CommandList>
         </Command>
       ),
-    [property, column, columnMeta, value, table, properties],
+    [property, column, columnMeta, value, table, properties, onChange],
   );
 
   return (
@@ -281,7 +295,10 @@ export function DebouncedInput({
   );
 }
 
-export function ActiveFilters<TData>({ table }: { table: Table<TData> }) {
+export function ActiveFilters<TData>({
+  table,
+  onChange,
+}: { table: Table<TData>; onChange?: (filters: ServerSideFilter[]) => void }) {
   const filters = table.getState().columnFilters;
 
   return (
@@ -303,6 +320,7 @@ export function ActiveFilters<TData>({ table }: { table: Table<TData> }) {
               column,
               meta as ColumnMeta<TData, unknown> & { type: "text" },
               table,
+              onChange,
             );
           case "number":
             return renderFilter<TData, "number">(
@@ -310,6 +328,7 @@ export function ActiveFilters<TData>({ table }: { table: Table<TData> }) {
               column,
               meta as ColumnMeta<TData, unknown> & { type: "number" },
               table,
+              onChange,
             );
           case "date":
             return renderFilter<TData, "date">(
@@ -317,6 +336,7 @@ export function ActiveFilters<TData>({ table }: { table: Table<TData> }) {
               column,
               meta as ColumnMeta<TData, unknown> & { type: "date" },
               table,
+              onChange,
             );
           case "option":
             return renderFilter<TData, "option">(
@@ -324,6 +344,7 @@ export function ActiveFilters<TData>({ table }: { table: Table<TData> }) {
               column,
               meta as ColumnMeta<TData, unknown> & { type: "option" },
               table,
+              onChange,
             );
           case "multiOption":
             return renderFilter<TData, "multiOption">(
@@ -336,6 +357,7 @@ export function ActiveFilters<TData>({ table }: { table: Table<TData> }) {
                 type: "multiOption";
               },
               table,
+              onChange,
             );
           default:
             return null; // Handle unknown types gracefully
@@ -351,8 +373,20 @@ function renderFilter<TData, T extends ColumnDataType>(
   column: Column<TData, unknown>,
   meta: ColumnMeta<TData, unknown> & { type: T },
   table: Table<TData>,
+  onChange?: (filters: ServerSideFilter[]) => void,
 ) {
   const { value } = filter;
+
+  const handleRemoveFilter = () => {
+    const currentFilters = table.getState().columnFilters;
+    const newFilters = currentFilters.filter((f) => f.id !== filter.id);
+    table.setColumnFilters(newFilters);
+
+    if (onChange) {
+      const serverFilters = computeServerFilters(table, newFilters);
+      onChange(serverFilters);
+    }
+  };
 
   return (
     <div
@@ -364,7 +398,9 @@ function renderFilter<TData, T extends ColumnDataType>(
       <FilterOperator
         column={column}
         columnMeta={meta}
-        filter={value} // Typed as FilterValue<T>
+        filter={value}
+        table={table}
+        onChange={onChange}
       />
       <Separator orientation="vertical" />
       <FilterValue
@@ -372,12 +408,13 @@ function renderFilter<TData, T extends ColumnDataType>(
         column={column}
         columnMeta={meta}
         table={table}
+        onChange={onChange}
       />
       <Separator orientation="vertical" />
       <Button
         variant="ghost"
         className="rounded-none rounded-r-2xl text-xs w-7 h-full"
-        onClick={() => table.getColumn(filter.id)?.setFilterValue(undefined)}
+        onClick={handleRemoveFilter}
       >
         <X className="size-4 -translate-x-0.5" />
       </Button>
@@ -410,10 +447,14 @@ export function FilterOperator<TData, T extends ColumnDataType>({
   column,
   columnMeta,
   filter,
+  table,
+  onChange,
 }: {
   column: Column<TData, unknown>;
   columnMeta: ColumnMeta<TData, unknown>;
   filter: FilterModel<T, TData>;
+  table: Table<TData>;
+  onChange?: (filters: ServerSideFilter[]) => void;
 }) {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -437,7 +478,12 @@ export function FilterOperator<TData, T extends ColumnDataType>({
           <CommandInput placeholder="Search..." />
           <CommandEmpty>No results.</CommandEmpty>
           <CommandList className="max-h-fit">
-            <FilterOperatorController column={column} closeController={close} />
+            <FilterOperatorController
+              column={column}
+              closeController={close}
+              table={table}
+              onChange={onChange}
+            />
           </CommandList>
         </Command>
       </PopoverContent>
@@ -460,11 +506,15 @@ export function FilterOperatorDisplay<TData, T extends ColumnDataType>({
 interface FilterOperatorControllerProps<TData> {
   column: Column<TData, unknown>;
   closeController: () => void;
+  table: Table<TData>;
+  onChange?: (filters: ServerSideFilter[]) => void;
 }
 
 export function FilterOperatorController<TData>({
   column,
   closeController,
+  table,
+  onChange,
 }: FilterOperatorControllerProps<TData>) {
   const { type } = column.columnDef.meta!;
 
@@ -474,6 +524,8 @@ export function FilterOperatorController<TData>({
         <FilterOperatorOptionController
           column={column}
           closeController={closeController}
+          table={table}
+          onChange={onChange}
         />
       );
     case "multiOption":
@@ -481,6 +533,8 @@ export function FilterOperatorController<TData>({
         <FilterOperatorMultiOptionController
           column={column}
           closeController={closeController}
+          table={table}
+          onChange={onChange}
         />
       );
     case "date":
@@ -488,6 +542,8 @@ export function FilterOperatorController<TData>({
         <FilterOperatorDateController
           column={column}
           closeController={closeController}
+          table={table}
+          onChange={onChange}
         />
       );
     case "text":
@@ -495,6 +551,8 @@ export function FilterOperatorController<TData>({
         <FilterOperatorTextController
           column={column}
           closeController={closeController}
+          table={table}
+          onChange={onChange}
         />
       );
     case "number":
@@ -502,6 +560,8 @@ export function FilterOperatorController<TData>({
         <FilterOperatorNumberController
           column={column}
           closeController={closeController}
+          table={table}
+          onChange={onChange}
         />
       );
     default:
@@ -512,6 +572,8 @@ export function FilterOperatorController<TData>({
 function FilterOperatorOptionController<TData>({
   column,
   closeController,
+  table,
+  onChange,
 }: FilterOperatorControllerProps<TData>) {
   const filter = column.getFilterValue() as FilterModel<"option", TData>;
   const filterDetails = optionFilterDetails[filter.operator];
@@ -526,13 +588,30 @@ function FilterOperatorOptionController<TData>({
       operator: value,
     }));
     closeController();
+
+    if (onChange) {
+      const serverFilters = computeServerFilters(table, [
+        {
+          id: column.id,
+          value: {
+            operator: value,
+            values: filter.values,
+          },
+        },
+      ]);
+      onChange(serverFilters);
+    }
   };
 
   return (
     <CommandGroup heading="Operators">
       {relatedFilters.map((r) => {
         return (
-          <CommandItem onSelect={changeOperator} value={r.value} key={r.value}>
+          <CommandItem
+            onSelect={() => changeOperator(r.value)}
+            value={r.value}
+            key={r.value}
+          >
             {r.label}
           </CommandItem>
         );
@@ -544,6 +623,8 @@ function FilterOperatorOptionController<TData>({
 function FilterOperatorMultiOptionController<TData>({
   column,
   closeController,
+  table,
+  onChange,
 }: FilterOperatorControllerProps<TData>) {
   const filter = column.getFilterValue() as FilterModel<"multiOption", TData>;
   const filterDetails = multiOptionFilterDetails[filter.operator];
@@ -558,13 +639,30 @@ function FilterOperatorMultiOptionController<TData>({
       operator: value,
     }));
     closeController();
+
+    if (onChange) {
+      const serverFilters = computeServerFilters(table, [
+        {
+          id: column.id,
+          value: {
+            operator: value,
+            values: filter.values,
+          },
+        },
+      ]);
+      onChange(serverFilters);
+    }
   };
 
   return (
     <CommandGroup heading="Operators">
       {relatedFilters.map((r) => {
         return (
-          <CommandItem onSelect={changeOperator} value={r.value} key={r.value}>
+          <CommandItem
+            onSelect={() => changeOperator(r.value)}
+            value={r.value}
+            key={r.value}
+          >
             {r.label}
           </CommandItem>
         );
@@ -576,6 +674,8 @@ function FilterOperatorMultiOptionController<TData>({
 function FilterOperatorDateController<TData>({
   column,
   closeController,
+  table,
+  onChange,
 }: FilterOperatorControllerProps<TData>) {
   const filter = column.getFilterValue() as FilterModel<"date", TData>;
   const filterDetails = dateFilterDetails[filter.operator];
@@ -590,13 +690,30 @@ function FilterOperatorDateController<TData>({
       operator: value,
     }));
     closeController();
+
+    if (onChange) {
+      const serverFilters = computeServerFilters(table, [
+        {
+          id: column.id,
+          value: {
+            operator: value,
+            values: filter.values,
+          },
+        },
+      ]);
+      onChange(serverFilters);
+    }
   };
 
   return (
     <CommandGroup>
       {relatedFilters.map((r) => {
         return (
-          <CommandItem onSelect={changeOperator} value={r.value} key={r.value}>
+          <CommandItem
+            onSelect={() => changeOperator(r.value)}
+            value={r.value}
+            key={r.value}
+          >
             {r.label}
           </CommandItem>
         );
@@ -608,6 +725,8 @@ function FilterOperatorDateController<TData>({
 export function FilterOperatorTextController<TData>({
   column,
   closeController,
+  table,
+  onChange,
 }: FilterOperatorControllerProps<TData>) {
   const filter = column.getFilterValue() as FilterModel<"text", TData>;
   const filterDetails = textFilterDetails[filter.operator];
@@ -622,13 +741,30 @@ export function FilterOperatorTextController<TData>({
       operator: value,
     }));
     closeController();
+
+    if (onChange) {
+      const serverFilters = computeServerFilters(table, [
+        {
+          id: column.id,
+          value: {
+            operator: value,
+            values: filter.values,
+          },
+        },
+      ]);
+      onChange(serverFilters);
+    }
   };
 
   return (
     <CommandGroup heading="Operators">
       {relatedFilters.map((r) => {
         return (
-          <CommandItem onSelect={changeOperator} value={r.value} key={r.value}>
+          <CommandItem
+            onSelect={() => changeOperator(r.value)}
+            value={r.value}
+            key={r.value}
+          >
             {r.label}
           </CommandItem>
         );
@@ -640,6 +776,8 @@ export function FilterOperatorTextController<TData>({
 function FilterOperatorNumberController<TData>({
   column,
   closeController,
+  table,
+  onChange,
 }: FilterOperatorControllerProps<TData>) {
   const filter = column.getFilterValue() as FilterModel<"number", TData>;
 
@@ -658,6 +796,19 @@ function FilterOperatorNumberController<TData>({
       return { ...old, operator: value, values: newValues };
     });
     closeController();
+
+    if (onChange) {
+      const serverFilters = computeServerFilters(table, [
+        {
+          id: column.id,
+          value: {
+            operator: value,
+            values: filter.values,
+          },
+        },
+      ]);
+      onChange(serverFilters);
+    }
   };
 
   return (
@@ -684,11 +835,13 @@ export function FilterValue<TData, TValue>({
   column,
   columnMeta,
   table,
+  onChange,
 }: {
   id: string;
   column: Column<TData>;
   columnMeta: ColumnMeta<TData, TValue>;
   table: Table<TData>;
+  onChange?: (filters: ServerSideFilter[]) => void;
 }) {
   return (
     <Popover>
@@ -716,6 +869,7 @@ export function FilterValue<TData, TValue>({
           column={column}
           columnMeta={columnMeta}
           table={table}
+          onChange={onChange}
         />
       </PopoverContent>
     </Popover>
@@ -976,6 +1130,7 @@ function formatDateRange(start: Date, end: Date) {
 
 export function FilterValueDateDisplay<TData, TValue>({
   column,
+  columnMeta,
 }: FilterValueDisplayProps<TData, TValue>) {
   const filter = column.getFilterValue()
     ? (column.getFilterValue() as FilterModel<"date", TData>)
@@ -1056,11 +1211,13 @@ export function FitlerValueController<TData, TValue>({
   column,
   columnMeta,
   table,
+  onChange,
 }: {
   id: string;
   column: Column<TData>;
   columnMeta: ColumnMeta<TData, TValue>;
   table: Table<TData>;
+  onChange?: (filters: ServerSideFilter[]) => void;
 }) {
   switch (columnMeta.type) {
     case "option":
@@ -1070,6 +1227,7 @@ export function FitlerValueController<TData, TValue>({
           column={column}
           columnMeta={columnMeta}
           table={table}
+          onChange={onChange}
         />
       );
     case "multiOption":
@@ -1079,6 +1237,7 @@ export function FitlerValueController<TData, TValue>({
           column={column}
           columnMeta={columnMeta}
           table={table}
+          onChange={onChange}
         />
       );
     case "date":
@@ -1088,6 +1247,7 @@ export function FitlerValueController<TData, TValue>({
           column={column}
           columnMeta={columnMeta}
           table={table}
+          onChange={onChange}
         />
       );
     case "text":
@@ -1097,6 +1257,7 @@ export function FitlerValueController<TData, TValue>({
           column={column}
           columnMeta={columnMeta}
           table={table}
+          onChange={onChange}
         />
       );
     case "number":
@@ -1106,6 +1267,7 @@ export function FitlerValueController<TData, TValue>({
           column={column}
           columnMeta={columnMeta}
           table={table}
+          onChange={onChange}
         />
       );
     default:
@@ -1118,6 +1280,7 @@ interface ProperFilterValueMenuProps<TData, TValue> {
   column: Column<TData>;
   columnMeta: ColumnMeta<TData, TValue>;
   table: Table<TData>;
+  onChange?: (filters: ServerSideFilter[]) => void;
 }
 
 export function FilterValueOptionController<TData, TValue>({
@@ -1125,6 +1288,7 @@ export function FilterValueOptionController<TData, TValue>({
   column,
   columnMeta,
   table,
+  onChange,
 }: ProperFilterValueMenuProps<TData, TValue>) {
   const filter = column.getFilterValue()
     ? (column.getFilterValue() as FilterModel<"option", TData>)
@@ -1269,6 +1433,7 @@ export function FilterValueMultiOptionController<
   column,
   columnMeta,
   table,
+  onChange,
 }: ProperFilterValueMenuProps<TData, TValue>) {
   const filter = column.getFilterValue() as
     | FilterModel<"multiOption", TData>
@@ -1427,7 +1592,11 @@ export function FilterValueMultiOptionController<
 }
 
 export function FilterValueDateController<TData, TValue>({
+  id,
   column,
+  columnMeta,
+  table,
+  onChange,
 }: ProperFilterValueMenuProps<TData, TValue>) {
   const filter = column.getFilterValue()
     ? (column.getFilterValue() as FilterModel<"date", TData>)
@@ -1451,31 +1620,54 @@ export function FilterValueDateController<TData, TValue>({
 
     const newValues = isRange ? [start, end] : start ? [start] : [];
 
-    column.setFilterValue((old: undefined | FilterModel<"date", TData>) => {
-      if (!old || old.values.length === 0)
-        return {
-          operator: newValues.length > 1 ? "is between" : "is",
-          values: newValues,
-          columnMeta: column.columnDef.meta,
-        } satisfies FilterModel<"date", TData>;
+    let determinedOperator: DateFilterOperator | undefined;
 
-      return {
-        operator:
+    column.setFilterValue((old: undefined | FilterModel<"date", TData>) => {
+      if (!old || old.values.length === 0) {
+        determinedOperator = newValues.length > 1 ? "is between" : "is";
+      } else {
+        determinedOperator =
           old.values.length < newValues.length
             ? "is between"
             : old.values.length > newValues.length
               ? "is"
-              : old.operator,
+              : old.operator;
+      }
+
+      return {
+        operator: determinedOperator!,
         values: newValues,
         columnMeta: column.columnDef.meta,
       } satisfies FilterModel<"date", TData>;
     });
+
+    if (onChange && determinedOperator !== undefined) {
+      const currentFilters = table.getState().columnFilters;
+      const newFilterValuePart = {
+        operator: determinedOperator,
+        values: newValues,
+      };
+
+      let filterExists = false;
+      const nextFiltersState = currentFilters.map((f) => {
+        if (f.id === column.id) {
+          filterExists = true;
+          return { id: column.id, value: newFilterValuePart };
+        }
+        return f;
+      });
+
+      if (!filterExists) {
+        nextFiltersState.push({ id: column.id, value: newFilterValuePart });
+      }
+
+      const serverFilters = computeServerFilters(table, nextFiltersState);
+      onChange(serverFilters);
+    }
   }
 
   return (
     <Command>
-      {/* <CommandInput placeholder="Search..." /> */}
-      {/* <CommandEmpty>No results.</CommandEmpty> */}
       <CommandList className="max-h-fit">
         <CommandGroup>
           <div>
@@ -1496,6 +1688,7 @@ export function FilterValueDateController<TData, TValue>({
 
 export function FilterValueTextController<TData, TValue>({
   column,
+  onChange,
 }: ProperFilterValueMenuProps<TData, TValue>) {
   const filter = column.getFilterValue()
     ? (column.getFilterValue() as FilterModel<"text", TData>)
@@ -1535,6 +1728,7 @@ export function FilterValueNumberController<TData, TValue>({
   table,
   column,
   columnMeta,
+  onChange,
 }: ProperFilterValueMenuProps<TData, TValue>) {
   const maxFromMeta = columnMeta.max;
   const cappedMax = maxFromMeta ?? Number.MAX_SAFE_INTEGER;
