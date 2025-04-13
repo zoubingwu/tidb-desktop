@@ -386,14 +386,13 @@ func (a *App) ListTables(dbName string) ([]string, error) {
 }
 
 // GetTableData retrieves paginated data and column info for a specific table.
-func (a *App) GetTableData(tableName string, limit int, offset int, filterParams *map[string]interface{}) (*TableDataResponse, error) {
+func (a *App) GetTableData(dbName string, tableName string, limit int, offset int, filterParams *map[string]any) (*TableDataResponse, error) {
 	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
 	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
 	if tableName == "" { return nil, fmt.Errorf("table name cannot be empty") }
 
 	// 1. Get Column Info (Example using information_schema - adjust if needed)
 	// Ensure the DBName is handled correctly (either part of connection or table name)
-	dbName := a.activeConnection.DBName
 	if dbName == "" {
 		// Attempt to infer from active connection or return error
 		// This part needs refinement based on how you manage DB context
