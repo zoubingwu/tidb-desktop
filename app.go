@@ -238,45 +238,142 @@ type TableDataResponse struct {
 	TotalRows *int64         `json:"totalRows,omitempty"` // Optional: For pagination
 }
 
-// ListTables retrieves a list of table names from the active connection's database.
-func (a *App) ListTables() ([]string, error) {
+// ListDatabases retrieves a list of database/schema names accessible by the connection.
+func (a *App) ListDatabases() ([]string, error) {
 	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
 	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
 
-	// Example query (adjust for TiDB/MySQL if different)
-	query := "SHOW TABLES;"
-	if a.activeConnection.DBName != "" {
-		// If a specific DB is selected in the connection, use it
-		query = fmt.Sprintf("SHOW TABLES FROM `%s`;", a.activeConnection.DBName)
-		// Alternatively connect to that specific DB first if ExecuteSQL doesn't handle it
-	} else {
-		// Maybe return error or default DB's tables? Needs decision.
-		return nil, fmt.Errorf("no database selected in the active connection")
-	}
+	// Query varies slightly between DBs (e.g., MySQL vs PostgreSQL)
+	// SHOW DATABASES; is common for MySQL/TiDB
+	query := "SHOW DATABASES;"
 
 	result, err := a.ExecuteSQL(query) // Use the existing ExecuteSQL
 	if err != nil {
-		return nil, fmt.Errorf("failed to list tables: %w", err)
+		return nil, fmt.Errorf("failed to list databases: %w", err)
+	}
+
+	dbRows, ok := result.([]map[string]any)
+	if !ok {
+		// Handle case where result might be different (e.g., single column result)
+		// This part might need adjustment based on actual driver behavior
+		fmt.Printf("Debug: Unexpected result format when listing databases: %T\n", result)
+		// Try to handle single column result?
+		if rows, ok := result.([]any); ok {
+			var dbNames []string
+			for _, row := range rows {
+				if dbMap, ok := row.(map[string]any); ok {
+					 for _, v := range dbMap { // Get the first value assuming it's the name
+						if name, ok := v.(string); ok {
+								// Filter out system databases if desired
+								if name != "information_schema" && name != "performance_schema" && name != "mysql" && name != "sys" {
+									dbNames = append(dbNames, name)
+								}
+								break // Only take the first value
+						}
+					 }
+				}
+			}
+			if len(dbNames) > 0 {
+				return dbNames, nil
+			}
+		}
+		return nil, fmt.Errorf("unexpected result format when listing databases")
+	}
+
+	var dbNames []string
+	// The column name might vary (e.g., 'Database')
+	columnKey := ""
+	if len(dbRows) > 0 {
+		for k := range dbRows[0] {
+			columnKey = k // Assume the first column contains the name
+			break
+		}
+	}
+
+	if columnKey == "" && len(dbRows) > 0 {
+		return nil, fmt.Errorf("could not determine database name column key from SHOW DATABASES result")
+	}
+
+	for _, row := range dbRows {
+		if name, ok := row[columnKey].(string); ok {
+			// Filter out common system databases
+			if name != "information_schema" && name != "performance_schema" && name != "mysql" && name != "sys" {
+				dbNames = append(dbNames, name)
+			}
+		}
+	}
+
+	// If the connection details specify a DB, ensure it's in the list or add it?
+	// Or maybe the frontend should pre-select it if available.
+	if a.activeConnection.DBName != "" {
+		found := false
+		for _, name := range dbNames {
+			if name == a.activeConnection.DBName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			// Add it if not found by SHOW DATABASES (might happen due to permissions)
+			// Or maybe just rely on the frontend to pre-select it if available
+			dbNames = append([]string{a.activeConnection.DBName}, dbNames...) // Prepend it
+		}
+	}
+
+	return dbNames, nil
+}
+
+// ListTables retrieves a list of table names from the specified database.
+// If dbName is empty, it uses the database specified in the active connection details.
+func (a *App) ListTables(dbName string) ([]string, error) {
+	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
+	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
+
+	targetDB := dbName
+	if targetDB == "" {
+		targetDB = a.activeConnection.DBName // Use DB from connection if provided
+	}
+
+	if targetDB == "" {
+		// If still empty, we can't proceed.
+		// Consider fetching default DB first? Or just error out.
+		return nil, fmt.Errorf("no database selected or specified in connection details")
+	}
+
+	// Query to list tables from the target database
+	query := fmt.Sprintf("SHOW TABLES FROM `%s`;", targetDB)
+
+	result, err := a.ExecuteSQL(query)
+	if err != nil {
+		// Check if error is due to database not existing? Could provide better feedback.
+		// Example: Check for MySQL error code 1049 (Unknown database)
+		// if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1049 {
+		//  return nil, fmt.Errorf("database '%s' not found", targetDB)
+		// }
+		return nil, fmt.Errorf("failed to list tables from database '%s': %w", targetDB, err)
 	}
 
 	tableRows, ok := result.([]map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("unexpected result format when listing tables")
+		fmt.Printf("Debug: Unexpected result format when listing tables from %s: %T\n", targetDB, result)
+		// Handle empty result or other formats if necessary
+		if result == nil || len(tableRows) == 0 {
+			return []string{}, nil // Return empty list if no tables found
+		}
+		return nil, fmt.Errorf("unexpected result format when listing tables from database '%s'", targetDB)
 	}
 
 	var tableNames []string
-	// The column name might vary depending on the DB (e.g., 'Tables_in_db', 'TABLE_NAME')
-	// Inspect the actual result of SHOW TABLES; to find the correct key
 	columnKey := ""
 	if len(tableRows) > 0 {
 		for k := range tableRows[0] {
-			// Assume the first column contains the table name
-			columnKey = k
+			columnKey = k // Assume first column is table name
 			break
 		}
 	}
+
 	if columnKey == "" && len(tableRows) > 0 {
-		return nil, fmt.Errorf("could not determine table name column key from SHOW TABLES result")
+		return nil, fmt.Errorf("could not determine table name column key from SHOW TABLES result for database '%s'", targetDB)
 	}
 
 	for _, row := range tableRows {
