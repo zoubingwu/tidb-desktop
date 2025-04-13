@@ -324,7 +324,7 @@ const MainDataView = () => {
 
   return (
     <div className="h-full flex">
-      <ScrollArea className="w-[240px] h-full border-r bg-muted/40">
+      <ScrollArea className="w-[240px] h-full bg-muted/40">
         {isLoadingDatabases ? (
           <div className="p-4 text-center text-muted-foreground">
             Loading Databases...
