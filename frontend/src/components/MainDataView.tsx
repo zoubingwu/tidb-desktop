@@ -123,9 +123,6 @@ const MainDataView = () => {
     refetchOnWindowFocus: false,
   });
 
-  // --- Effects ---
-  console.log("databases", databases);
-
   // Effect 1: Initialize/Update databaseTree when databases load & handle DB selection validity
   useEffect(() => {
     if (databases?.length) {
@@ -247,9 +244,6 @@ const MainDataView = () => {
       ) || []),
     ];
   }, [tableDataResponse?.columns]);
-
-  console.log("tableDataResponse", tableDataResponse);
-  console.log("columns", columns);
 
   const data = useMemo(
     () => tableDataResponse?.rows ?? [],
