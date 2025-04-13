@@ -44,9 +44,6 @@ const WelcomeScreen = () => {
     setConnectingName(name);
     try {
       await ConnectUsingSaved(name);
-      toast.info("Connecting Session...", {
-        description: `Connecting to '${name}'...`,
-      });
     } catch (error: any) {
       console.error(`Connect using ${name} error:`, error);
       toast.error("Connection Failed", { description: error?.message });
