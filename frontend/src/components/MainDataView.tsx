@@ -1,13 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import {
-  Loader2,
-  Database,
-  Table2Icon,
-  ChevronsLeft,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsRight,
-} from "lucide-react";
+import { Loader2, Database, Table2Icon } from "lucide-react";
 import {
   ColumnDef,
   flexRender,
@@ -27,19 +19,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DataTableFilter } from "@/components/ui/data-table-filter";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tree, Folder, File } from "@/components/ui/file-tree";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { DataTablePagination } from "./DataTablePagination";
 
 // Type for the Go backend response from GetTableData
 // Assuming TableDataResponse structure defined in Go
@@ -299,14 +284,15 @@ const MainDataView = () => {
     () => ({ pageIndex, pageSize }),
     [pageIndex, pageSize],
   );
+  const totalRowCount = tableDataResponse?.totalRows;
   const pageCount = useMemo(() => {
-    if (tableDataResponse?.totalRows != null) {
-      return Math.ceil(tableDataResponse.totalRows / pageSize);
+    if (totalRowCount != null && totalRowCount >= 0) {
+      return Math.ceil(totalRowCount / pageSize);
     }
-    // If totalRows isn't provided, estimate based on current data
-    // This allows the "Next" button to be enabled if a full page was fetched.
-    return data.length < pageSize ? pageIndex + 1 : pageIndex + 2; // Indicate potentially more pages
-  }, [tableDataResponse?.totalRows, pageSize, data.length, pageIndex]);
+    // Fallback estimation if totalRowCount is not available
+    // -1 tells the table instance pagination controls might be inaccurate
+    return -1;
+  }, [totalRowCount, pageSize]);
 
   // --- TanStack Table Instance ---
   const table = useReactTable({
@@ -318,7 +304,7 @@ const MainDataView = () => {
       rowSelection,
     },
     manualPagination: true,
-    pageCount: pageCount > 0 ? pageCount : -1, // Ensure pageCount is -1 if unknown
+    pageCount, // Use accurate or estimated page count
     onPaginationChange: setPagination,
     onColumnFiltersChange: setColumnFilters,
     onRowSelectionChange: setRowSelection,
@@ -357,11 +343,6 @@ const MainDataView = () => {
       setPagination({ pageIndex: 0, pageSize }); // Reset pagination
     }
   };
-
-  // Calculate display range for footer
-  const totalRowCount = tableDataResponse?.totalRows ?? 0;
-  const firstRowIndex = pageIndex * pageSize + 1;
-  const lastRowIndex = Math.min(firstRowIndex + pageSize - 1, totalRowCount);
 
   return (
     <div className="h-full flex">
@@ -516,83 +497,7 @@ const MainDataView = () => {
         </div>
 
         {selection?.type === "table" && !isLoading && !error && (
-          <div className="flex items-center justify-between p-2 bg-background">
-            <div className="flex-1 text-sm text-muted-foreground whitespace-nowrap">
-              {table.getFilteredSelectedRowModel().rows.length} selected
-            </div>
-
-            <div className="flex items-center space-x-6 lg:space-x-8">
-              <div className="flex items-center space-x-2">
-                <p className="text-sm font-medium whitespace-nowrap">
-                  Rows per page
-                </p>
-                <Select
-                  value={`${table.getState().pagination.pageSize}`}
-                  onValueChange={(value) => {
-                    table.setPageSize(Number(value));
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-[70px] border-0 bg-transparent shadow-none hover:bg-accent hover:text-accent-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2">
-                    <SelectValue
-                      placeholder={table.getState().pagination.pageSize}
-                    />
-                  </SelectTrigger>
-                  <SelectContent side="top">
-                    {[10, 20, 50, 100, 250].map((size) => (
-                      <SelectItem key={size} value={`${size}`}>
-                        {size}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex w-[120px] items-center justify-center text-sm font-medium whitespace-nowrap">
-                {totalRowCount > 0
-                  ? `${firstRowIndex} - ${lastRowIndex} of ${totalRowCount}`
-                  : `Page ${pageIndex + 1}`}
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="ghost"
-                  className="hidden h-8 w-8 p-0 lg:flex"
-                  onClick={() => table.setPageIndex(0)}
-                  disabled={!table.getCanPreviousPage()}
-                >
-                  <span className="sr-only">Go to first page</span>
-                  <ChevronsLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="h-8 w-8 p-0"
-                  onClick={() => table.previousPage()}
-                  disabled={!table.getCanPreviousPage()}
-                >
-                  <span className="sr-only">Go to previous page</span>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="h-8 w-8 p-0"
-                  onClick={() => table.nextPage()}
-                  disabled={!table.getCanNextPage()}
-                >
-                  <span className="sr-only">Go to next page</span>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="hidden h-8 w-8 p-0 lg:flex"
-                  onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                  disabled={!table.getCanNextPage()}
-                >
-                  <span className="sr-only">Go to last page</span>
-                  <ChevronsRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
+          <DataTablePagination table={table} totalRowCount={totalRowCount} />
         )}
       </div>
     </div>
