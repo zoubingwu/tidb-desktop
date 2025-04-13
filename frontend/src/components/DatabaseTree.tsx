@@ -34,7 +34,7 @@ export const DatabaseTree = memo(
     const selectedDbName = selection?.dbName;
 
     return (
-      <ScrollArea className="w-[240px] h-full bg-muted/40">
+      <ScrollArea className="w-[240px] flex-shrink-0 h-full bg-muted/40">
         {isLoadingDatabases ? (
           <div className="p-4 text-center text-muted-foreground">
             Loading Databases...
