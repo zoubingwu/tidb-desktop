@@ -459,8 +459,39 @@ func (a *App) GetTableData(tableName string, limit int, offset int) (*TableDataR
 		}
 	}
 
+	// 3. Get Total Row Count for Pagination
+	countQuery := fmt.Sprintf("SELECT COUNT(*) as total FROM `%s`;", tableName)
+	countResult, countErr := a.ExecuteSQL(countQuery) // Execute count query separately
+	var totalRows *int64 = nil // Use pointer to distinguish 0 from not fetched
+
+	if countErr == nil {
+		if countRows, ok := countResult.([]map[string]any); ok && len(countRows) > 0 {
+			// Type assertion depends on DB driver (e.g., int64, float64)
+			// Use a robust way to convert to int64 if possible
+			if totalValRaw, ok := countRows[0]["total"]; ok {
+				 // Example conversion (adjust based on actual type)
+				 switch v := totalValRaw.(type) {
+				 case int64:
+					totalRows = &v
+				 case int:
+					temp := int64(v)
+					totalRows = &temp
+				 case float64: // Some drivers might return float
+					 temp := int64(v)
+					 totalRows = &temp
+				 // Add other potential types if needed
+				 default:
+					 fmt.Printf("Warning: Unexpected type for COUNT(*): %T\n", v)
+				 }
+			}
+		}
+	} else {
+		 fmt.Printf("Warning: Failed to get total row count for table '%s': %v\n", tableName, countErr)
+	}
+
 	return &TableDataResponse{
 		Columns: columns,
 		Rows:    dataRows,
+		TotalRows: totalRows, // Add totalRows to the response
 	}, nil
 }
