@@ -207,6 +207,7 @@ type FolderProps = {
   element: string;
   isSelectable?: boolean;
   isSelect?: boolean;
+  onExpand?: (id: string) => void;
 } & FolderComponentProps;
 
 const Folder = forwardRef<
@@ -221,6 +222,7 @@ const Folder = forwardRef<
       isSelectable = true,
       isSelect,
       children,
+      onExpand,
       ...props
     },
     ref,
@@ -253,7 +255,13 @@ const Folder = forwardRef<
             },
           )}
           disabled={!isSelectable}
-          onClick={() => handleExpand(value)}
+          onClick={() => {
+            handleExpand(value);
+
+            if (!expandedItems?.includes(value)) {
+              onExpand?.(value);
+            }
+          }}
         >
           {expandedItems?.includes(value)
             ? (openIcon ?? <FolderOpenIcon className="size-4" />)

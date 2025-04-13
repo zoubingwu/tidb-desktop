@@ -50,7 +50,7 @@ export const DatabaseTree = memo(
                 key={dbItem.name}
                 element={dbItem.name}
                 value={dbItem.name}
-                onClick={() => onSelectDatabase(dbItem.name)}
+                onExpand={onSelectDatabase}
               >
                 {dbItem.isLoadingTables ? (
                   <File

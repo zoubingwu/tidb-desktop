@@ -83,13 +83,22 @@ const MainDataView = () => {
     refetchOnWindowFocus: false,
   });
 
-  // --- Convert Tables Query to a Mutation ---
   const {
     mutate: fetchTables,
     isPending: isLoadingTables,
     error: tablesError,
   } = useMutation({
     mutationFn: (dbName: string) => ListTables(dbName),
+    onMutate: (dbName: string) => {
+      setDatabaseTree((prevTree) =>
+        prevTree.map((item) => {
+          if (item.name === dbName && !item.isLoadingTables) {
+            return { ...item, isLoadingTables: item.tables.length === 0 };
+          }
+          return item;
+        }),
+      );
+    },
     onSuccess: (tables, dbName) => {
       // Update database tree with fetched tables
       setDatabaseTree((currentTree) =>
@@ -289,20 +298,6 @@ const MainDataView = () => {
   // Safely update database tree for selected DB
   const handleSelectDatabase = (dbName: string) => {
     if (dbName !== selectedDbName) {
-      // First set the selection
-      setSelection({ dbName, tableName: "" });
-
-      // Update the loading state for the specific DB without triggering a loop
-      setDatabaseTree((prevTree) =>
-        prevTree.map((item) => {
-          if (item.name === dbName && !item.isLoadingTables) {
-            return { ...item, isLoadingTables: true };
-          }
-          return item;
-        }),
-      );
-
-      // Fetch tables for the selected database
       fetchTables(dbName);
     }
   };
