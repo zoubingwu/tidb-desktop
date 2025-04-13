@@ -251,7 +251,7 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="p-4 flex items-center justify-between border-b sticky top-0 bg-background z-20">
+      <header className="p-4 flex items-center justify-between  sticky top-0 bg-background z-20">
         <div className="flex items-center gap-4">
           <Select
             value={selectedDatabase}
@@ -309,8 +309,8 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
         </Button>
       </header>
 
-      <div className="flex-grow flex flex-col overflow-hidden p-4">
-        <div className="border rounded-md overflow-hidden flex-grow flex flex-col">
+      <div className="flex-grow flex flex-col overflow-hidden">
+        <div className="rounded-none overflow-hidden flex-grow flex flex-col">
           {isLoading && !tableDataResponse ? (
             <div className="flex-grow flex items-center justify-center text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin mr-3" /> Loading...
@@ -340,6 +340,7 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
                         <TableHead
                           key={header.id}
                           style={{ width: header.getSize() }}
+                          className="px-4"
                         >
                           {header.isPlaceholder
                             ? null
@@ -363,6 +364,7 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
                           <TableCell
                             key={cell.id}
                             style={{ width: cell.column.getSize() }}
+                            className="px-4"
                           >
                             {flexRender(
                               cell.column.columnDef.cell,
@@ -376,7 +378,7 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
                     <TableRow>
                       <TableCell
                         colSpan={columns.length}
-                        className="h-24 text-center"
+                        className="h-24 text-center px-4"
                       >
                         {isLoadingData
                           ? "Loading data..."
@@ -392,7 +394,7 @@ const MainDataView = ({ onDisconnect }: MainDataViewProps) => {
           )}
         </div>
 
-        <div className="flex items-center justify-between pt-4">
+        <div className="flex items-center justify-between p-4">
           <div className="flex-1 text-sm text-muted-foreground">
             {table.getFilteredSelectedRowModel().rows.length} of{" "}
             {table.getFilteredRowModel().rows.length} row(s) selected.
