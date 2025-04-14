@@ -38,7 +38,6 @@ import {
 import type { ColumnOption, ElementType } from "@/lib/filters";
 import type { Column, ColumnMeta, RowData, Table } from "@tanstack/react-table";
 import { format, isEqual } from "date-fns";
-import { FilterXIcon } from "lucide-react";
 import { ArrowRight, Filter } from "lucide-react";
 import { X } from "lucide-react";
 import { Ellipsis } from "lucide-react";
@@ -95,7 +94,6 @@ interface DataTableFilterProviderProps<TData> {
 }
 
 export const DataTableFilterProvider = <TData,>({
-  table, // Pass table down if needed by children, but not for filter state mgmt
   children,
   onChange,
   initialFilters = [],
@@ -166,7 +164,7 @@ type DataTableFilterProps<TData> = {
   initialFilters?: ServerSideFilter[];
 };
 
-export const DataTableFilter = <TData, TValue>({
+export const DataTableFilter = <TData,>({
   table,
   onChange,
   initialFilters,
@@ -184,38 +182,13 @@ export const DataTableFilter = <TData, TValue>({
           <FilterSelector table={table} />
           <ActiveFilters table={table} />
         </div>
-        <FilterActions />
       </div>
     </DataTableFilterProvider>
   );
 };
 
-// FilterActions uses context to clear filters
-export function FilterActions() {
-  const { filters, clearFilters } = useDataTableFilter();
-  const hasFilters = filters.length > 0;
-
-  // Removed table and onChange props, uses context directly
-  function handleClearFilters() {
-    clearFilters();
-    // table.setGlobalFilter(""); // Clear global if needed elsewhere
-  }
-
-  return (
-    <Button
-      className={cn("h-7 !px-2", !hasFilters && "hidden")}
-      variant="destructive"
-      onClick={handleClearFilters}
-    >
-      <FilterXIcon />
-      <span className="hidden md:block">Clear</span>
-    </Button>
-  );
-}
-
-// FilterSelector uses context, but needs table for column info
 export function FilterSelector<TData>({ table }: { table: Table<TData> }) {
-  const { filters } = useDataTableFilter(); // Use context to get filters state if needed (e.g., for display logic)
+  const { filters } = useDataTableFilter();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [property, setProperty] = useState<string | undefined>(undefined);
@@ -474,26 +447,20 @@ export function FilterSubject<TData>({
   );
 }
 
-/****** Property Filter Operator (Modified) ******/
 export function FilterOperator<TData, T extends ColumnDataType>({
   column,
   columnMeta,
-  // Filter prop is now mainly for display, logic uses context
-  filter, // This might be ServerSideFilter or a reconstructed FilterModel
+  filter,
   table,
-}: // onChange removed
-{
+}: {
   column: Column<TData, unknown>;
   columnMeta: ColumnMeta<TData, unknown>;
-  filter: FilterModel<T, TData>; // Keep for display component compatibility
+  filter: FilterModel<T, TData>;
   table: Table<TData>;
-  // onChange?: (filters: ServerSideFilter[]) => void; // Removed
 }) {
   const [open, setOpen] = useState<boolean>(false);
   const close = () => setOpen(false);
 
-  // Display needs the current operator from the filter prop
-  const displayOperator = filter.operator;
   const filterType = columnMeta.type as T; // Get type from meta
 
   return (
@@ -614,17 +581,12 @@ FilterOperatorControllerProps<TData>) {
   }
 }
 
-// --- Operator Controllers updated to use context ---
-
 function FilterOperatorOptionController<TData>({
   column,
   closeController,
-  table,
-}: // onChange removed
-FilterOperatorControllerProps<TData>) {
+}: FilterOperatorControllerProps<TData>) {
   const { getFilter, addOrUpdateFilter } = useDataTableFilter();
   const currentFilter = getFilter(column.id); // Get filter state from context
-  const meta = column.columnDef.meta as ColumnMeta<TData, unknown>;
 
   // Determine current operator safely
   const currentOperator = currentFilter?.operator ?? "is"; // Default or derive if needed
@@ -669,12 +631,9 @@ FilterOperatorControllerProps<TData>) {
 function FilterOperatorMultiOptionController<TData>({
   column,
   closeController,
-  table,
-}: // onChange removed
-FilterOperatorControllerProps<TData>) {
+}: FilterOperatorControllerProps<TData>) {
   const { getFilter, addOrUpdateFilter } = useDataTableFilter();
   const currentFilter = getFilter(column.id);
-  const meta = column.columnDef.meta as ColumnMeta<TData, unknown>;
 
   const currentOperator = currentFilter?.operator ?? "include";
   const filterDetails =
@@ -718,12 +677,9 @@ FilterOperatorControllerProps<TData>) {
 function FilterOperatorDateController<TData>({
   column,
   closeController,
-  table,
-}: // onChange removed
-FilterOperatorControllerProps<TData>) {
+}: FilterOperatorControllerProps<TData>) {
   const { getFilter, addOrUpdateFilter } = useDataTableFilter();
   const currentFilter = getFilter(column.id);
-  const meta = column.columnDef.meta as ColumnMeta<TData, unknown>;
 
   const currentOperator = currentFilter?.operator ?? "is";
   const filterDetails =
@@ -765,12 +721,9 @@ FilterOperatorControllerProps<TData>) {
 export function FilterOperatorTextController<TData>({
   column,
   closeController,
-  table,
-}: // onChange removed
-FilterOperatorControllerProps<TData>) {
+}: FilterOperatorControllerProps<TData>) {
   const { getFilter, addOrUpdateFilter } = useDataTableFilter();
   const currentFilter = getFilter(column.id);
-  const meta = column.columnDef.meta as ColumnMeta<TData, unknown>;
 
   const currentOperator = currentFilter?.operator ?? "contains";
   const filterDetails =
@@ -812,12 +765,9 @@ FilterOperatorControllerProps<TData>) {
 function FilterOperatorNumberController<TData>({
   column,
   closeController,
-  table,
-}: // onChange removed
-FilterOperatorControllerProps<TData>) {
+}: FilterOperatorControllerProps<TData>) {
   const { getFilter, addOrUpdateFilter } = useDataTableFilter();
   const currentFilter = getFilter(column.id);
-  const meta = column.columnDef.meta as ColumnMeta<TData, unknown>;
 
   const relatedFilters = Object.values(numberFilterDetails);
 
@@ -977,18 +927,14 @@ export function FilterValueDisplay<TData, TValue>({
   }
 }
 
-// --- Value Display Components updated to use context ---
-
 export function FilterValueOptionDisplay<TData, TValue>({
   id,
-  column,
   columnMeta,
   table,
 }: FilterValueDisplayProps<TData, TValue>) {
   const { getFilter } = useDataTableFilter();
-  const filter = getFilter(id); // Get filter state from context
+  const filter = getFilter(id);
 
-  // Logic to get options remains the same (needs table data)
   let options: ColumnOption[];
   const columnVals = table
     .getCoreRowModel()
@@ -1060,7 +1006,6 @@ export function FilterValueOptionDisplay<TData, TValue>({
 
 export function FilterValueMultiOptionDisplay<TData, TValue>({
   id,
-  column,
   columnMeta,
   table,
 }: FilterValueDisplayProps<TData, TValue>) {
@@ -1333,11 +1278,9 @@ interface ProperFilterValueMenuProps<TData, TValue> {
 
 export function FilterValueOptionController<TData, TValue>({
   id, // columnId
-  column, // Keep for metadata
   columnMeta,
   table,
-}: // onChange removed
-ProperFilterValueMenuProps<TData, TValue>) {
+}: ProperFilterValueMenuProps<TData, TValue>) {
   const { getFilter, addOrUpdateFilter, removeFilter } = useDataTableFilter();
   const filter = getFilter(id); // Get current filter state
 
@@ -1476,11 +1419,9 @@ export function FilterValueMultiOptionController<
   TValue,
 >({
   id, // columnId
-  column, // For metadata
   columnMeta,
   table,
-}: // onChange removed
-ProperFilterValueMenuProps<TData, TValue>) {
+}: ProperFilterValueMenuProps<TData, TValue>) {
   const { getFilter, addOrUpdateFilter, removeFilter } = useDataTableFilter();
   const filter = getFilter(id); // Get current filter state
 
@@ -1624,7 +1565,6 @@ ProperFilterValueMenuProps<TData, TValue>) {
 
 export function FilterValueDateController<TData, TValue>({
   id, // columnId
-  column, // For metadata
 }: ProperFilterValueMenuProps<TData, TValue>) {
   const { getFilter, addOrUpdateFilter, removeFilter } = useDataTableFilter();
   const filter = getFilter(id);
@@ -1691,9 +1631,7 @@ export function FilterValueDateController<TData, TValue>({
 
 export function FilterValueTextController<TData, TValue>({
   id, // columnId
-  column, // For metadata
-}: // table, onChange removed
-ProperFilterValueMenuProps<TData, TValue>) {
+}: ProperFilterValueMenuProps<TData, TValue>) {
   const { getFilter, addOrUpdateFilter, removeFilter } = useDataTableFilter();
   const filter = getFilter(id);
 
@@ -1733,11 +1671,9 @@ ProperFilterValueMenuProps<TData, TValue>) {
 
 export function FilterValueNumberController<TData, TValue>({
   id, // columnId
-  column, // For metadata, faceted values
+  column,
   columnMeta,
-  table, // Needed for faceted values? Might remove later
-}: // onChange removed
-ProperFilterValueMenuProps<TData, TValue>) {
+}: ProperFilterValueMenuProps<TData, TValue>) {
   const { getFilter, addOrUpdateFilter, removeFilter } = useDataTableFilter();
   const filter = getFilter(id);
 
