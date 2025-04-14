@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { useImmer } from "use-immer";
 import { Loader2, RefreshCw, Columns3 } from "lucide-react";
 import {
   ColumnDef,
@@ -52,7 +53,7 @@ type DatabaseTreeData = DatabaseTreeItem[];
 type SelectionState = TreeSelectionState;
 
 const MainDataView = () => {
-  const [databaseTree, setDatabaseTree] = useState<DatabaseTreeData>([]);
+  const [databaseTree, setDatabaseTree] = useImmer<DatabaseTreeData>([]);
   const [selection, setSelection] = useState<SelectionState>(null);
   const [{ pageIndex, pageSize }, setPagination] = useState<PaginationState>({
     pageIndex: 0,
@@ -71,6 +72,19 @@ const MainDataView = () => {
   const selectedDbName = selection?.dbName;
   const selectedTableName = selection?.tableName;
 
+  const updateDatabaseTree = (
+    dbName: string,
+    newItem: Partial<Omit<DatabaseTreeItem, "name">>,
+  ) => {
+    setDatabaseTree((prevTree: DatabaseTreeData) => {
+      const item = prevTree.find((item) => item.name === dbName);
+      if (item) {
+        item.isLoadingTables = newItem.isLoadingTables;
+        item.tables = newItem.tables || [];
+      }
+    });
+  };
+
   // --- Databases Query (keeps automatic fetching for initial page load) ---
   const {
     data: databases = [],
@@ -83,6 +97,26 @@ const MainDataView = () => {
     refetchOnWindowFocus: false,
   });
 
+  useEffect(() => {
+    if (databases?.length) {
+      setDatabaseTree((draft) => {
+        databases.forEach((dbName) => {
+          const existingItem = draft.find((item) => item.name === dbName);
+          if (existingItem) {
+            existingItem.isLoadingTables = false;
+          } else {
+            draft.push({
+              name: dbName,
+              tables: [],
+              isLoadingTables: false,
+            });
+          }
+        });
+        return draft;
+      });
+    }
+  }, [databases]);
+
   const {
     mutate: fetchTables,
     isPending: isLoadingTables,
@@ -90,27 +124,16 @@ const MainDataView = () => {
   } = useMutation({
     mutationFn: (dbName: string) => ListTables(dbName),
     onMutate: (dbName: string) => {
-      setDatabaseTree((prevTree) =>
-        prevTree.map((item) => {
-          if (item.name === dbName && !item.isLoadingTables) {
-            return { ...item, isLoadingTables: item.tables.length === 0 };
-          }
-          return item;
-        }),
-      );
+      updateDatabaseTree(dbName, { isLoadingTables: true });
     },
     onSuccess: (tables, dbName) => {
-      // Update database tree with fetched tables
-      setDatabaseTree((currentTree) =>
-        currentTree.map((item) => {
-          if (item.name === dbName) {
-            return { ...item, tables: tables || [], isLoadingTables: false };
-          }
-          return item;
-        }),
-      );
+      updateDatabaseTree(dbName, {
+        tables: tables || [],
+        isLoadingTables: false,
+      });
     },
-    onError: (error) => {
+    onError: (error, dbName) => {
+      updateDatabaseTree(dbName, { isLoadingTables: false });
       console.error("Error fetching tables:", error);
     },
   });
@@ -260,40 +283,6 @@ const MainDataView = () => {
     }
     return -1;
   }, [totalRowCount, pageSize]);
-
-  // --- Initialize database tree when databases load ---
-  useMemo(() => {
-    if (databases?.length) {
-      // Only set database tree if it's empty or if databases have changed
-      const currentDbNames = databaseTree.map((item) => item.name);
-      const newDbNames = databases;
-
-      // Check if the database list has changed
-      const hasChanges =
-        currentDbNames.length !== newDbNames.length ||
-        newDbNames.some((dbName) => !currentDbNames.includes(dbName));
-
-      if (hasChanges) {
-        setDatabaseTree((prevTree) => {
-          // Preserve existing tree data when possible
-          return databases.map((dbName) => {
-            const existingItem = prevTree.find((item) => item.name === dbName);
-            // Keep existing table data if we had it
-            if (existingItem) {
-              return existingItem;
-            }
-            // Create new item if this database is new
-            return {
-              name: dbName,
-              tables: [],
-              isLoadingTables: false,
-            };
-          });
-        });
-      }
-    }
-    // Don't include databaseTree in dependencies to avoid re-render loops
-  }, [databases]);
 
   // Safely update database tree for selected DB
   const handleSelectDatabase = (dbName: string) => {
