@@ -113,7 +113,6 @@ export const DataTableFilter = <TData, TValue>({
         <FilterSelector table={table} onChange={onChange} />
         <ActiveFilters table={table} onChange={onChange} />
       </div>
-      <FilterActions table={table} onChange={onChange} />
     </div>
   );
 };
