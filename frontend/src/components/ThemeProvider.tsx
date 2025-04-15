@@ -11,14 +11,23 @@ import { GetThemeSettings, SaveThemeSettings } from "wailsjs/go/main/App";
 // Define the available theme names. These should match CSS classes.
 // These are the *base* themes you switch between.
 export const availableThemes = [
-  "claude", // Assuming 'claude' is the default/base theme (maps to :root)
+  "solar-dusk",
+  "claude",
   "nature",
   "elegant-luxury",
   "neo-brutalism",
   "quantum-rose",
   "sunset-horizon",
-  "solar-dusk",
 ];
+
+// Map theme names to their primary font families
+const fontsByTheme = {
+  "elegant-luxury": ["Poppins", "Libre Baskerville", "IBM Plex Mono"],
+  nature: ["Montserrat", "Merriweather", "Source Code Pro"],
+  "neo-brutalism": ["DM Sans", "Space Mono"],
+  "quantum-rose": ["Poppins", "Playfair Display", "Space Mono"],
+  "solar-dusk": ["Oxanium", "Merriweather", "Fira Code"],
+};
 
 export type ThemeMode = "light" | "dark" | "system";
 
@@ -30,6 +39,28 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+const downloadFont = (fonts?: string[]) => {
+  if (!fonts || fonts.length === 0) return;
+
+  const fontUrls = fonts.map((font) => {
+    return {
+      url: `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font)}:wght@400;500;600;700&display=swap`,
+      name: font,
+    };
+  });
+
+  fontUrls.forEach(({ url, name }) => {
+    const id = `font-${name}`;
+    if (url && !document.getElementById(id)) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = url;
+      link.id = id;
+      document.head.appendChild(link);
+    }
+  });
+};
 
 // Helper to apply theme classes to the root element
 export const applyTheme = (base: string, mode: ThemeMode) => {
@@ -46,6 +77,7 @@ export const applyTheme = (base: string, mode: ThemeMode) => {
   // Add new base theme class
   if (base && availableThemes.includes(base)) {
     root.classList.add(base);
+    downloadFont(fontsByTheme[base as keyof typeof fontsByTheme]);
   }
 
   // Handle dark/light mode
