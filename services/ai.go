@@ -15,7 +15,7 @@ import (
 const (
 	openRouterAPIURL = "https://openrouter.ai/api/v1/chat/completions"
 	// Consider making the model configurable if needed
-	defaultModel = "google/gemini-flash-1.5:free" // Use a fast, free model for inference
+	defaultModel = "google/gemini-2.5-pro-exp-03-25:free" // Use a fast, free model for inference
 )
 
 // AIService handles interactions with the LLM API
