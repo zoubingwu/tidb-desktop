@@ -20,7 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import {
   DataTableFilter,
@@ -30,11 +29,7 @@ import { Button } from "@/components/ui/button";
 import { filterFn } from "@/lib/filters";
 import { mapDbColumnTypeToFilterType } from "@/lib/utils";
 import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
-import {
-  DatabaseTree,
-  DatabaseTreeItem,
-  SelectionState as TreeSelectionState,
-} from "@/components/DatabaseTree";
+import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
 import { SettingsModal } from "@/components/SettingModal";
 
 // Type for the Go backend response from GetTableData
@@ -50,12 +45,13 @@ type TableRowData = Record<string, any>;
 
 // Rename to avoid conflict with the imported component
 type DatabaseTreeData = DatabaseTreeItem[];
-// Reuse the SelectionState from the DatabaseTree component
-type SelectionState = TreeSelectionState;
 
 const MainDataView = () => {
   const [databaseTree, setDatabaseTree] = useImmer<DatabaseTreeData>([]);
-  const [selection, setSelection] = useState<SelectionState>(null);
+  const [currentTable, setCurrentTable] = useState<{
+    db: string;
+    table: string;
+  } | null>(null);
   const [{ pageIndex, pageSize }, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 50,
@@ -68,10 +64,6 @@ const MainDataView = () => {
   const [tableData, setTableData] = useState<TableDataResponse | null>(null);
   const [loadingTableData, setLoadingTableData] = useState<boolean>(false);
   const [tableDataError, setTableDataError] = useState<Error | null>(null);
-
-  // Convenience accessors
-  const selectedDbName = selection?.dbName;
-  const selectedTableName = selection?.tableName;
 
   const updateDatabaseTree = (
     dbName: string,
@@ -125,7 +117,9 @@ const MainDataView = () => {
   } = useMutation({
     mutationFn: (dbName: string) => ListTables(dbName),
     onMutate: (dbName: string) => {
-      updateDatabaseTree(dbName, { isLoadingTables: true });
+      if (!databaseTree.find((db) => db.name === dbName)?.tables?.length) {
+        updateDatabaseTree(dbName, { isLoadingTables: true });
+      }
     },
     onSuccess: (tables, dbName) => {
       updateDatabaseTree(dbName, {
@@ -187,17 +181,17 @@ const MainDataView = () => {
       setPagination({ pageIndex: 0, pageSize });
 
       // Refetch data with new filters if we have a selection
-      if (selectedTableName && selectedDbName) {
+      if (currentTable) {
         fetchTableData({
-          tableName: selectedTableName,
-          dbName: selectedDbName,
+          tableName: currentTable.table,
+          dbName: currentTable.db,
           pageSize,
           pageIndex: 0, // Reset to first page
           filters,
         });
       }
     },
-    [selectedTableName, selectedDbName, pageSize],
+    [currentTable, pageSize],
   );
 
   // --- Derived State & Calculations ---
@@ -212,32 +206,32 @@ const MainDataView = () => {
 
     return [
       // Select Checkbox Column
-      {
-        id: "select",
-        header: ({ table }) => (
-          <Checkbox
-            checked={
-              table.getIsAllPageRowsSelected() ||
-              (table.getIsSomePageRowsSelected() && "indeterminate")
-            }
-            onCheckedChange={(value) =>
-              table.toggleAllPageRowsSelected(!!value)
-            }
-            aria-label="Select all"
-            className="translate-y-[2px]"
-          />
-        ),
-        cell: ({ row }) => (
-          <Checkbox
-            checked={row.getIsSelected()}
-            onCheckedChange={(value) => row.toggleSelected(!!value)}
-            aria-label="Select row"
-            className="translate-y-[2px]"
-          />
-        ),
-        enableSorting: false,
-        enableHiding: false,
-      },
+      // {
+      //   id: "select",
+      //   header: ({ table }) => (
+      //     <Checkbox
+      //       checked={
+      //         table.getIsAllPageRowsSelected() ||
+      //         (table.getIsSomePageRowsSelected() && "indeterminate")
+      //       }
+      //       onCheckedChange={(value) =>
+      //         table.toggleAllPageRowsSelected(!!value)
+      //       }
+      //       aria-label="Select all"
+      //       className="translate-y-[2px]"
+      //     />
+      //   ),
+      //   cell: ({ row }) => (
+      //     <Checkbox
+      //       checked={row.getIsSelected()}
+      //       onCheckedChange={(value) => row.toggleSelected(!!value)}
+      //       aria-label="Select row"
+      //       className="translate-y-[2px]"
+      //     />
+      //   ),
+      //   enableSorting: false,
+      //   enableHiding: false,
+      // },
       // Data Columns
       ...(tableData.columns.map(
         (col): ColumnDef<TableRowData> => ({
@@ -287,16 +281,14 @@ const MainDataView = () => {
 
   // Safely update database tree for selected DB
   const handleSelectDatabase = (dbName: string) => {
-    if (dbName !== selectedDbName) {
-      fetchTables(dbName);
-    }
+    fetchTables(dbName);
   };
 
   // --- Function to handle table selection from tree ---
   const handleSelectTable = (dbName: string, tableName: string) => {
-    if (selection?.dbName !== dbName || selection?.tableName !== tableName) {
+    if (currentTable?.db !== dbName || currentTable?.table !== tableName) {
       // First set the selection
-      setSelection({ dbName, tableName });
+      setCurrentTable({ db: dbName, table: tableName });
 
       // Reset filters and pagination
       const newFilters: ServerSideFilter[] = [];
@@ -320,10 +312,10 @@ const MainDataView = () => {
   };
 
   const handleRefresh = () => {
-    if (selectedTableName && selectedDbName) {
+    if (currentTable) {
       fetchTableData({
-        tableName: selectedTableName,
-        dbName: selectedDbName,
+        tableName: currentTable.table,
+        dbName: currentTable.db,
         pageSize,
         pageIndex,
         filters: serverFilters,
@@ -340,10 +332,10 @@ const MainDataView = () => {
 
     setPagination(newPagination);
 
-    if (selectedTableName && selectedDbName) {
+    if (currentTable) {
       fetchTableData({
-        tableName: selectedTableName,
-        dbName: selectedDbName,
+        tableName: currentTable.table,
+        dbName: currentTable.db,
         pageSize: newPagination.pageSize,
         pageIndex: newPagination.pageIndex,
         filters: serverFilters,
@@ -370,53 +362,43 @@ const MainDataView = () => {
     getPaginationRowModel: getPaginationRowModel(),
   });
 
-  // Also fix the render condition for tables
-  const getTablesForCurrentDb = () => {
-    const currentDb = databaseTree.find((db) => db.name === selectedDbName);
-    return currentDb?.tables || [];
-  };
-
   return (
     <div className="h-full flex">
       <DatabaseTree
         databaseTree={databaseTree}
-        selection={selection}
         isLoadingDatabases={isLoadingDatabases}
         databasesError={databasesError}
         onSelectDatabase={handleSelectDatabase}
         onSelectTable={handleSelectTable}
+        selectedTable={currentTable}
       />
 
       <div className="flex-grow flex flex-col overflow-hidden">
-        {selection?.tableName && columns.length > 1 && (
-          <div className="p-2 flex items-center gap-2 sticky top-0 bg-background z-20">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleRefresh}
-              disabled={
-                isRefreshingIndicator || (!selectedDbName && !selectedTableName)
-              }
-            >
-              {isRefreshingIndicator ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              <span className="sr-only">Refresh</span>
+        <div className="p-2 flex items-center gap-2 sticky top-0 bg-background z-20">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={handleRefresh}
+            disabled={isRefreshingIndicator || !currentTable}
+          >
+            {isRefreshingIndicator ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            <span className="sr-only">Refresh</span>
+          </Button>
+
+          <DataTableFilter table={table} onChange={handleFilterChange} />
+
+          <SettingsModal>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Settings className="h-4 w-4" />
+              <span className="sr-only">Settings</span>
             </Button>
-
-            <DataTableFilter table={table} onChange={handleFilterChange} />
-
-            <SettingsModal>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <Settings className="h-4 w-4" />
-                <span className="sr-only">Settings</span>
-              </Button>
-            </SettingsModal>
-          </div>
-        )}
+          </SettingsModal>
+        </div>
 
         <div className="rounded-none overflow-hidden flex-grow flex flex-col">
           {isInitialLoading ? (
@@ -430,11 +412,7 @@ const MainDataView = () => {
                 ? (error as Error).message
                 : String(error ?? "An unknown error occurred")}
             </div>
-          ) : !selectedDbName ? (
-            <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
-              Please select a database.
-            </div>
-          ) : !selectedTableName && getTablesForCurrentDb().length ? (
+          ) : !currentTable?.table ? (
             <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
               Please select a table.
             </div>
@@ -447,11 +425,11 @@ const MainDataView = () => {
                     ? (error as Error).message
                     : String(error ?? "An unknown error occurred")}
                 </div>
-              ) : !selection ? (
+              ) : !currentTable?.table ? (
                 <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
                   Please select a database or table from the sidebar.
                 </div>
-              ) : selection.tableName === "" ? (
+              ) : currentTable.table === "" ? (
                 <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
                   Please select a table from the sidebar.
                 </div>
@@ -506,7 +484,7 @@ const MainDataView = () => {
                         >
                           {loadingTableData
                             ? "Loading data..."
-                            : selectedTableName
+                            : currentTable.table
                               ? "No results found."
                               : "Select a table."}
                         </TableCell>
@@ -519,8 +497,12 @@ const MainDataView = () => {
           )}
         </div>
 
-        {selection?.tableName && !loadingTableData && !error && (
-          <DataTablePagination table={table} totalRowCount={totalRowCount} />
+        {currentTable?.table && !loadingTableData && !error && (
+          <DataTablePagination
+            table={table}
+            totalRowCount={totalRowCount}
+            name={``}
+          />
         )}
       </div>
     </div>
