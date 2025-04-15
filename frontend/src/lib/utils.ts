@@ -65,3 +65,7 @@ export function mapDbColumnTypeToFilterType(dbType: string): ColumnDataType {
       return "text";
   }
 }
+
+export function capitalize(str: string) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
