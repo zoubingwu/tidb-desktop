@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useImmer } from "use-immer";
-import { Loader2, RefreshCw, Columns3, Settings } from "lucide-react";
+import { Loader2, RefreshCw, Columns3, Settings, XIcon } from "lucide-react";
 import {
   ColumnDef,
   flexRender,
@@ -46,7 +46,7 @@ type TableRowData = Record<string, any>;
 // Rename to avoid conflict with the imported component
 type DatabaseTreeData = DatabaseTreeItem[];
 
-const MainDataView = () => {
+const MainDataView = ({ onClose }: { onClose: () => void }) => {
   const [databaseTree, setDatabaseTree] = useImmer<DatabaseTreeData>([]);
   const [currentTable, setCurrentTable] = useState<{
     db: string;
@@ -351,6 +351,11 @@ const MainDataView = () => {
     }
   };
 
+  const handleClose = () => {
+    setCurrentTable(null);
+    onClose();
+  };
+
   // --- TanStack Table Instance ---
   const table = useReactTable({
     data,
@@ -406,6 +411,16 @@ const MainDataView = () => {
               <span className="sr-only">Settings</span>
             </Button>
           </SettingsModal>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={handleClose}
+          >
+            <XIcon className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
         </div>
 
         <div className="rounded-none overflow-hidden flex-grow flex flex-col">

@@ -52,7 +52,7 @@ function App() {
       case "welcome":
         return <WelcomeScreen />;
       case "main":
-        return <MainDataView onDisconnect={triggerDisconnect} />;
+        return <MainDataView onClose={triggerDisconnect} />;
       default:
         return <div>Unknown View</div>;
     }
