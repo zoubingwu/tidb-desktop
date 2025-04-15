@@ -11,28 +11,24 @@ export type DatabaseTreeItem = {
 
 export type DatabaseTree = DatabaseTreeItem[];
 
-export type SelectionState = { dbName: string; tableName: string } | null;
-
 type DatabaseTreeProps = {
   databaseTree: DatabaseTree;
-  selection: SelectionState;
   isLoadingDatabases: boolean;
   databasesError: Error | null;
   onSelectDatabase: (dbName: string) => void;
   onSelectTable: (dbName: string, tableName: string) => void;
+  selectedTable: { db: string; table: string } | null;
 };
 
 export const DatabaseTree = memo(
   ({
     databaseTree,
-    selection,
     isLoadingDatabases,
     databasesError,
     onSelectDatabase,
     onSelectTable,
+    selectedTable,
   }: DatabaseTreeProps) => {
-    const selectedDbName = selection?.dbName;
-
     return (
       <ScrollArea className="w-[240px] flex-shrink-0 h-full bg-muted/40">
         {isLoadingDatabases ? (
@@ -66,8 +62,8 @@ export const DatabaseTree = memo(
                       key={tbl}
                       value={tbl}
                       isSelect={
-                        selection?.tableName === tbl &&
-                        selection?.dbName === dbItem.name
+                        selectedTable?.db === dbItem.name &&
+                        selectedTable?.table === tbl
                       }
                       onClick={(e) => {
                         e.stopPropagation();
@@ -79,7 +75,6 @@ export const DatabaseTree = memo(
                     </File>
                   ))
                 ) : (
-                  dbItem.name === selectedDbName &&
                   !dbItem.isLoadingTables && (
                     <File
                       isSelectable={false}
