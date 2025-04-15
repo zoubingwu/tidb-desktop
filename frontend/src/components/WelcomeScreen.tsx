@@ -18,6 +18,7 @@ const WelcomeScreen = () => {
   const [savedConnections, setSavedConnections] = useState<SavedConnectionsMap>(
     {},
   );
+  const hasConnections = Object.keys(savedConnections).length > 0;
   const [isLoadingConnections, setIsLoadingConnections] = useState(true);
   const [connectingName, setConnectingName] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -102,7 +103,7 @@ const WelcomeScreen = () => {
             <Loader2 className="h-8 w-8 animate-spin mr-3" />
             <span>Loading connections...</span>
           </div>
-        ) : Object.keys(savedConnections).length > 0 ? (
+        ) : hasConnections ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {Object.entries(savedConnections).map(([name, details]) => (
               <ConnectionCard
@@ -119,9 +120,10 @@ const WelcomeScreen = () => {
           <div className="text-center py-10 border border-dashed rounded-lg">
             <h3 className="text-lg font-semibold">No Saved Connections</h3>
             <p className="text-muted-foreground mt-1 mb-4">
-              Click "Add New Connection" to get started.
+              Ready to explore? Add your first connection now.
             </p>
             <Button onClick={() => setIsFormOpen(true)} variant="outline">
+              <PlusCircle className="mr-2 h-4 w-4" />
               Add New Connection
             </Button>
           </div>
