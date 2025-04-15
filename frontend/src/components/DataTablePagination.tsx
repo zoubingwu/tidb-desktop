@@ -11,13 +11,15 @@ import {
 interface DataTablePaginationProps<TData> {
   table: Table<TData>;
   totalRowCount?: number | null; // Pass total rows if available
-  name: string;
+  status: string;
+  disabled?: boolean;
 }
 
 export function DataTablePagination<TData>({
   table,
   totalRowCount,
-  name,
+  status,
+  disabled,
 }: DataTablePaginationProps<TData>) {
   const { pageIndex, pageSize } = table.getState().pagination;
 
@@ -36,8 +38,8 @@ export function DataTablePagination<TData>({
   return (
     <div className="flex items-center justify-between p-2 bg-background">
       {/* Row Selection Count */}
-      <div className="flex-1 text-sm text-muted-foreground whitespace-nowrap">
-        {name}
+      <div className="flex-1 text-sm text-muted-foreground whitespace-nowrap pl-2">
+        {status}
       </div>
 
       {/* Pagination Controls */}
@@ -56,7 +58,7 @@ export function DataTablePagination<TData>({
             variant="ghost"
             className="hidden h-8 w-8 p-0 lg:flex"
             onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
+            disabled={!table.getCanPreviousPage() || disabled}
           >
             <span className="sr-only">Go to first page</span>
             <ChevronsLeft className="h-4 w-4" />
@@ -65,7 +67,7 @@ export function DataTablePagination<TData>({
             variant="ghost"
             className="h-8 w-8 p-0"
             onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            disabled={!table.getCanPreviousPage() || disabled}
           >
             <span className="sr-only">Go to previous page</span>
             <ChevronLeft className="h-4 w-4" />
@@ -74,7 +76,7 @@ export function DataTablePagination<TData>({
             variant="ghost"
             className="h-8 w-8 p-0"
             onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            disabled={!table.getCanNextPage() || disabled}
           >
             <span className="sr-only">Go to next page</span>
             <ChevronRight className="h-4 w-4" />
@@ -87,7 +89,7 @@ export function DataTablePagination<TData>({
                 calculatedPageCount > 0 ? calculatedPageCount - 1 : 0,
               )
             } // Use calculatedPageCount
-            disabled={!table.getCanNextPage()}
+            disabled={!table.getCanNextPage() || disabled}
           >
             <span className="sr-only">Go to last page</span>
             <ChevronsRight className="h-4 w-4" />
