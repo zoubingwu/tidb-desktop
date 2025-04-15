@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Loader2, PlusCircle } from "lucide-react";
+import { Loader2, PlusCircle, Settings } from "lucide-react";
 import { ConnectionCard } from "./ConnectionCard";
 import { ConnectionFormDialog } from "./ConnectionForm";
 import {
@@ -10,6 +10,7 @@ import {
   DeleteSavedConnection,
 } from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
+import { SettingsModal } from "./SettingModal";
 
 type SavedConnectionsMap = Record<string, services.ConnectionDetails>;
 
@@ -80,9 +81,19 @@ const WelcomeScreen = () => {
             Connect and manage your TiDB database connections
           </p>
         </div>
-        <Button onClick={() => setIsFormOpen(true)}>
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Connection
-        </Button>
+
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setIsFormOpen(true)}>
+            <PlusCircle className="mr-2 h-4 w-4" /> Add New Connection
+          </Button>
+
+          <SettingsModal>
+            <Button variant="outline" size="icon">
+              <Settings className="h-4 w-4" />
+              <span className="sr-only">Settings</span>
+            </Button>
+          </SettingsModal>
+        </div>
       </header>
 
       <section>
