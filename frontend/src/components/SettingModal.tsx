@@ -22,6 +22,7 @@ import {
   availableThemes,
   type ThemeMode,
 } from "@/components/ThemeProvider";
+import { capitalize } from "@/lib/utils";
 
 interface SettingsModalProps {
   children: React.ReactNode; // To wrap the trigger button
@@ -84,7 +85,7 @@ export function SettingsModal({ children }: SettingsModalProps) {
               <SelectContent>
                 {availableThemes.map((baseTheme) => (
                   <SelectItem key={baseTheme} value={baseTheme}>
-                    {baseTheme.charAt(0).toUpperCase() + baseTheme.slice(1)}
+                    {baseTheme.split("-").map(capitalize).join(" ")}
                   </SelectItem>
                 ))}
               </SelectContent>

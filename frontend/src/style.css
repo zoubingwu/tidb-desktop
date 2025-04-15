@@ -6,8 +6,7 @@
 @import "./themes/neo-brutalism.css";
 @import "./themes/quantum-rose.css";
 @import "./themes/sunset-horizon.css";
-
-@custom-variant dark (&:is(.dark *));
+@import "./themes/solar-dusk.css";
 
 body {
   margin: 0;

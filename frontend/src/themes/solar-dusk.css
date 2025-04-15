@@ -1,0 +1,103 @@
+:root.solar-dusk {
+  --background: rgb(253, 251, 247);
+  --foreground: rgb(74, 59, 51);
+  --card: rgb(248, 244, 238);
+  --card-foreground: rgb(74, 59, 51);
+  --popover: rgb(248, 244, 238);
+  --popover-foreground: rgb(74, 59, 51);
+  --primary: rgb(180, 83, 9);
+  --primary-foreground: rgb(255, 255, 255);
+  --secondary: rgb(228, 192, 144);
+  --secondary-foreground: rgb(87, 83, 78);
+  --muted: rgb(241, 233, 218);
+  --muted-foreground: rgb(120, 113, 108);
+  --accent: rgb(242, 218, 186);
+  --accent-foreground: rgb(87, 83, 78);
+  --destructive: rgb(153, 27, 27);
+  --destructive-foreground: rgb(255, 255, 255);
+  --border: rgb(228, 217, 188);
+  --input: rgb(228, 217, 188);
+  --ring: rgb(180, 83, 9);
+  --chart-1: rgb(180, 83, 9);
+  --chart-2: rgb(120, 113, 108);
+  --chart-3: rgb(161, 98, 7);
+  --chart-4: rgb(120, 113, 108);
+  --chart-5: rgb(202, 138, 4);
+  --sidebar: rgb(241, 233, 218);
+  --sidebar-foreground: rgb(74, 59, 51);
+  --sidebar-primary: rgb(180, 83, 9);
+  --sidebar-primary-foreground: rgb(255, 255, 255);
+  --sidebar-accent: rgb(161, 98, 7);
+  --sidebar-accent-foreground: rgb(255, 255, 255);
+  --sidebar-border: rgb(228, 217, 188);
+  --sidebar-ring: rgb(180, 83, 9);
+  --font-sans: Oxanium, sans-serif;
+  --font-serif: Merriweather, serif;
+  --font-mono: Fira Code, monospace;
+  --radius: 0.3rem;
+  --shadow-2xs: 0px 2px 3px 0px hsl(28 18% 25% / 0.09);
+  --shadow-xs: 0px 2px 3px 0px hsl(28 18% 25% / 0.09);
+  --shadow-sm: 0px 2px 3px 0px hsl(28 18% 25% / 0.18), 0px 1px 2px -1px
+    hsl(28 18% 25% / 0.18);
+  --shadow: 0px 2px 3px 0px hsl(28 18% 25% / 0.18), 0px 1px 2px -1px
+    hsl(28 18% 25% / 0.18);
+  --shadow-md: 0px 2px 3px 0px hsl(28 18% 25% / 0.18), 0px 2px 4px -1px
+    hsl(28 18% 25% / 0.18);
+  --shadow-lg: 0px 2px 3px 0px hsl(28 18% 25% / 0.18), 0px 4px 6px -1px
+    hsl(28 18% 25% / 0.18);
+  --shadow-xl: 0px 2px 3px 0px hsl(28 18% 25% / 0.18), 0px 8px 10px -1px
+    hsl(28 18% 25% / 0.18);
+  --shadow-2xl: 0px 2px 3px 0px hsl(28 18% 25% / 0.45);
+}
+
+.dark.solar-dusk {
+  --background: rgb(28, 25, 23);
+  --foreground: rgb(245, 245, 244);
+  --card: rgb(41, 37, 36);
+  --card-foreground: rgb(245, 245, 244);
+  --popover: rgb(41, 37, 36);
+  --popover-foreground: rgb(245, 245, 244);
+  --primary: rgb(249, 115, 22);
+  --primary-foreground: rgb(255, 255, 255);
+  --secondary: rgb(87, 83, 78);
+  --secondary-foreground: rgb(231, 229, 228);
+  --muted: rgb(41, 37, 36);
+  --muted-foreground: rgb(168, 162, 158);
+  --accent: rgb(30, 66, 82);
+  --accent-foreground: rgb(231, 229, 228);
+  --destructive: rgb(220, 38, 38);
+  --destructive-foreground: rgb(255, 255, 255);
+  --border: rgb(68, 64, 60);
+  --input: rgb(68, 64, 60);
+  --ring: rgb(249, 115, 22);
+  --chart-1: rgb(249, 115, 22);
+  --chart-2: rgb(14, 165, 233);
+  --chart-3: rgb(234, 179, 8);
+  --chart-4: rgb(168, 162, 158);
+  --chart-5: rgb(120, 113, 108);
+  --sidebar: rgb(41, 37, 36);
+  --sidebar-foreground: rgb(245, 245, 244);
+  --sidebar-primary: rgb(249, 115, 22);
+  --sidebar-primary-foreground: rgb(255, 255, 255);
+  --sidebar-accent: rgb(14, 165, 233);
+  --sidebar-accent-foreground: rgb(12, 42, 77);
+  --sidebar-border: rgb(68, 64, 60);
+  --sidebar-ring: rgb(249, 115, 22);
+  --font-sans: Oxanium, sans-serif;
+  --font-serif: Merriweather, serif;
+  --font-mono: Fira Code, monospace;
+  --radius: 0.3rem;
+  --shadow-2xs: 0px 2px 3px 0px hsl(0 0% 5% / 0.09);
+  --shadow-xs: 0px 2px 3px 0px hsl(0 0% 5% / 0.09);
+  --shadow-sm: 0px 2px 3px 0px hsl(0 0% 5% / 0.18), 0px 1px 2px -1px
+    hsl(0 0% 5% / 0.18);
+  --shadow: 0px 2px 3px 0px hsl(0 0% 5% / 0.18), 0px 1px 2px -1px
+    hsl(0 0% 5% / 0.18);
+  --shadow-md: 0px 2px 3px 0px hsl(0 0% 5% / 0.18), 0px 2px 4px -1px
+    hsl(0 0% 5% / 0.18);
+  --shadow-lg: 0px 2px 3px 0px hsl(0 0% 5% / 0.18), 0px 4px 6px -1px
+    hsl(0 0% 5% / 0.18);
+  --shadow-xl: 0px 2px 3px 0px hsl(0 0% 5% / 0.18), 0px 8px 10px -1px
+    hsl(0 0% 5% / 0.18);
+  --shadow-2xl: 0px 2px 3px 0px hsl(0 0% 5% / 0.45);
+}

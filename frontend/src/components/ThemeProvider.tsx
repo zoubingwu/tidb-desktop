@@ -17,6 +17,7 @@ export const availableThemes = [
   "neo-brutalism",
   "quantum-rose",
   "sunset-horizon",
+  "solar-dusk",
 ];
 
 export type ThemeMode = "light" | "dark" | "system";
