@@ -3,8 +3,10 @@ package main
 import (
 	"embed"
 	"fmt"
+	"runtime"
 
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
@@ -20,6 +22,14 @@ func main() {
 	// Create an instance of the app structure
 	app := NewApp()
 
+	appMenu := menu.NewMenu()
+
+	if runtime.GOOS == "darwin" {
+		appMenu.Append(menu.AppMenu())
+		appMenu.Append(menu.EditMenu())
+		appMenu.Append(menu.WindowMenu())
+	}
+
 	err := wails.Run(&options.App{
 		Title:  appName,
 		Width:  1024,
@@ -27,6 +37,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
+		Menu:             appMenu,
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 0},
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
