@@ -11,11 +11,13 @@ import {
 interface DataTablePaginationProps<TData> {
   table: Table<TData>;
   totalRowCount?: number | null; // Pass total rows if available
+  name: string;
 }
 
 export function DataTablePagination<TData>({
   table,
   totalRowCount,
+  name,
 }: DataTablePaginationProps<TData>) {
   const { pageIndex, pageSize } = table.getState().pagination;
 
@@ -35,7 +37,7 @@ export function DataTablePagination<TData>({
     <div className="flex items-center justify-between p-2 bg-background">
       {/* Row Selection Count */}
       <div className="flex-1 text-sm text-muted-foreground whitespace-nowrap">
-        {table.getFilteredSelectedRowModel().rows.length} selected
+        {name}
       </div>
 
       {/* Pagination Controls */}
