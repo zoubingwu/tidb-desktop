@@ -62,7 +62,6 @@ const MainDataView = () => {
 
   // Store table data in state
   const [tableData, setTableData] = useState<TableDataResponse | null>(null);
-  const [loadingTableData, setLoadingTableData] = useState<boolean>(false);
   const [tableDataError, setTableDataError] = useState<Error | null>(null);
 
   const updateDatabaseTree = (
@@ -159,17 +158,14 @@ const MainDataView = () => {
         );
       },
       onMutate: () => {
-        setLoadingTableData(true);
         setTableDataError(null);
       },
       onSuccess: (data) => {
         console.log("onSuccess data", data);
         setTableData(data);
-        setLoadingTableData(false);
       },
       onError: (error) => {
         setTableDataError(error as Error);
-        setLoadingTableData(false);
         console.error("Error fetching table data:", error);
       },
     });
@@ -196,8 +192,7 @@ const MainDataView = () => {
 
   // --- Derived State & Calculations ---
   const isRefreshingIndicator = isLoadingTables || isFetchingTableData;
-  const isInitialLoading =
-    isLoadingDatabases || isLoadingTables || loadingTableData;
+  const isInitialLoading = isLoadingDatabases || isLoadingTables;
   const error = databasesError || tablesError || tableDataError;
 
   // --- Derive columns and data from table data ---
@@ -278,6 +273,19 @@ const MainDataView = () => {
     }
     return -1;
   }, [totalRowCount, pageSize]);
+
+  const status = useMemo(() => {
+    if (isFetchingTableData) {
+      return "Fetching data...";
+    }
+    if (error) {
+      return `Error loading data: ${error.message}`;
+    }
+    if (currentTable) {
+      return `current table: ${currentTable?.db}.${currentTable?.table}`;
+    }
+    return "No table selected";
+  }, [isFetchingTableData, error, currentTable]);
 
   // Safely update database tree for selected DB
   const handleSelectDatabase = (dbName: string) => {
@@ -482,11 +490,9 @@ const MainDataView = () => {
                           colSpan={columns.length}
                           className="h-24 text-center px-4"
                         >
-                          {loadingTableData
-                            ? "Loading data..."
-                            : currentTable.table
-                              ? "No results found."
-                              : "Select a table."}
+                          {currentTable.table
+                            ? "No results found."
+                            : "Select a table."}
                         </TableCell>
                       </TableRow>
                     )}
@@ -497,13 +503,12 @@ const MainDataView = () => {
           )}
         </div>
 
-        {currentTable?.table && !loadingTableData && !error && (
-          <DataTablePagination
-            table={table}
-            totalRowCount={totalRowCount}
-            name={``}
-          />
-        )}
+        <DataTablePagination
+          table={table}
+          totalRowCount={totalRowCount}
+          status={status}
+          disabled={isFetchingTableData}
+        />
       </div>
     </div>
   );
