@@ -622,3 +622,22 @@ func (a *App) GetTableData(dbName string, tableName string, limit int, offset in
 		TotalRows: totalRows, // Add totalRows to the response
 	}, nil
 }
+
+// --- Theme Settings ---
+
+// GetThemeSettings retrieves the currently saved theme settings.
+func (a *App) GetThemeSettings() (*services.ThemeSettings, error) {
+	if a.configService == nil {
+		return nil, fmt.Errorf("config service not initialized")
+	}
+	return a.configService.GetThemeSettings()
+}
+
+// SaveThemeSettings saves the provided theme settings to the config file.
+func (a *App) SaveThemeSettings(settings services.ThemeSettings) error {
+	if a.configService == nil {
+		return fmt.Errorf("config service not initialized")
+	}
+	fmt.Printf("Saving theme settings: %+v\n", settings) // Log the received settings
+	return a.configService.SaveThemeSettings(settings)
+}

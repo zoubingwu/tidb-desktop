@@ -13,11 +13,18 @@ const (
 	configFileName = "config.json"
 )
 
+// ThemeSettings holds theme preferences
+type ThemeSettings struct {
+	Mode      string `json:"mode"` // e.g., "light", "dark", "system"
+	BaseTheme string `json:"baseTheme"` // e.g., "claude", "nature"
+}
+
 // ConfigData defines the structure of the entire configuration file.
 type ConfigData struct {
 	// Use ConnectionDetails from database.go
-	Connections map[string]ConnectionDetails `json:"connections"`
+	Connections   map[string]ConnectionDetails `json:"connections"`
 	// Add other configuration fields here later, e.g., settings
+	ThemeSettings *ThemeSettings               `json:"themeSettings,omitempty"` // Use pointer to handle nil easily
 }
 
 // ConfigService handles loading and saving application configuration.
@@ -39,19 +46,39 @@ func NewConfigService() (*ConfigService, error) {
 
 	service := &ConfigService{
 		configPath: configFilePath,
-		config:     &ConfigData{Connections: make(map[string]ConnectionDetails)}, // Initialize map
+		config: &ConfigData{
+			Connections:   make(map[string]ConnectionDetails),
+			ThemeSettings: &ThemeSettings{Mode: "system", BaseTheme: "claude"}, // Default theme settings
+		},
 	}
 
-	// Load existing config on startup
+	// Load existing config on startup, potentially overwriting defaults
 	if err := service.loadConfig(); err != nil {
-		// If loading fails (e.g., corrupted JSON), log but continue with empty config
-		fmt.Printf("Warning: Failed to load config file %s: %v. Starting with empty config.\n", configFilePath, err)
-		// Ensure map is initialized even if loading fails partially
+		fmt.Printf("Warning: Failed to load config file %s: %v. Starting with default config.\n", configFilePath, err)
+		// Ensure base structure is still valid even if load fails
+		if service.config == nil {
+			service.config = &ConfigData{
+				Connections:   make(map[string]ConnectionDetails),
+				ThemeSettings: &ThemeSettings{Mode: "system", BaseTheme: "claude"},
+			}
+		}
+		// Ensure sub-maps/structs are initialized if config was partially loaded or nil
 		if service.config.Connections == nil {
 			service.config.Connections = make(map[string]ConnectionDetails)
 		}
+		if service.config.ThemeSettings == nil {
+			service.config.ThemeSettings = &ThemeSettings{Mode: "system", BaseTheme: "claude"}
+		}
 	} else {
 		fmt.Printf("Config loaded successfully from %s\n", configFilePath)
+		// Ensure ThemeSettings is initialized if it was missing in the loaded file
+		if service.config.ThemeSettings == nil {
+			service.config.ThemeSettings = &ThemeSettings{Mode: "system", BaseTheme: "claude"}
+			// Optionally save immediately to persist the default theme settings
+			// if err := service.saveConfig(); err != nil {
+			//  fmt.Printf("Warning: Failed to save default theme settings after load: %v\n", err)
+			// }
+		}
 	}
 
 	return service, nil
@@ -64,13 +91,9 @@ func (s *ConfigService) loadConfig() error {
 
 	// Check if file exists
 	if _, err := os.Stat(s.configPath); os.IsNotExist(err) {
-		fmt.Printf("Config file %s does not exist, creating empty config.\n", s.configPath)
-		// Ensure map is initialized
-		if s.config.Connections == nil {
-			s.config.Connections = make(map[string]ConnectionDetails)
-		}
-		// No need to save yet, will save when data is added
-		return nil // Not an error if file doesn't exist
+		fmt.Printf("Config file %s does not exist, creating empty config with defaults.\n", s.configPath)
+		// Defaults are already set in NewConfigService
+		return nil
 	}
 
 	data, err := os.ReadFile(s.configPath)
@@ -80,22 +103,28 @@ func (s *ConfigService) loadConfig() error {
 
 	// If the file is empty, initialize config
 	if len(data) == 0 {
-		fmt.Printf("Config file %s is empty, creating empty config.\n", s.configPath)
-		if s.config.Connections == nil {
-			s.config.Connections = make(map[string]ConnectionDetails)
-		}
+		fmt.Printf("Config file %s is empty, using default config.\n", s.configPath)
+		// Defaults are already set in NewConfigService
 		return nil
 	}
 
-	// Unmarshal the data
-	err = json.Unmarshal(data, s.config)
+	// Temporarily unmarshal into a new struct to preserve defaults if load fails
+	var loadedConfig ConfigData
+	err = json.Unmarshal(data, &loadedConfig)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal config data from %s: %w", s.configPath, err)
 	}
 
-	// Ensure the map is initialized if JSON was like {"connections": null}
+	// Assign loaded data to the service config
+	s.config = &loadedConfig
+
+	// Ensure nested structures are initialized if they were null/missing in the JSON
 	if s.config.Connections == nil {
 		s.config.Connections = make(map[string]ConnectionDetails)
+	}
+	if s.config.ThemeSettings == nil {
+		// If theme settings are missing from the file, apply defaults
+		s.config.ThemeSettings = &ThemeSettings{Mode: "system", BaseTheme: "claude"}
 	}
 
 	return nil
@@ -139,8 +168,10 @@ func (s *ConfigService) GetAllConnections() (map[string]ConnectionDetails, error
 
 	// Return a copy to prevent external modification of the internal map
 	connectionsCopy := make(map[string]ConnectionDetails)
-	for name, details := range s.config.Connections {
-		connectionsCopy[name] = details // Assuming ConnectionDetails is a struct (value type)
+	if s.config.Connections != nil {
+		for name, details := range s.config.Connections {
+			connectionsCopy[name] = details
+		}
 	}
 	return connectionsCopy, nil
 }
@@ -180,4 +211,36 @@ func (s *ConfigService) GetConnection(name string) (ConnectionDetails, bool, err
 
 	details, found := s.config.Connections[name]
 	return details, found, nil
+}
+
+// --- Theme Settings Management Methods ---
+
+// GetThemeSettings retrieves the current theme settings.
+func (s *ConfigService) GetThemeSettings() (*ThemeSettings, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	// Return a copy to prevent modification of internal state?
+	// For simple structs, returning the pointer might be okay for read,
+	// but save must go through SaveThemeSettings.
+	if s.config.ThemeSettings == nil {
+		// Should not happen due to initialization, but return default if it does
+		return &ThemeSettings{Mode: "system", BaseTheme: "claude"}, nil
+	}
+	// Return a copy to be safe
+	settingsCopy := *s.config.ThemeSettings
+	return &settingsCopy, nil
+}
+
+// SaveThemeSettings updates and saves the theme settings.
+func (s *ConfigService) SaveThemeSettings(settings ThemeSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Basic validation (optional but good practice)
+	if settings.Mode == "" { settings.Mode = "system" } // Default if empty
+	if settings.BaseTheme == "" { settings.BaseTheme = "claude" } // Default if empty
+	// Add validation against availableThemes if needed
+
+	s.config.ThemeSettings = &settings // Update the internal config
+	return s.saveConfig() // Save the entire config file
 }
