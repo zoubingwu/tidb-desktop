@@ -273,7 +273,7 @@ export function ConnectionFormDialog({
               value={formState.dbName}
               onChange={handleChange}
               className="col-span-3"
-              placeholder="(Optional) e.g., test"
+              placeholder="Optional, e.g., test"
             />
           </div>
           {/* Use TLS Checkbox - Note: Go backend auto-detects for .tidbcloud.com */}
@@ -294,7 +294,7 @@ export function ConnectionFormDialog({
                 htmlFor="useTLS"
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-muted-foreground"
               >
-                Force TLS (Required for TiDB Cloud if not auto-detected)
+                Force TLS, required for TiDB Cloud
               </label>
             </div>
           </div>
