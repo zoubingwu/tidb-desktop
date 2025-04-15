@@ -15,6 +15,9 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed build/appicon.png
+var icon []byte
+
 var appName = "TiDB Desktop"
 var version = "0.1.0"
 
@@ -48,6 +51,7 @@ func main() {
 			About: &mac.AboutInfo{
 				Title:   fmt.Sprintf("%s %s", appName, version),
 				Message: "A modern lightweight TiDB desktop client.\n\nCopyright © 2025",
+				Icon:    icon,
 			},
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,
