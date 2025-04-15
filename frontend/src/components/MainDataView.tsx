@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useImmer } from "use-immer";
-import { Loader2, RefreshCw, Columns3 } from "lucide-react";
+import { Loader2, RefreshCw, Columns3, Settings } from "lucide-react";
 import {
   ColumnDef,
   flexRender,
@@ -35,6 +35,7 @@ import {
   DatabaseTreeItem,
   SelectionState as TreeSelectionState,
 } from "@/components/DatabaseTree";
+import { SettingsModal } from "@/components/SettingModal";
 
 // Type for the Go backend response from GetTableData
 // Assuming TableDataResponse structure defined in Go
@@ -407,6 +408,13 @@ const MainDataView = () => {
             </Button>
 
             <DataTableFilter table={table} onChange={handleFilterChange} />
+
+            <SettingsModal>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Settings className="h-4 w-4" />
+                <span className="sr-only">Settings</span>
+              </Button>
+            </SettingsModal>
           </div>
         )}
 
