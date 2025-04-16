@@ -61,6 +61,11 @@
   --shadow-2xl: var(--shadow-2xl);
 }
 
+* {
+  user-select: none;
+  -webkit-user-select: none; /* Safari */
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);
