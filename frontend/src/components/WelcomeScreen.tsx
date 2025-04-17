@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Loader2, PlusCircle, Settings } from "lucide-react";
@@ -156,4 +156,4 @@ const WelcomeScreen = () => {
   );
 };
 
-export default WelcomeScreen;
+export default memo(WelcomeScreen);
