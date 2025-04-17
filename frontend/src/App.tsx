@@ -4,7 +4,7 @@ import { EventsOn } from "wailsjs/runtime";
 import { Disconnect } from "wailsjs/go/main/App";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import MainDataView from "@/components/MainDataView";
-import { Header } from "./components/Header";
+import TitleBar from "@/components/TitleBar";
 
 type ViewState = "welcome" | "main";
 
@@ -66,7 +66,7 @@ function App() {
 
   return (
     <div id="App" className="h-screen w-screen flex flex-col">
-      <Header title={title} />
+      <TitleBar title={title} />
       <div className="flex-grow overflow-auto">{renderView()}</div>
     </div>
   );
