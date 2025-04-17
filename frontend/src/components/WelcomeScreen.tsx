@@ -82,7 +82,7 @@ const WelcomeScreen = () => {
   }, [savedConnections]);
 
   return (
-    <div className="w-full min-h-full bg-muted/30 p-6 md:p-10">
+    <div className="w-full min-h-full bg-muted/50 p-6 md:p-10">
       <header className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">
