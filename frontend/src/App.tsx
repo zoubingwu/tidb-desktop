@@ -59,16 +59,14 @@ function App() {
     }
   };
 
+  const title = connectionDetails
+    ? connectionDetails.name ||
+      `${connectionDetails.user}@${connectionDetails.host}:${connectionDetails.port}`
+    : "TiDB Desktop";
+
   return (
     <div id="App" className="h-screen w-screen flex flex-col">
-      <Header
-        title={
-          connectionDetails
-            ? connectionDetails.name ||
-              `${connectionDetails.user}@${connectionDetails.host}:${connectionDetails.port}`
-            : "TiDB Desktop"
-        }
-      />
+      <Header title={title} />
       <div className="flex-grow overflow-auto">{renderView()}</div>
     </div>
   );
