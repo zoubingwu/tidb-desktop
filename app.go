@@ -571,11 +571,11 @@ func (a *App) GetTableData(dbName string, tableName string, limit int, offset in
 	}
 
 	// 2. Get Table Data with filters applied
-	dataQuery := fmt.Sprintf("SELECT * FROM `%s`%s LIMIT %d OFFSET %d;",
-		tableName, whereClause, limit, offset)
+	dataQuery := fmt.Sprintf("SELECT * FROM `%s`.`%s`%s LIMIT %d OFFSET %d;",
+		dbName, tableName, whereClause, limit, offset)
 
 	dataResult, err := a.ExecuteSQL(dataQuery)
-	if err != nil { return nil, fmt.Errorf("failed to get data for table '%s': %w", tableName, err) }
+	if err != nil { return nil, fmt.Errorf("failed to get data for table `%s`.`%s`: %w", dbName, tableName, err) }
 
 	dataRows, ok := dataResult.([]map[string]any)
 	if !ok {
@@ -593,7 +593,7 @@ func (a *App) GetTableData(dbName string, tableName string, limit int, offset in
 
 	// 3. Get Total Row Count for Pagination
 	// Apply the same filters to the count query
-	countQuery := fmt.Sprintf("SELECT COUNT(*) as total FROM `%s`%s;", tableName, whereClause)
+	countQuery := fmt.Sprintf("SELECT COUNT(*) as total FROM `%s`.`%s`%s;", dbName, tableName, whereClause)
 	countResult, countErr := a.ExecuteSQL(countQuery) // Execute count query separately
 	var totalRows *int64 = nil // Use pointer to distinguish 0 from not fetched
 
@@ -619,7 +619,7 @@ func (a *App) GetTableData(dbName string, tableName string, limit int, offset in
 			}
 		}
 	} else {
-		 fmt.Printf("Warning: Failed to get total row count for table '%s': %v\n", tableName, countErr)
+		 fmt.Printf("Warning: Failed to get total row count for table `%s`.`%s`: %v\n", dbName, tableName, countErr)
 	}
 
 	return &TableDataResponse{
