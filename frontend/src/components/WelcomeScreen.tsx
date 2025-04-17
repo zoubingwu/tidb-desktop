@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Loader2, PlusCircle, Settings } from "lucide-react";
@@ -11,6 +11,7 @@ import {
 } from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
 import { SettingsModal } from "./SettingModal";
+import { formatDistanceToNow } from "date-fns";
 
 type SavedConnectionsMap = Record<string, services.ConnectionDetails>;
 
@@ -71,6 +72,15 @@ const WelcomeScreen = () => {
     fetchConnections();
   };
 
+  // Memoize sorted connections
+  const sortedConnections = useMemo(() => {
+    return Object.entries(savedConnections).sort(([, a], [, b]) => {
+      const timeA = a.lastUsed ? new Date(a.lastUsed).getTime() : 0;
+      const timeB = b.lastUsed ? new Date(b.lastUsed).getTime() : 0;
+      return timeB - timeA; // Sort descending (most recent first)
+    });
+  }, [savedConnections]);
+
   return (
     <div className="w-full min-h-full bg-muted/30 p-6 md:p-10">
       <header className="flex items-center justify-between mb-8">
@@ -105,7 +115,7 @@ const WelcomeScreen = () => {
           </div>
         ) : hasConnections ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Object.entries(savedConnections).map(([name, details]) => (
+            {sortedConnections.map(([name, details]) => (
               <ConnectionCard
                 key={name}
                 name={name}
@@ -113,6 +123,13 @@ const WelcomeScreen = () => {
                 onConnect={handleConnect}
                 onDelete={handleDelete}
                 isConnecting={connectingName === name}
+                lastUsed={
+                  details.lastUsed
+                    ? formatDistanceToNow(new Date(details.lastUsed), {
+                        addSuffix: true,
+                      })
+                    : "Never"
+                }
               />
             ))}
           </div>

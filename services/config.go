@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync" // Use a mutex for safe concurrent access if needed, though less critical for simple desktop apps
+	"time"
 )
 
 const (
@@ -215,6 +216,26 @@ func (s *ConfigService) GetConnection(name string) (ConnectionDetails, bool, err
 		details.Name = name // Populate the Name field
 	}
 	return details, found, nil
+}
+
+// RecordConnectionUsage updates the LastUsed timestamp for a connection.
+func (s *ConfigService) RecordConnectionUsage(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	details, found := s.config.Connections[name]
+	if !found {
+		// Should we error? Or just ignore? Ignoring is safer if called speculatively.
+		fmt.Printf("Warning: Attempted to record usage for non-existent connection '%s'\n", name)
+		return nil // Don't block connection flow if name somehow doesn't exist
+		// return fmt.Errorf("connection '%s' not found", name) // Stricter alternative
+	}
+
+	details.LastUsed = time.Now().Format(time.RFC3339)
+	s.config.Connections[name] = details // Update the map with the modified struct
+
+	// Save the configuration
+	return s.saveConfig()
 }
 
 // --- Theme Settings Management Methods ---

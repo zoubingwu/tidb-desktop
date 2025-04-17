@@ -19,7 +19,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, Database } from "lucide-react";
+import { Loader2, Trash2, Database, Clock } from "lucide-react";
 import { services } from "wailsjs/go/models";
 
 type ConnectionCardProps = {
@@ -29,6 +29,7 @@ type ConnectionCardProps = {
   onDelete: (name: string) => Promise<void>; // Pass delete logic from parent
   // onEdit: (name: string, details: services.ConnectionDetails) => void; // Placeholder for edit
   isConnecting: boolean; // Flag from parent indicating *this* card is connecting
+  lastUsed: string;
 };
 
 export const ConnectionCard = ({
@@ -37,6 +38,7 @@ export const ConnectionCard = ({
   onConnect,
   onDelete,
   isConnecting,
+  lastUsed,
 }: ConnectionCardProps) => {
   const [isDeleting, setIsDeleting] = useState(false); // Local delete loading state
 
@@ -64,11 +66,11 @@ export const ConnectionCard = ({
             {details.host}:{details.port} ({details.user})
           </span>
         </div>
-        {/* Last Connected Info (Placeholder) */}
-        {/* <div className="flex items-center gap-2">
-                     <Clock className="h-4 w-4" />
-                     <span>Last connected: 2 days ago</span>
-                 </div> */}
+        {/* Last Connected Info */}
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 shrink-0" />
+          <span>Last used: {lastUsed}</span>
+        </div>
       </CardContent>
       <CardFooter className="flex items-center justify-between gap-2">
         {/* Connect Button */}

@@ -22,7 +22,10 @@ import {
 import { Loader2 } from "lucide-react";
 
 // Type definition for the connection details state
-type ConnectionFormState = Omit<services.ConnectionDetails, "toJSON">; // Exclude toJSON if present
+type ConnectionFormState = Pick<
+  services.ConnectionDetails,
+  "host" | "port" | "user" | "password" | "dbName" | "useTLS"
+>;
 
 const initialFormState: ConnectionFormState = {
   host: "",
