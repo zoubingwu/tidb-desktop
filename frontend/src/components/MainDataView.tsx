@@ -157,8 +157,10 @@ const MainDataView = ({
         filterObject,
       );
     },
-    onMutate: () => {
-      onUpdateTitle(`Fetching ${currentTable?.db}.${currentTable?.table}...`);
+    onMutate: (variables) => {
+      onUpdateTitle(
+        `Fetching data from ${variables.dbName}.${variables.tableName}...`,
+      );
     },
     onSuccess: (_data, variables) => {
       onUpdateTitle(`${variables.dbName}.${variables.tableName}`);
