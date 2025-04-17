@@ -99,7 +99,7 @@ const WelcomeScreen = () => {
           </Button>
 
           <SettingsModal>
-            <Button variant="outline" size="icon">
+            <Button variant="outline" className="size-9">
               <SettingsIcon className="h-4 w-4" />
               <span className="sr-only">Preferences</span>
             </Button>
