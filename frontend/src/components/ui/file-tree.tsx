@@ -313,7 +313,7 @@ const File = forwardRef<
     },
     ref,
   ) => {
-    const { direction, selectedId, selectItem } = useTree();
+    const { selectedId, selectItem } = useTree();
     const isSelected = isSelect ?? selectedId === value;
     return (
       <button
@@ -321,12 +321,11 @@ const File = forwardRef<
         type="button"
         disabled={!isSelectable}
         className={cn(
-          "flex w-fit items-center gap-1 rounded-md pr-1 text-sm duration-200 ease-in-out rtl:pl-1 rtl:pr-0",
+          "flex w-fit items-center gap-1 rounded-lg text-sm duration-200 ease-in-out px-1",
           {
             "bg-muted": isSelected && isSelectable,
           },
           isSelectable ? "cursor-pointer" : "cursor-not-allowed opacity-50",
-          direction === "rtl" ? "rtl" : "ltr",
           className,
         )}
         onClick={() => selectItem(value)}
