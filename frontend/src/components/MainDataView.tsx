@@ -463,9 +463,9 @@ const MainDataView = ({
 
           <div className="flex gap-2">
             <SettingsModal>
-              <Button title="Settings" variant="ghost" size="icon">
+              <Button title="Preferences" variant="ghost" size="icon">
                 <SettingsIcon className="h-4 w-4" />
-                <span className="sr-only">Settings</span>
+                <span className="sr-only">Preferences</span>
               </Button>
             </SettingsModal>
 

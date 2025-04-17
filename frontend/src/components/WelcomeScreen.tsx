@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Loader2, PlusCircle, Settings } from "lucide-react";
+import { Loader2Icon, PlusCircleIcon, SettingsIcon } from "lucide-react";
 import { ConnectionCard } from "./ConnectionCard";
 import { ConnectionFormDialog } from "./ConnectionForm";
 import {
@@ -95,13 +95,13 @@ const WelcomeScreen = () => {
 
         <div className="flex items-center gap-2">
           <Button onClick={() => setIsFormOpen(true)}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Connection
+            <PlusCircleIcon className="mr-2 h-4 w-4" /> Add New Connection
           </Button>
 
           <SettingsModal>
             <Button variant="outline" size="icon">
-              <Settings className="h-4 w-4" />
-              <span className="sr-only">Settings</span>
+              <SettingsIcon className="h-4 w-4" />
+              <span className="sr-only">Preferences</span>
             </Button>
           </SettingsModal>
         </div>
@@ -110,7 +110,7 @@ const WelcomeScreen = () => {
       <section>
         {isLoadingConnections ? (
           <div className="flex items-center justify-center p-10 text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin mr-3" />
+            <Loader2Icon className="h-8 w-8 animate-spin mr-3" />
             <span>Loading connections...</span>
           </div>
         ) : hasConnections ? (
@@ -140,7 +140,7 @@ const WelcomeScreen = () => {
               Ready to explore? Add your first connection now.
             </p>
             <Button onClick={() => setIsFormOpen(true)} variant="outline">
-              <PlusCircle className="mr-2 h-4 w-4" />
+              <PlusCircleIcon className="mr-2 h-4 w-4" />
               Add New Connection
             </Button>
           </div>

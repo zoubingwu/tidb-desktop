@@ -44,7 +44,7 @@ export function SettingsModal({ children }: SettingsModalProps) {
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
+          <DialogTitle>Preferences</DialogTitle>
         </DialogHeader>
         <div className="grid gap-6 py-4">
           {/* Mode Selection */}
