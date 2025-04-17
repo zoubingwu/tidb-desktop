@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, memo } from "react";
 import { useImmer } from "use-immer";
 import { Loader2, RefreshCw, Columns3, Settings, XIcon } from "lucide-react";
 import {
@@ -530,4 +530,4 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-export default MainDataView;
+export default memo(MainDataView);

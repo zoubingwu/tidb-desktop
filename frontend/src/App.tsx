@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { services } from "wailsjs/go/models";
 import { EventsOn } from "wailsjs/runtime";
 import { Disconnect } from "wailsjs/go/main/App";
@@ -43,10 +43,10 @@ function App() {
     setCurrentView("welcome");
   };
 
-  const triggerDisconnect = () => {
+  const triggerDisconnect = useCallback(() => {
     console.log("App.tsx: Triggering disconnect via UI.");
     Disconnect();
-  };
+  }, []);
 
   const renderView = () => {
     switch (currentView) {
