@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, memo } from "react";
 import { useImmer } from "use-immer";
-import { Columns3, Settings, XIcon } from "lucide-react";
+import { Columns3 } from "lucide-react";
 import {
   ColumnDef,
   flexRender,
@@ -25,13 +25,12 @@ import {
   DataTableFilter,
   ServerSideFilter,
 } from "@/components/ui/data-table-filter";
-import { Button } from "@/components/ui/button";
 import { filterFn } from "@/lib/filters";
 import { mapDbColumnTypeToFilterType } from "@/lib/utils";
 import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
 import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
-import { SettingsModal } from "@/components/SettingModal";
 import { toast } from "sonner";
+import TablePlaceholder from "./TablePlaceHolder";
 
 // Use `any` for row data initially, can be refined if needed
 type TableRowData = Record<string, any>;
@@ -255,6 +254,8 @@ const MainDataView = ({
     ];
   }, [tableData?.columns]);
 
+  console.log("tableData", tableData);
+
   // Derive data, using placeholders if loading or no table selected
   const displayData = useMemo(() => {
     if (isFetchingTableData || !currentTable?.table) {
@@ -277,6 +278,20 @@ const MainDataView = ({
     }
     return -1;
   }, [totalRowCount, pageSize]);
+
+  const tableViewState = useMemo(() => {
+    if (isFetchingTableData || isLoadingDatabases) return "loading";
+
+    if (
+      currentTable?.table &&
+      tableData?.rows?.length &&
+      tableData?.columns.length
+    ) {
+      return "data";
+    }
+
+    return "empty";
+  }, [currentTable, tableData, isFetchingTableData, isLoadingDatabases]);
 
   // Safely update database tree for selected DB
   const handleSelectDatabase = useCallback(
@@ -358,6 +373,11 @@ const MainDataView = ({
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    defaultColumn: {
+      minSize: 0,
+      size: Number.MAX_SAFE_INTEGER,
+      maxSize: Number.MAX_SAFE_INTEGER,
+    },
   });
 
   return (
@@ -372,7 +392,7 @@ const MainDataView = ({
       />
 
       <div className="flex-grow flex flex-col overflow-hidden">
-        <div className="p-2 flex items-center gap-2 sticky top-0 bg-background z-20">
+        {/* <div className="p-2 flex items-center gap-2 sticky top-0 bg-background z-20">
           <SettingsModal>
             <Button variant="ghost" size="icon" className="h-8 w-8">
               <Settings className="h-4 w-4" />
@@ -389,39 +409,38 @@ const MainDataView = ({
             <XIcon className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </Button>
-        </div>
+        </div> */}
 
-        <div className="rounded-none overflow-hidden flex-grow flex flex-col">
-          <div className="flex-grow overflow-auto relative">
-            <Table>
+        <div className="flex-grow overflow-auto relative">
+          <TablePlaceholder animate={tableViewState === "loading"} />
+
+          {tableViewState !== "loading" && (
+            <Table className="z-10 bg-white">
               <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
                       <TableHead
                         key={header.id}
-                        style={{ width: header.getSize() }}
+                        style={{
+                          width:
+                            header.getSize() === Number.MAX_SAFE_INTEGER
+                              ? "auto"
+                              : header.getSize(),
+                        }}
                         className="px-4"
                       >
-                        {header.isPlaceholder || !currentTable?.table
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )}
-                        {!header.isPlaceholder &&
-                          !currentTable?.table &&
-                          header.column.id !== "select" &&
-                          header.column.id}
+                        {flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
                       </TableHead>
                     ))}
                   </TableRow>
                 ))}
               </TableHeader>
               <TableBody>
-                {currentTable?.table &&
-                !isFetchingTableData &&
-                table.getRowModel().rows?.length ? (
+                {tableData?.rows?.length &&
                   table.getRowModel().rows.map((row) => (
                     <TableRow
                       key={row.id}
@@ -441,22 +460,10 @@ const MainDataView = ({
                         </TableCell>
                       ))}
                     </TableRow>
-                  ))
-                ) : (
-                  /* Only show "No results" when data is loaded but empty */
-                  /* This assumes !isFetchingTableData && currentTable?.table */
-                  <TableRow>
-                    <TableCell
-                      colSpan={columns.length || 1}
-                      className="h-24 text-center px-4 text-muted-foreground"
-                    >
-                      No results found.
-                    </TableCell>
-                  </TableRow>
-                )}
+                  ))}
               </TableBody>
             </Table>
-          </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between p-2 bg-background">
