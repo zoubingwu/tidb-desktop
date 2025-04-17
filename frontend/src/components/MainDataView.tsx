@@ -31,14 +31,7 @@ import { mapDbColumnTypeToFilterType } from "@/lib/utils";
 import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
 import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
 import { SettingsModal } from "@/components/SettingModal";
-
-// Type for the Go backend response from GetTableData
-// Assuming TableDataResponse structure defined in Go
-type TableDataResponse = {
-  columns: { name: string; type: string }[];
-  rows: Record<string, any>[];
-  totalRows?: number;
-};
+import { toast } from "sonner";
 
 // Use `any` for row data initially, can be refined if needed
 type TableRowData = Record<string, any>;
@@ -46,7 +39,13 @@ type TableRowData = Record<string, any>;
 // Rename to avoid conflict with the imported component
 type DatabaseTreeData = DatabaseTreeItem[];
 
-const MainDataView = ({ onClose }: { onClose: () => void }) => {
+const MainDataView = ({
+  onClose,
+  onUpdateTitle,
+}: {
+  onClose: () => void;
+  onUpdateTitle: (title: string) => void;
+}) => {
   const [databaseTree, setDatabaseTree] = useImmer<DatabaseTreeData>([]);
   const [currentTable, setCurrentTable] = useState<{
     db: string;
@@ -59,10 +58,6 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [rowSelection, setRowSelection] = useState({});
   const [serverFilters, setServerFilters] = useState<ServerSideFilter[]>([]);
-
-  // Store table data in state
-  const [tableData, setTableData] = useState<TableDataResponse | null>(null);
-  const [tableDataError, setTableDataError] = useState<Error | null>(null);
 
   const updateDatabaseTree = (
     dbName: string,
@@ -132,43 +127,49 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
     },
   });
 
-  // --- Convert Table Data Query to a Mutation ---
-  const { mutate: fetchTableData, isPending: isFetchingTableData } =
-    useMutation({
-      mutationFn: ({
-        tableName,
+  const {
+    mutate: fetchTableData,
+    isPending: isFetchingTableData,
+    data: tableData,
+    error: tableDataError,
+  } = useMutation({
+    mutationFn: ({
+      tableName,
+      dbName,
+      pageSize,
+      pageIndex,
+      filters,
+    }: {
+      tableName: string;
+      dbName: string;
+      pageSize: number;
+      pageIndex: number;
+      filters: ServerSideFilter[];
+    }) => {
+      const filterObject = filters.length > 0 ? { filters } : null;
+      return GetTableData(
         dbName,
+        tableName,
         pageSize,
-        pageIndex,
-        filters,
-      }: {
-        tableName: string;
-        dbName: string;
-        pageSize: number;
-        pageIndex: number;
-        filters: ServerSideFilter[];
-      }) => {
-        const filterObject = filters.length > 0 ? { filters } : null;
-        return GetTableData(
-          dbName,
-          tableName,
-          pageSize,
-          pageIndex * pageSize,
-          filterObject,
-        );
-      },
-      onMutate: () => {
-        setTableDataError(null);
-      },
-      onSuccess: (data) => {
-        console.log("onSuccess data", data);
-        setTableData(data);
-      },
-      onError: (error) => {
-        setTableDataError(error as Error);
-        console.error("Error fetching table data:", error);
-      },
-    });
+        pageIndex * pageSize,
+        filterObject,
+      );
+    },
+    onMutate: () => {
+      onUpdateTitle(`Fetching ${currentTable?.db}.${currentTable?.table}...`);
+    },
+    onSuccess: (_data, variables) => {
+      onUpdateTitle(`${variables.dbName}.${variables.tableName}`);
+    },
+    onError: (error) => {
+      onUpdateTitle(
+        `Error fetching ${currentTable?.db}.${currentTable?.table}`,
+      );
+      toast.error("Error fetching table data", {
+        description: `Error fetching ${currentTable?.db}.${currentTable?.table}: ${error.message}`,
+      });
+    },
+  });
 
   // --- Handle server-side filter changes ---
   const handleFilterChange = useCallback(

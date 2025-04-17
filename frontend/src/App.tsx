@@ -12,6 +12,7 @@ function App() {
   const [currentView, setCurrentView] = useState<ViewState>("welcome");
   const [connectionDetails, setConnectionDetails] =
     useState<services.ConnectionDetails | null>(null);
+  const [titleSuffix, setTitleSuffix] = useState<string>("");
 
   const navigateToMain = (details: services.ConnectionDetails) => {
     setConnectionDetails(details);
@@ -53,7 +54,12 @@ function App() {
       case "welcome":
         return <WelcomeScreen />;
       case "main":
-        return <MainDataView onClose={triggerDisconnect} />;
+        return (
+          <MainDataView
+            onClose={triggerDisconnect}
+            onUpdateTitle={setTitleSuffix}
+          />
+        );
       default:
         return <div>Unknown View</div>;
     }
@@ -66,7 +72,7 @@ function App() {
 
   return (
     <div id="App" className="h-screen w-screen flex flex-col">
-      <TitleBar title={title} />
+      <TitleBar title={titleSuffix ? `${title} - ${titleSuffix}` : title} />
       <div className="flex-grow overflow-auto">{renderView()}</div>
     </div>
   );
