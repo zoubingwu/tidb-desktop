@@ -494,7 +494,7 @@ const MainDataView = ({
           <DataTablePagination
             table={table}
             totalRowCount={totalRowCount}
-            disabled={isFetchingTableData}
+            disabled={isFetchingTableData || !tableData}
           />
         </div>
       </div>
