@@ -170,6 +170,7 @@ func (s *ConfigService) GetAllConnections() (map[string]ConnectionDetails, error
 	connectionsCopy := make(map[string]ConnectionDetails)
 	if s.config.Connections != nil {
 		for name, details := range s.config.Connections {
+			details.Name = name // Populate the Name field
 			connectionsCopy[name] = details
 		}
 	}
@@ -210,6 +211,9 @@ func (s *ConfigService) GetConnection(name string) (ConnectionDetails, bool, err
 	defer s.mu.RUnlock()
 
 	details, found := s.config.Connections[name]
+	if found {
+		details.Name = name // Populate the Name field
+	}
 	return details, found, nil
 }
 

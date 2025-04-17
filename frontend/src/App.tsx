@@ -60,15 +60,16 @@ function App() {
   };
 
   return (
-    <div id="App" className="h-screen w-screen">
+    <div id="App" className="h-screen w-screen flex flex-col">
       <Header
         title={
           connectionDetails
-            ? `${connectionDetails?.user}@${connectionDetails?.host}:${connectionDetails?.port}`
+            ? connectionDetails.name ||
+              `${connectionDetails.user}@${connectionDetails.host}:${connectionDetails.port}`
             : "TiDB Desktop"
         }
       />
-      {renderView()}
+      <div className="flex-grow overflow-auto">{renderView()}</div>
     </div>
   );
 }

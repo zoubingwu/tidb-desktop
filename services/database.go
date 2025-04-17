@@ -13,6 +13,7 @@ import (
 // ConnectionDetails defines the structure for DB connection info from the frontend
 // Moved definition here and exported it.
 type ConnectionDetails struct {
+	Name     string `json:"name,omitempty"` // Added: Name for the connection
 	Host     string `json:"host"`
 	Port     string `json:"port"`
 	User     string `json:"user"`
