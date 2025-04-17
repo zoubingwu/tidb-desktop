@@ -176,7 +176,7 @@ export const DataTableFilter = <TData,>({
       onChange={onChange}
       initialFilters={initialFilters}
     >
-      <div className="flex w-full items-start justify-between gap-2">
+      <div className="flex w-full flex-grow items-start justify-between gap-2">
         <div className="flex md:flex-wrap gap-2 w-full flex-1">
           {/* Pass table for metadata, but filter logic uses context */}
           <FilterSelector table={table} />
@@ -260,10 +260,10 @@ export function FilterSelector<TData>({ table }: { table: Table<TData> }) {
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
-          className={cn("h-7", hasFilters && "w-fit !px-2")}
+          size="icon"
+          className={cn(hasFilters && "w-fit !px-2")}
         >
           <Filter className="size-4" />
-          {!hasFilters && <span>Filter</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent

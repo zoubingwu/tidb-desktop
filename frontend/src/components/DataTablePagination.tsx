@@ -48,40 +48,46 @@ export function DataTablePagination<TData>({
       <div className="flex items-center space-x-2">
         <Button
           variant="ghost"
-          className="hidden h-8 w-8 p-0 lg:flex"
+          className="hidden lg:flex"
           onClick={() => table.setPageIndex(0)}
           disabled={!table.getCanPreviousPage() || disabled}
+          title="Go to first page"
+          size="icon"
         >
           <span className="sr-only">Go to first page</span>
           <ChevronsLeft className="h-4 w-4" />
         </Button>
         <Button
           variant="ghost"
-          className="h-8 w-8 p-0"
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage() || disabled}
+          title="Go to previous page"
+          size="icon"
         >
           <span className="sr-only">Go to previous page</span>
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <Button
           variant="ghost"
-          className="h-8 w-8 p-0"
+          size="icon"
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage() || disabled}
+          title="Go to next page"
         >
           <span className="sr-only">Go to next page</span>
           <ChevronRight className="h-4 w-4" />
         </Button>
         <Button
           variant="ghost"
-          className="hidden h-8 w-8 p-0 lg:flex"
+          className="hidden lg:flex"
           onClick={() =>
             table.setPageIndex(
               calculatedPageCount > 0 ? calculatedPageCount - 1 : 0,
             )
-          } // Use calculatedPageCount
+          }
           disabled={!table.getCanNextPage() || disabled}
+          title="Go to last page"
+          size="icon"
         >
           <span className="sr-only">Go to last page</span>
           <ChevronsRight className="h-4 w-4" />

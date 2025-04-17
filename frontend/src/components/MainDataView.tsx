@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, memo } from "react";
 import { useImmer } from "use-immer";
-import { Columns3 } from "lucide-react";
+import { Columns3Icon, SettingsIcon, UnplugIcon } from "lucide-react";
 import {
   ColumnDef,
   flexRender,
@@ -31,6 +31,8 @@ import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
 import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
 import { toast } from "sonner";
 import TablePlaceholder from "./TablePlaceHolder";
+import { SettingsModal } from "./SettingModal";
+import { Button } from "@/components/ui/button";
 
 // Use `any` for row data initially, can be refined if needed
 type TableRowData = Record<string, any>;
@@ -247,7 +249,7 @@ const MainDataView = ({
           meta: {
             displayName: col.name,
             type: mapDbColumnTypeToFilterType(col.type),
-            icon: Columns3,
+            icon: Columns3Icon,
           },
         }),
       ) || []),
@@ -392,25 +394,6 @@ const MainDataView = ({
       />
 
       <div className="flex-grow flex flex-col overflow-hidden">
-        {/* <div className="p-2 flex items-center gap-2 sticky top-0 bg-background z-20">
-          <SettingsModal>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <Settings className="h-4 w-4" />
-              <span className="sr-only">Settings</span>
-            </Button>
-          </SettingsModal>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleClose}
-          >
-            <XIcon className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </Button>
-        </div> */}
-
         <div className="flex-grow overflow-auto relative">
           <TablePlaceholder animate={tableViewState === "loading"} />
 
@@ -466,7 +449,7 @@ const MainDataView = ({
           )}
         </div>
 
-        <div className="flex items-center justify-between p-2 bg-background">
+        <div className="flex items-center justify-between p-2 bg-background gap-2">
           <DataTableFilter table={table} onChange={handleFilterChange} />
 
           <DataTablePagination
@@ -474,6 +457,25 @@ const MainDataView = ({
             totalRowCount={totalRowCount}
             disabled={isFetchingTableData || !tableData}
           />
+
+          <div className="flex gap-2">
+            <SettingsModal>
+              <Button title="Settings" variant="ghost" size="icon">
+                <SettingsIcon className="h-4 w-4" />
+                <span className="sr-only">Settings</span>
+              </Button>
+            </SettingsModal>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleClose}
+              title="Disconnect"
+            >
+              <UnplugIcon className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </Button>
+          </div>
         </div>
       </div>
     </div>
