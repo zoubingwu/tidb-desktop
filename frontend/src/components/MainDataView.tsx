@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, memo } from "react";
 import { useImmer } from "use-immer";
-import { Loader2, RefreshCw, Columns3, Settings, XIcon } from "lucide-react";
+import { Loader2, Columns3, Settings, XIcon } from "lucide-react";
 import {
   ColumnDef,
   flexRender,
@@ -191,8 +191,6 @@ const MainDataView = ({
     [currentTable, pageSize],
   );
 
-  // --- Derived State & Calculations ---
-  const isRefreshingIndicator = isLoadingTables || isFetchingTableData;
   const isInitialLoading = isLoadingDatabases || isLoadingTables;
   const error = databasesError || tablesError || tableDataError;
 
@@ -274,19 +272,6 @@ const MainDataView = ({
     }
     return -1;
   }, [totalRowCount, pageSize]);
-
-  const status = useMemo(() => {
-    if (isFetchingTableData) {
-      return "Fetching data...";
-    }
-    if (error) {
-      return `Error loading data: ${error.message}`;
-    }
-    if (currentTable) {
-      return `current table: ${currentTable?.db}.${currentTable?.table}`;
-    }
-    return "No table selected";
-  }, [isFetchingTableData, error, currentTable]);
 
   // Safely update database tree for selected DB
   const handleSelectDatabase = (dbName: string) => {
@@ -389,23 +374,6 @@ const MainDataView = ({
 
       <div className="flex-grow flex flex-col overflow-hidden">
         <div className="p-2 flex items-center gap-2 sticky top-0 bg-background z-20">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleRefresh}
-            disabled={isRefreshingIndicator || !currentTable}
-          >
-            {isRefreshingIndicator ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            <span className="sr-only">Refresh</span>
-          </Button>
-
-          <DataTableFilter table={table} onChange={handleFilterChange} />
-
           <SettingsModal>
             <Button variant="ghost" size="icon" className="h-8 w-8">
               <Settings className="h-4 w-4" />
@@ -520,12 +488,15 @@ const MainDataView = ({
           )}
         </div>
 
-        <DataTablePagination
-          table={table}
-          totalRowCount={totalRowCount}
-          status={status}
-          disabled={isFetchingTableData}
-        />
+        <div className="flex items-center justify-between p-2 bg-background">
+          <DataTableFilter table={table} onChange={handleFilterChange} />
+
+          <DataTablePagination
+            table={table}
+            totalRowCount={totalRowCount}
+            disabled={isFetchingTableData}
+          />
+        </div>
       </div>
     </div>
   );
