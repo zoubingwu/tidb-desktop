@@ -483,6 +483,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
                       table.getRowModel().rows.map((row) => (
                         <TableRow
                           key={row.id}
+                          className="odd:bg-muted/50"
                           data-state={row.getIsSelected() && "selected"}
                         >
                           {row.getVisibleCells().map((cell) => (
