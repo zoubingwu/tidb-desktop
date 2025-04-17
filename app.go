@@ -115,6 +115,12 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 	a.activeConnection = &details
 	fmt.Printf("Session connection activated using saved connection '%s': %+v\n", name, *a.activeConnection)
 
+	// Record usage timestamp in config
+	if err := a.configService.RecordConnectionUsage(name); err != nil {
+		// Log the error but don't fail the connection for this
+		fmt.Printf("Warning: Failed to record usage for connection '%s': %v\n", name, err)
+	}
+
 	// Emit event to notify frontend the active session is ready
 	runtime.EventsEmit(a.ctx, "connection:established", details)
 
