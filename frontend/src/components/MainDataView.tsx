@@ -305,18 +305,6 @@ const MainDataView = ({
     }
   };
 
-  const handleRefresh = () => {
-    if (currentTable) {
-      fetchTableData({
-        tableName: currentTable.table,
-        dbName: currentTable.db,
-        pageSize,
-        pageIndex,
-        filters: serverFilters,
-      });
-    }
-  };
-
   const handlePaginationChange = (updaterOrValue: Updater<PaginationState>) => {
     // Handle both function updater and direct value
     const newPagination =
