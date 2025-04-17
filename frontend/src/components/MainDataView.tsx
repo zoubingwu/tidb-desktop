@@ -274,36 +274,42 @@ const MainDataView = ({
   }, [totalRowCount, pageSize]);
 
   // Safely update database tree for selected DB
-  const handleSelectDatabase = (dbName: string) => {
-    fetchTables(dbName);
-  };
+  const handleSelectDatabase = useCallback(
+    (dbName: string) => {
+      fetchTables(dbName);
+    },
+    [fetchTables],
+  );
 
   // --- Function to handle table selection from tree ---
-  const handleSelectTable = (dbName: string, tableName: string) => {
-    if (currentTable?.db !== dbName || currentTable?.table !== tableName) {
-      // First set the selection
-      setCurrentTable({ db: dbName, table: tableName });
+  const handleSelectTable = useCallback(
+    (dbName: string, tableName: string) => {
+      if (currentTable?.db !== dbName || currentTable?.table !== tableName) {
+        // First set the selection
+        setCurrentTable({ db: dbName, table: tableName });
 
-      // Reset filters and pagination
-      const newFilters: ServerSideFilter[] = [];
-      setServerFilters(newFilters);
-      setColumnFilters([]);
+        // Reset filters and pagination
+        const newFilters: ServerSideFilter[] = [];
+        setServerFilters(newFilters);
+        setColumnFilters([]);
 
-      const newPageIndex = 0;
-      setPagination({ pageIndex: newPageIndex, pageSize });
+        const newPageIndex = 0;
+        setPagination((prev) => ({ ...prev, pageIndex: newPageIndex }));
 
-      // Only fetch table data if tableName is provided
-      if (tableName) {
-        fetchTableData({
-          tableName,
-          dbName,
-          pageSize,
-          pageIndex: newPageIndex,
-          filters: newFilters,
-        });
+        // Only fetch table data if tableName is provided
+        if (tableName) {
+          fetchTableData({
+            tableName,
+            dbName,
+            pageSize,
+            pageIndex: newPageIndex,
+            filters: newFilters,
+          });
+        }
       }
-    }
-  };
+    },
+    [currentTable, fetchTableData],
+  );
 
   const handlePaginationChange = (updaterOrValue: Updater<PaginationState>) => {
     // Handle both function updater and direct value
