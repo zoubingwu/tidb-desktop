@@ -39,7 +39,9 @@ export function DataTablePagination<TData>({
       <div className="flex items-center justify-center text-sm font-medium whitespace-nowrap">
         {totalRowCount != null && totalRowCount > 0 // Check if totalRowCount is known and > 0
           ? `${firstRowIndex} - ${lastRowIndex} of ${totalRowCount}`
-          : null}
+          : !disabled
+            ? "0 rows"
+            : null}
       </div>
 
       {/* Navigation buttons */}
