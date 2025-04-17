@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, memo } from "react";
 import { useImmer } from "use-immer";
-import { Loader2, Columns3, Settings, XIcon } from "lucide-react";
+import { Columns3, Settings, XIcon } from "lucide-react";
 import {
   ColumnDef,
   flexRender,
@@ -38,6 +38,12 @@ type TableRowData = Record<string, any>;
 
 // Rename to avoid conflict with the imported component
 type DatabaseTreeData = DatabaseTreeItem[];
+
+// Define placeholder data for loading/empty states
+const PLACEHOLDER_ROW_COUNT = 10;
+const PLACEHOLDER_DATA = Array.from({ length: PLACEHOLDER_ROW_COUNT }).map(
+  () => ({}),
+);
 
 const MainDataView = ({
   onClose,
@@ -104,11 +110,7 @@ const MainDataView = ({
     }
   }, [databases]);
 
-  const {
-    mutate: fetchTables,
-    isPending: isLoadingTables,
-    error: tablesError,
-  } = useMutation({
+  const { mutate: fetchTables } = useMutation({
     mutationFn: (dbName: string) => ListTables(dbName),
     onMutate: (dbName: string) => {
       if (!databaseTree.find((db) => db.name === dbName)?.tables?.length) {
@@ -131,7 +133,6 @@ const MainDataView = ({
     mutate: fetchTableData,
     isPending: isFetchingTableData,
     data: tableData,
-    error: tableDataError,
   } = useMutation({
     mutationFn: ({
       tableName,
@@ -161,12 +162,12 @@ const MainDataView = ({
     onSuccess: (_data, variables) => {
       onUpdateTitle(`${variables.dbName}.${variables.tableName}`);
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       onUpdateTitle(
-        `Error fetching ${currentTable?.db}.${currentTable?.table}`,
+        `Error fetching ${variables.dbName}.${variables.tableName}`,
       );
       toast.error("Error fetching table data", {
-        description: `Error fetching ${currentTable?.db}.${currentTable?.table}: ${error.message}`,
+        description: `Error fetching ${variables.dbName}.${variables.tableName}: ${error}`,
       });
     },
   });
@@ -190,9 +191,6 @@ const MainDataView = ({
     },
     [currentTable, pageSize],
   );
-
-  const isInitialLoading = isLoadingDatabases || isLoadingTables;
-  const error = databasesError || tablesError || tableDataError;
 
   // --- Derive columns and data from table data ---
   const columns = useMemo<ColumnDef<TableRowData>[]>(() => {
@@ -257,7 +255,14 @@ const MainDataView = ({
     ];
   }, [tableData?.columns]);
 
-  const data = useMemo(() => tableData?.rows ?? [], [tableData?.rows]);
+  // Derive data, using placeholders if loading or no table selected
+  const displayData = useMemo(() => {
+    if (isFetchingTableData || !currentTable?.table) {
+      return PLACEHOLDER_DATA;
+    }
+    return tableData?.rows ?? [];
+  }, [isFetchingTableData, currentTable, tableData?.rows]);
+
   const totalRowCount = tableData?.totalRows;
 
   // --- Calculate pagination values ---
@@ -338,7 +343,7 @@ const MainDataView = ({
 
   // --- TanStack Table Instance ---
   const table = useReactTable({
-    data,
+    data: displayData, // Use derived data with placeholders
     columns,
     state: {
       columnFilters,
@@ -387,99 +392,71 @@ const MainDataView = ({
         </div>
 
         <div className="rounded-none overflow-hidden flex-grow flex flex-col">
-          {isInitialLoading ? (
-            <div className="flex-grow flex items-center justify-center text-muted-foreground">
-              <Loader2 className="h-8 w-8 animate-spin mr-3" /> Loading...
-            </div>
-          ) : error ? (
-            <div className="flex-grow flex items-center justify-center text-destructive p-4">
-              Error:{" "}
-              {(error as any) instanceof Error
-                ? (error as Error).message
-                : String(error ?? "An unknown error occurred")}
-            </div>
-          ) : !currentTable?.table ? (
-            <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
-              Please select a table.
-            </div>
-          ) : (
-            <div className="flex-grow overflow-auto relative">
-              {error ? (
-                <div className="flex-grow flex items-center justify-center text-destructive p-4">
-                  Error:{" "}
-                  {(error as any) instanceof Error
-                    ? (error as Error).message
-                    : String(error ?? "An unknown error occurred")}
-                </div>
-              ) : !currentTable?.table ? (
-                <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
-                  Please select a database or table from the sidebar.
-                </div>
-              ) : currentTable.table === "" ? (
-                <div className="flex-grow flex items-center justify-center text-muted-foreground p-4">
-                  Please select a table from the sidebar.
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
-                    {table.getHeaderGroups().map((headerGroup) => (
-                      <TableRow key={headerGroup.id}>
-                        {headerGroup.headers.map((header) => (
-                          <TableHead
-                            key={header.id}
-                            style={{ width: header.getSize() }}
-                            className="px-4"
-                          >
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext(),
-                                )}
-                          </TableHead>
-                        ))}
-                      </TableRow>
+          <div className="flex-grow overflow-auto relative">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead
+                        key={header.id}
+                        style={{ width: header.getSize() }}
+                        className="px-4"
+                      >
+                        {header.isPlaceholder || !currentTable?.table
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext(),
+                            )}
+                        {!header.isPlaceholder &&
+                          !currentTable?.table &&
+                          header.column.id !== "select" &&
+                          header.column.id}
+                      </TableHead>
                     ))}
-                  </TableHeader>
-                  <TableBody>
-                    {table.getRowModel().rows?.length ? (
-                      table.getRowModel().rows.map((row) => (
-                        <TableRow
-                          key={row.id}
-                          className="odd:bg-muted/50"
-                          data-state={row.getIsSelected() && "selected"}
-                        >
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell
-                              key={cell.id}
-                              style={{ width: cell.column.getSize() }}
-                              className="max-w-[250px] truncate px-4"
-                            >
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext(),
-                              )}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {currentTable?.table &&
+                !isFetchingTableData &&
+                table.getRowModel().rows?.length ? (
+                  table.getRowModel().rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      className="odd:bg-muted/50"
+                      data-state={row.getIsSelected() && "selected"}
+                    >
+                      {row.getVisibleCells().map((cell) => (
                         <TableCell
-                          colSpan={columns.length}
-                          className="h-24 text-center px-4"
+                          key={cell.id}
+                          style={{ width: cell.column.getSize() }}
+                          className="max-w-[250px] truncate px-4"
                         >
-                          {currentTable.table
-                            ? "No results found."
-                            : "Select a table."}
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext(),
+                          )}
                         </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-          )}
+                      ))}
+                    </TableRow>
+                  ))
+                ) : (
+                  /* Only show "No results" when data is loaded but empty */
+                  /* This assumes !isFetchingTableData && currentTable?.table */
+                  <TableRow>
+                    <TableCell
+                      colSpan={columns.length || 1}
+                      className="h-24 text-center px-4 text-muted-foreground"
+                    >
+                      No results found.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
 
         <div className="flex items-center justify-between p-2 bg-background">
