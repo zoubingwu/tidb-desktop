@@ -355,6 +355,7 @@ const MainDataView = ({
 
   const handleClose = () => {
     setCurrentTable(null);
+    onUpdateTitle("");
     onClose();
   };
 
