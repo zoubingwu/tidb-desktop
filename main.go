@@ -53,6 +53,7 @@ func main() {
 				Message: "A modern lightweight TiDB desktop client.\n\nCopyright © 2025",
 				Icon:    icon,
 			},
+			TitleBar: mac.TitleBarHidden(),
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,
 		},

@@ -4,6 +4,7 @@ import { EventsOn } from "wailsjs/runtime";
 import { Disconnect } from "wailsjs/go/main/App";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import MainDataView from "@/components/MainDataView";
+import { Header } from "./components/Header";
 
 type ViewState = "welcome" | "main";
 
@@ -60,6 +61,13 @@ function App() {
 
   return (
     <div id="App" className="h-screen w-screen">
+      <Header
+        title={
+          connectionDetails
+            ? `${connectionDetails?.user}@${connectionDetails?.host}:${connectionDetails?.port}`
+            : "TiDB Desktop"
+        }
+      />
       {renderView()}
     </div>
   );
