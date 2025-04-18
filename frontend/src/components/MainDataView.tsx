@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, memo } from "react";
+import { useMemo, useCallback, useEffect, memo } from "react";
 import { useImmer } from "use-immer";
 import { Columns3Icon, SettingsIcon, UnplugIcon } from "lucide-react";
 import {
@@ -7,11 +7,10 @@ import {
   getCoreRowModel,
   useReactTable,
   getPaginationRowModel,
-  ColumnFiltersState,
   PaginationState,
   Updater,
 } from "@tanstack/react-table";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import {
   Table,
   TableBody,
@@ -50,17 +49,24 @@ const MainDataView = ({
   onUpdateTitle: (title: string) => void;
 }) => {
   const [databaseTree, setDatabaseTree] = useImmer<DatabaseTreeData>([]);
-  const [currentTable, setCurrentTable] = useState<{
-    db: string;
-    table: string;
-  } | null>(null);
-  const [{ pageIndex, pageSize }, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
+  const [tableDataPrameters, setTableDataPrameters] = useImmer<{
+    dbName: string;
+    tableName: string;
+    pageSize: number;
+    pageIndex: number;
+    serverFilters: ServerSideFilter[];
+  }>({
+    dbName: "",
+    tableName: "",
     pageSize: defaultPageSize,
+    pageIndex: 0,
+    serverFilters: [],
   });
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [rowSelection, setRowSelection] = useState({});
-  const [serverFilters, setServerFilters] = useState<ServerSideFilter[]>([]);
+  const currentDb = tableDataPrameters.dbName;
+  const currentTable = tableDataPrameters.tableName;
+  const currentPageSize = tableDataPrameters.pageSize;
+  const currentPageIndex = tableDataPrameters.pageIndex;
+  const currentServerFilters = tableDataPrameters.serverFilters;
 
   const updateDatabaseTree = (
     dbName: string,
@@ -128,70 +134,109 @@ const MainDataView = ({
     },
   });
 
-  const {
-    mutate: fetchTableData,
-    isPending: isFetchingTableData,
-    data: tableData,
-  } = useMutation({
-    mutationFn: ({
-      tableName,
-      dbName,
-      pageSize,
-      pageIndex,
-      filters,
-    }: {
-      tableName: string;
-      dbName: string;
-      pageSize: number;
-      pageIndex: number;
-      filters: ServerSideFilter[];
-    }) => {
-      const filterObject = filters.length > 0 ? { filters } : null;
-      return GetTableData(
-        dbName,
-        tableName,
-        pageSize,
-        pageIndex * pageSize,
-        filterObject,
-      );
+  // const {
+  //   mutate: fetchTableData,
+  //   isPending: isFetchingTableData,
+  //   data: tableData,
+  // } = useMutation({
+  //   mutationFn: ({
+  //     tableName,
+  //     dbName,
+  //     pageSize,
+  //     pageIndex,
+  //     filters,
+  //   }: {
+  //     tableName: string;
+  //     dbName: string;
+  //     pageSize: number;
+  //     pageIndex: number;
+  //     filters: ServerSideFilter[];
+  //   }) => {
+  //     const filterObject = filters.length > 0 ? { filters } : null;
+  //     console.log(
+  //       "fetching table data",
+  //       dbName,
+  //       tableName,
+  //       pageSize,
+  //       pageIndex,
+  //       filterObject,
+  //     );
+  //     return GetTableData(
+  //       dbName,
+  //       tableName,
+  //       pageSize,
+  //       pageIndex * pageSize,
+  //       filterObject,
+  //     );
+  //   },
+  //   onMutate: (variables) => {
+  //     onUpdateTitle(
+  //       `Fetching data from ${variables.dbName}.${variables.tableName}...`,
+  //     );
+  //   },
+  //   onSuccess: (_data, variables) => {
+  //     onUpdateTitle(`${variables.dbName}.${variables.tableName}`);
+  //   },
+  //   onError: (error, variables) => {
+  //     onUpdateTitle(
+  //       `Error fetching ${variables.dbName}.${variables.tableName}`,
+  //     );
+  //     toast.error("Error fetching table data", {
+  //       description: `Error fetching ${variables.dbName}.${variables.tableName}: ${error}`,
+  //     });
+  //   },
+  // });
+
+  const { isPending: isFetchingTableData, data: tableData } = useQuery({
+    enabled: !!currentDb && !!currentTable,
+    queryKey: [
+      "tableData",
+      currentDb,
+      currentTable,
+      currentPageSize,
+      currentPageIndex,
+      currentServerFilters,
+    ],
+    queryFn: async () => {
+      const dbName = currentDb;
+      const tableName = currentTable;
+      const filterObject =
+        currentServerFilters.length > 0
+          ? { filters: currentServerFilters }
+          : null;
+
+      try {
+        onUpdateTitle(`Fetching data from ${dbName}.${tableName}...`);
+        const res = await GetTableData(
+          dbName,
+          tableName,
+          currentPageSize,
+          currentPageIndex * currentPageSize,
+          filterObject,
+        );
+        onUpdateTitle(`${dbName}.${tableName}`);
+
+        return res;
+      } catch (error) {
+        onUpdateTitle(`Error fetching ${dbName}.${tableName}`);
+        toast.error("Error fetching table data", {
+          description: `Error fetching ${dbName}.${tableName}: ${error}`,
+        });
+        throw error;
+      }
     },
-    onMutate: (variables) => {
-      onUpdateTitle(
-        `Fetching data from ${variables.dbName}.${variables.tableName}...`,
-      );
-    },
-    onSuccess: (_data, variables) => {
-      onUpdateTitle(`${variables.dbName}.${variables.tableName}`);
-    },
-    onError: (error, variables) => {
-      onUpdateTitle(
-        `Error fetching ${variables.dbName}.${variables.tableName}`,
-      );
-      toast.error("Error fetching table data", {
-        description: `Error fetching ${variables.dbName}.${variables.tableName}: ${error}`,
-      });
-    },
+    placeholderData: keepPreviousData,
   });
 
   // --- Handle server-side filter changes ---
-  const handleFilterChange = useCallback(
-    (filters: ServerSideFilter[]) => {
-      setServerFilters(filters);
-      setPagination({ pageIndex: 0, pageSize });
+  const handleFilterChange = useCallback((filters: ServerSideFilter[]) => {
+    console.log("ServerSideFilter filters", filters);
 
-      // Refetch data with new filters if we have a selection
-      if (currentTable) {
-        fetchTableData({
-          tableName: currentTable.table,
-          dbName: currentTable.db,
-          pageSize,
-          pageIndex: 0, // Reset to first page
-          filters,
-        });
-      }
-    },
-    [currentTable, pageSize],
-  );
+    setTableDataPrameters((draft) => {
+      draft.serverFilters = filters;
+      draft.pageIndex = 0;
+    });
+  }, []);
 
   // --- Derive columns and data from table data ---
   const columns = useMemo<ColumnDef<TableRowData>[]>(() => {
@@ -230,22 +275,26 @@ const MainDataView = ({
 
   // --- Calculate pagination values ---
   const pagination = useMemo(
-    () => ({ pageIndex, pageSize }),
-    [pageIndex, pageSize],
+    () => ({
+      pageIndex: currentPageIndex,
+      pageSize: currentPageSize,
+    }),
+    [currentPageIndex, currentPageSize],
   );
 
   const pageCount = useMemo(() => {
     if (totalRowCount != null && totalRowCount >= 0) {
-      return Math.ceil(totalRowCount / pageSize);
+      return Math.ceil(totalRowCount / currentPageSize);
     }
     return -1;
-  }, [totalRowCount, pageSize]);
+  }, [totalRowCount, currentPageSize]);
 
-  const tableViewState = useMemo(() => {
+  const tableViewState = (() => {
     if (isFetchingTableData || isLoadingDatabases) return "loading";
 
     if (
-      currentTable?.table &&
+      currentDb &&
+      currentTable &&
       tableData?.rows?.length &&
       tableData?.columns.length
     ) {
@@ -253,7 +302,7 @@ const MainDataView = ({
     }
 
     return "empty";
-  }, [currentTable, tableData, isFetchingTableData, isLoadingDatabases]);
+  })();
 
   // Safely update database tree for selected DB
   const handleSelectDatabase = useCallback(
@@ -264,57 +313,32 @@ const MainDataView = ({
   );
 
   // --- Function to handle table selection from tree ---
-  const handleSelectTable = useCallback(
-    (dbName: string, tableName: string) => {
-      if (currentTable?.db !== dbName || currentTable?.table !== tableName) {
-        // First set the selection
-        setCurrentTable({ db: dbName, table: tableName });
-
-        // Reset filters and pagination
-        const newFilters: ServerSideFilter[] = [];
-        setServerFilters(newFilters);
-        setColumnFilters([]);
-
-        const newPageIndex = 0;
-        setPagination((prev) => ({ ...prev, pageIndex: newPageIndex }));
-
-        // Only fetch table data if tableName is provided
-        if (tableName) {
-          fetchTableData({
-            tableName,
-            dbName,
-            pageSize,
-            pageIndex: newPageIndex,
-            filters: newFilters,
-          });
-        }
+  const handleSelectTable = useCallback((dbName: string, tableName: string) => {
+    setTableDataPrameters((draft) => {
+      if (draft.dbName !== dbName || draft.tableName !== tableName) {
+        draft.dbName = dbName;
+        draft.tableName = tableName;
+        draft.serverFilters = [];
+        draft.pageIndex = 0;
       }
-    },
-    [currentTable, fetchTableData],
-  );
+    });
+  }, []);
 
   const handlePaginationChange = (updaterOrValue: Updater<PaginationState>) => {
+    console.log("handlePaginationChange", updaterOrValue, pagination);
     // Handle both function updater and direct value
     const newPagination =
       typeof updaterOrValue === "function"
         ? updaterOrValue(pagination)
         : updaterOrValue;
 
-    setPagination(newPagination);
-
-    if (currentTable) {
-      fetchTableData({
-        tableName: currentTable.table,
-        dbName: currentTable.db,
-        pageSize: newPagination.pageSize,
-        pageIndex: newPagination.pageIndex,
-        filters: serverFilters,
-      });
-    }
+    setTableDataPrameters((draft) => {
+      draft.pageIndex = newPagination.pageIndex;
+      draft.pageSize = newPagination.pageSize;
+    });
   };
 
   const handleClose = () => {
-    setCurrentTable(null);
     onUpdateTitle("");
     onClose();
   };
@@ -324,16 +348,12 @@ const MainDataView = ({
     data: tableData?.rows || [],
     columns,
     state: {
-      columnFilters,
       pagination,
-      rowSelection,
     },
     manualPagination: true,
     manualFiltering: true,
     pageCount,
     onPaginationChange: handlePaginationChange,
-    onColumnFiltersChange: setColumnFilters,
-    onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     defaultColumn: {
@@ -351,7 +371,7 @@ const MainDataView = ({
         databasesError={databasesError}
         onSelectDatabase={handleSelectDatabase}
         onSelectTable={handleSelectTable}
-        selectedTable={currentTable}
+        selectedTable={{ db: currentDb, table: currentTable }}
       />
 
       <div className="flex-grow flex flex-col overflow-hidden">
