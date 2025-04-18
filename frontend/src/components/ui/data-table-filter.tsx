@@ -324,29 +324,61 @@ export function TextInput({
 export function ActiveFilters<TData>({ table }: { table: Table<TData> }) {
   const { filters } = useDataTableFilter(); // Use context
 
+  if (filters.length === 0) {
+    return null; // No filters, render nothing
+  }
+
+  if (filters.length === 1) {
+    // Render the single filter directly
+    const filter = filters[0];
+    const { columnId } = filter;
+    const column = getColumn(table, columnId);
+    if (!column) return null;
+    const meta = getColumnMeta(table, columnId);
+
+    return (
+      <ActiveFilterDisplay
+        key={`filter-${columnId}`}
+        filter={filter}
+        column={column}
+        meta={meta}
+        table={table}
+      />
+    );
+  }
+
+  // Render multiple filters inside a Popover
   return (
-    <>
-      {/* Iterate over filters from context */}
-      {filters.map((filter) => {
-        const { columnId } = filter;
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          className="h-6 px-2 text-xs flex items-center gap-1"
+        >
+          {filters.length} Filters
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-2">
+        <div className="flex flex-col items-start gap-2">
+          {filters.map((filter) => {
+            const { columnId } = filter;
+            const column = getColumn(table, columnId);
+            if (!column) return null;
+            const meta = getColumnMeta(table, columnId);
 
-        const column = getColumn(table, columnId); // Need table for column info
-        if (!column) return null; // Handle case where column might not be found
-        const meta = getColumnMeta(table, columnId); // Need table for column info
-
-        // We still need column metadata (type, displayName, etc.)
-        // The filter data (operator, values) comes from the context `filter` object
-        return (
-          <ActiveFilterDisplay
-            key={`filter-${columnId}`}
-            filter={filter} // Pass the ServerSideFilter from context
-            column={column} // Pass column for metadata
-            meta={meta} // Pass meta for details
-            table={table} // Pass table if needed by sub-components
-          />
-        );
-      })}
-    </>
+            return (
+              <ActiveFilterDisplay
+                key={`filter-${columnId}`}
+                filter={filter}
+                column={column}
+                meta={meta}
+                table={table}
+              />
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
