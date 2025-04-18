@@ -1,3 +1,19 @@
+import type { Column, ColumnMeta, RowData, Table } from "@tanstack/react-table";
+import { format, isEqual } from "date-fns";
+import { ArrowRight, Filter, X, Ellipsis } from "lucide-react";
+import React, {
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  createContext,
+  useContext,
+  useCallback,
+} from "react";
+import type { DateRange } from "react-day-picker";
+import { useDebounce } from "ahooks";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,23 +52,7 @@ import {
   textFilterDetails,
 } from "@/lib/filters";
 import type { ColumnOption, ElementType } from "@/lib/filters";
-import type { Column, ColumnMeta, RowData, Table } from "@tanstack/react-table";
-import { format, isEqual } from "date-fns";
-import { ArrowRight, Filter } from "lucide-react";
-import { X } from "lucide-react";
-import { Ellipsis } from "lucide-react";
-import React, {
-  cloneElement,
-  isValidElement,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  createContext,
-  useContext,
-  useCallback,
-} from "react";
-import type { DateRange } from "react-day-picker";
+import { useUncontrolled } from "@/hooks/use-uncontrolled";
 
 // Type to represent a serializable filter that can be sent to the server
 export type ServerSideFilter = {
@@ -86,26 +86,18 @@ export const useDataTableFilter = () => {
   return context;
 };
 
-interface DataTableFilterProviderProps<TData> {
-  table: Table<TData>; // Keep table for column metadata access
+interface DataTableFilterProviderProps {
   children: React.ReactNode;
   onChange?: (filters: ServerSideFilter[]) => void;
   initialFilters?: ServerSideFilter[];
 }
 
-export const DataTableFilterProvider = <TData,>({
+export const DataTableFilterProvider = ({
   children,
   onChange,
   initialFilters = [],
-}: DataTableFilterProviderProps<TData>) => {
+}: DataTableFilterProviderProps) => {
   const [filters, setFilters] = useState<ServerSideFilter[]>(initialFilters);
-
-  // Notify parent on filter changes
-  useEffect(() => {
-    if (onChange) {
-      onChange(filters);
-    }
-  }, [filters, onChange]);
 
   const addOrUpdateFilter = useCallback((newFilter: ServerSideFilter) => {
     setFilters((currentFilters) => {
@@ -125,15 +117,16 @@ export const DataTableFilterProvider = <TData,>({
   }, []);
 
   const removeFilter = useCallback((columnId: string) => {
-    setFilters((currentFilters) =>
-      currentFilters.filter((f) => f.columnId !== columnId),
-    );
+    console.log("removeFilter", Date.now(), columnId, filters);
+    setFilters((currentFilters) => {
+      const nextFilters = currentFilters.filter((f) => f.columnId !== columnId);
+      return nextFilters;
+    });
   }, []);
 
   const clearFilters = useCallback(() => {
+    console.log("clearFilters", Date.now(), filters);
     setFilters([]);
-    // Also clear global filter if it's being used elsewhere (though context doesn't manage it)
-    // table.setGlobalFilter(""); // This might still be needed if global filter is separate
   }, []);
 
   const getFilter = useCallback(
@@ -142,6 +135,12 @@ export const DataTableFilterProvider = <TData,>({
     },
     [filters],
   );
+
+  const debouncedValue = useDebounce(filters, { wait: 500 });
+
+  useEffect(() => {
+    onChange?.(debouncedValue);
+  }, [debouncedValue]);
 
   const value = {
     filters,
@@ -172,7 +171,6 @@ export const DataTableFilter = <TData,>({
   return (
     // Wrap the filter UI with the Provider
     <DataTableFilterProvider
-      table={table}
       onChange={onChange}
       initialFilters={initialFilters}
     >
@@ -237,7 +235,6 @@ export function FilterSelector<TData>({ table }: { table: Table<TData> }) {
                 <FilterableColumn
                   key={column.id}
                   column={column}
-                  // table={table} // Pass table if FilterableColumn needs it
                   setProperty={setProperty}
                 />
               ))}
@@ -303,30 +300,18 @@ export function FilterableColumn<TData>({
   );
 }
 
-// DebouncedInput remains unchanged
-export function DebouncedInput({
+export function TextInput({
   value: initialValue,
   onChange,
-  debounce = 500,
   ...props
 }: {
   value: string | number;
   onChange: (value: string | number) => void;
-  debounce?: number;
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange">) {
-  const [value, setValue] = useState(initialValue);
-
-  useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      onChange(value);
-    }, debounce);
-
-    return () => clearTimeout(timeout);
-  }, [value, onChange, debounce]);
+  const [value, setValue] = useUncontrolled({
+    defaultValue: initialValue,
+    onChange,
+  });
 
   return (
     <Input
@@ -337,11 +322,8 @@ export function DebouncedInput({
   );
 }
 
-// ActiveFilters reads filters from context
 export function ActiveFilters<TData>({ table }: { table: Table<TData> }) {
   const { filters } = useDataTableFilter(); // Use context
-
-  // Removed onChange prop
 
   return (
     <>
@@ -1196,9 +1178,6 @@ export function FilterValueNumberDisplay<TData, TValue>({
   return <span className="tabular-nums tracking-tight">{value}</span>;
 }
 
-// --- Value Controllers updated to use context ---
-
-// Main dispatcher remains similar structure
 export function FitlerValueController<TData, TValue>({
   id, // columnId
   column,
@@ -1250,7 +1229,6 @@ export function FitlerValueController<TData, TValue>({
           column={column}
           columnMeta={columnMeta}
           table={table}
-          // onChange removed
         />
       );
     case "number":
@@ -1640,6 +1618,7 @@ export function FilterValueTextController<TData, TValue>({
     const stringValue = String(value).trim();
 
     if (stringValue === "") {
+      console.log("removeFilter FilterValueTextController", Date.now(), id);
       removeFilter(id); // Remove filter if input is empty
     } else {
       addOrUpdateFilter({
@@ -1656,7 +1635,7 @@ export function FilterValueTextController<TData, TValue>({
       <CommandList className="max-h-fit">
         <CommandGroup>
           <CommandItem>
-            <DebouncedInput
+            <TextInput
               placeholder="Search..."
               autoFocus
               value={filter?.values?.[0] ?? ""}
