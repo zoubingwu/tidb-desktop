@@ -10,10 +10,9 @@ import React, {
   useState,
   createContext,
   useContext,
-  useCallback,
 } from "react";
 import type { DateRange } from "react-day-picker";
-import { useDebounce } from "ahooks";
+import { useDebounce, useMemoizedFn } from "ahooks";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -99,7 +98,7 @@ export const DataTableFilterProvider = ({
 }: DataTableFilterProviderProps) => {
   const [filters, setFilters] = useState<ServerSideFilter[]>(initialFilters);
 
-  const addOrUpdateFilter = useCallback((newFilter: ServerSideFilter) => {
+  const addOrUpdateFilter = useMemoizedFn((newFilter: ServerSideFilter) => {
     setFilters((currentFilters) => {
       const existingIndex = currentFilters.findIndex(
         (f) => f.columnId === newFilter.columnId,
@@ -114,26 +113,23 @@ export const DataTableFilterProvider = ({
         return [...currentFilters, newFilter];
       }
     });
-  }, []);
+  });
 
-  const removeFilter = useCallback((columnId: string) => {
-    console.log("removeFilter", Date.now(), columnId, filters);
+  const removeFilter = useMemoizedFn((columnId: string) => {
     setFilters((currentFilters) => {
       const nextFilters = currentFilters.filter((f) => f.columnId !== columnId);
       return nextFilters;
     });
-  }, []);
+  });
 
-  const clearFilters = useCallback(() => {
-    console.log("clearFilters", Date.now(), filters);
+  const clearFilters = useMemoizedFn(() => {
     setFilters([]);
-  }, []);
+  });
 
-  const getFilter = useCallback(
+  const getFilter = useMemoizedFn(
     (columnId: string): ServerSideFilter | undefined => {
       return filters.find((f) => f.columnId === columnId);
     },
-    [filters],
   );
 
   const debouncedValue = useDebounce(filters, { wait: 500 });
@@ -380,7 +376,7 @@ function ActiveFilterDisplay<TData, T extends ColumnDataType>({
   return (
     <div
       key={`filter-${filter.columnId}`}
-      className="flex h-7 items-center rounded-2xl border border-border bg-background shadow-xs text-xs"
+      className="flex h-6 items-center rounded-2xl border border-border bg-background shadow-xs text-xs"
     >
       <FilterSubject meta={meta} />
       <Separator orientation="vertical" />
@@ -1618,7 +1614,6 @@ export function FilterValueTextController<TData, TValue>({
     const stringValue = String(value).trim();
 
     if (stringValue === "") {
-      console.log("removeFilter FilterValueTextController", Date.now(), id);
       removeFilter(id); // Remove filter if input is empty
     } else {
       addOrUpdateFilter({
