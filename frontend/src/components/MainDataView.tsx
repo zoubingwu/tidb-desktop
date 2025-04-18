@@ -40,6 +40,8 @@ type TableRowData = Record<string, any>;
 // Rename to avoid conflict with the imported component
 type DatabaseTreeData = DatabaseTreeItem[];
 
+const defaultPageSize = 100;
+
 const MainDataView = ({
   onClose,
   onUpdateTitle,
@@ -54,7 +56,7 @@ const MainDataView = ({
   } | null>(null);
   const [{ pageIndex, pageSize }, setPagination] = useState<PaginationState>({
     pageIndex: 0,
-    pageSize: 50,
+    pageSize: defaultPageSize,
   });
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [rowSelection, setRowSelection] = useState({});
