@@ -314,6 +314,9 @@ export function TextInput({
       {...props}
       value={value}
       onChange={(e) => setValue(e.target.value)}
+      autoComplete="off"
+      autoCorrect="off"
+      spellCheck="false"
     />
   );
 }
