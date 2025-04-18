@@ -40,12 +40,6 @@ type TableRowData = Record<string, any>;
 // Rename to avoid conflict with the imported component
 type DatabaseTreeData = DatabaseTreeItem[];
 
-// Define placeholder data for loading/empty states
-const PLACEHOLDER_ROW_COUNT = 10;
-const PLACEHOLDER_DATA = Array.from({ length: PLACEHOLDER_ROW_COUNT }).map(
-  () => ({}),
-);
-
 const MainDataView = ({
   onClose,
   onUpdateTitle,
@@ -228,16 +222,6 @@ const MainDataView = ({
     ];
   }, [tableData?.columns]);
 
-  console.log("tableData", tableData);
-
-  // Derive data, using placeholders if loading or no table selected
-  const displayData = useMemo(() => {
-    if (isFetchingTableData || !currentTable?.table) {
-      return PLACEHOLDER_DATA;
-    }
-    return tableData?.rows ?? [];
-  }, [isFetchingTableData, currentTable, tableData?.rows]);
-
   const totalRowCount = tableData?.totalRows;
 
   // --- Calculate pagination values ---
@@ -333,7 +317,7 @@ const MainDataView = ({
 
   // --- TanStack Table Instance ---
   const table = useReactTable({
-    data: displayData, // Use derived data with placeholders
+    data: tableData?.rows || [],
     columns,
     state: {
       columnFilters,
