@@ -1,7 +1,7 @@
 import { useMemoizedFn } from "ahooks";
 import { useMemo, useEffect, memo } from "react";
 import { useImmer } from "use-immer";
-import { Columns3Icon, SettingsIcon, UnplugIcon } from "lucide-react";
+import { SettingsIcon, UnplugIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   ColumnDef,
@@ -27,7 +27,7 @@ import {
   ServerSideFilter,
 } from "@/components/ui/data-table-filter";
 import { filterFn } from "@/lib/filters";
-import { mapDbColumnTypeToFilterType } from "@/lib/utils";
+import { ColumnDataTypeIcons, mapDbColumnTypeToFilterType } from "@/lib/utils";
 import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
 import { Button } from "@/components/ui/button";
 import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
@@ -189,8 +189,10 @@ const MainDataView = ({
     if (!tableData?.columns) return [];
 
     return [
-      ...(tableData.columns.map(
-        (col): ColumnDef<TableRowData> => ({
+      ...(tableData.columns.map((col): ColumnDef<TableRowData> => {
+        const type = mapDbColumnTypeToFilterType(col.type);
+
+        return {
           accessorKey: col.name,
           header: col.name,
           cell: (info) => {
@@ -206,14 +208,14 @@ const MainDataView = ({
             // Render other values as strings
             return String(value);
           },
-          filterFn: filterFn(mapDbColumnTypeToFilterType(col.type)),
+          filterFn: filterFn(type),
           meta: {
             displayName: col.name,
-            type: mapDbColumnTypeToFilterType(col.type),
-            icon: Columns3Icon,
+            type: type,
+            icon: ColumnDataTypeIcons[type],
           },
-        }),
-      ) || []),
+        };
+      }) || []),
     ];
   }, [tableData?.columns]);
 

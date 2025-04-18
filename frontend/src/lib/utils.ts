@@ -1,10 +1,26 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import {
+  Hash, // For 'number'
+  CalendarDays, // For 'date'
+  Text, // For 'text'
+  List, // For 'option' (assuming single choice)
+  ListChecks, // For 'multiOption' (assuming multiple choices)
+  LucideIcon, // Base type for icons
+} from "lucide-react";
 import { ColumnDataType } from "./filters";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+export const ColumnDataTypeIcons: Record<ColumnDataType, LucideIcon> = {
+  number: Hash,
+  date: CalendarDays,
+  text: Text,
+  option: List,
+  multiOption: ListChecks,
+};
 
 /**
  * Maps common TiDB/MySQL column type strings to the ColumnDataType used by the filter UI.
