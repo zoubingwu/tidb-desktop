@@ -72,7 +72,7 @@ class ErrorBoundary extends Component<Props, State> {
                 variant="outline"
                 onClick={() => window.location.reload()}
               >
-                Reload Page
+                Reload
               </Button>
               <Button onClick={this.handleReset}>Try Again</Button>
             </div>
