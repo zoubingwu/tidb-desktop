@@ -1,6 +1,8 @@
-import { useMemo, useCallback, useEffect, memo } from "react";
+import { useMemoizedFn } from "ahooks";
+import { useMemo, useEffect, memo } from "react";
 import { useImmer } from "use-immer";
 import { Columns3Icon, SettingsIcon, UnplugIcon } from "lucide-react";
+import { toast } from "sonner";
 import {
   ColumnDef,
   flexRender,
@@ -26,12 +28,11 @@ import {
 } from "@/components/ui/data-table-filter";
 import { filterFn } from "@/lib/filters";
 import { mapDbColumnTypeToFilterType } from "@/lib/utils";
-import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
 import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
 import TablePlaceholder from "./TablePlaceHolder";
 import { SettingsModal } from "./SettingModal";
-import { Button } from "@/components/ui/button";
 
 // Use `any` for row data initially, can be refined if needed
 type TableRowData = Record<string, any>;
@@ -39,7 +40,7 @@ type TableRowData = Record<string, any>;
 // Rename to avoid conflict with the imported component
 type DatabaseTreeData = DatabaseTreeItem[];
 
-const defaultPageSize = 100;
+const defaultPageSize = 50;
 
 const MainDataView = ({
   onClose,
@@ -176,14 +177,12 @@ const MainDataView = ({
   });
 
   // --- Handle server-side filter changes ---
-  const handleFilterChange = useCallback((filters: ServerSideFilter[]) => {
-    console.log("ServerSideFilter filters", filters);
-
+  const handleFilterChange = useMemoizedFn((filters: ServerSideFilter[]) => {
     setTableDataPrameters((draft) => {
       draft.serverFilters = filters;
       draft.pageIndex = 0;
     });
-  }, []);
+  });
 
   // --- Derive columns and data from table data ---
   const columns = useMemo<ColumnDef<TableRowData>[]>(() => {
@@ -251,44 +250,41 @@ const MainDataView = ({
     return "empty";
   })();
 
-  // Safely update database tree for selected DB
-  const handleSelectDatabase = useCallback(
-    (dbName: string) => {
-      fetchTables(dbName);
+  const handleSelectDatabase = useMemoizedFn((dbName: string) => {
+    fetchTables(dbName);
+  });
+
+  const handleSelectTable = useMemoizedFn(
+    (dbName: string, tableName: string) => {
+      setTableDataPrameters((draft) => {
+        if (draft.dbName !== dbName || draft.tableName !== tableName) {
+          draft.dbName = dbName;
+          draft.tableName = tableName;
+          draft.serverFilters = [];
+          draft.pageIndex = 0;
+        }
+      });
     },
-    [fetchTables],
   );
 
-  // --- Function to handle table selection from tree ---
-  const handleSelectTable = useCallback((dbName: string, tableName: string) => {
-    setTableDataPrameters((draft) => {
-      if (draft.dbName !== dbName || draft.tableName !== tableName) {
-        draft.dbName = dbName;
-        draft.tableName = tableName;
-        draft.serverFilters = [];
-        draft.pageIndex = 0;
-      }
-    });
-  }, []);
+  const handlePaginationChange = useMemoizedFn(
+    (updaterOrValue: Updater<PaginationState>) => {
+      const newPagination =
+        typeof updaterOrValue === "function"
+          ? updaterOrValue(pagination)
+          : updaterOrValue;
 
-  const handlePaginationChange = (updaterOrValue: Updater<PaginationState>) => {
-    console.log("handlePaginationChange", updaterOrValue, pagination);
-    // Handle both function updater and direct value
-    const newPagination =
-      typeof updaterOrValue === "function"
-        ? updaterOrValue(pagination)
-        : updaterOrValue;
+      setTableDataPrameters((draft) => {
+        draft.pageIndex = newPagination.pageIndex;
+        draft.pageSize = newPagination.pageSize;
+      });
+    },
+  );
 
-    setTableDataPrameters((draft) => {
-      draft.pageIndex = newPagination.pageIndex;
-      draft.pageSize = newPagination.pageSize;
-    });
-  };
-
-  const handleClose = () => {
+  const handleClose = useMemoizedFn(() => {
     onUpdateTitle("");
     onClose();
-  };
+  });
 
   // --- TanStack Table Instance ---
   const table = useReactTable({
