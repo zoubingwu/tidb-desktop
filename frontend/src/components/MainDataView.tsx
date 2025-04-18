@@ -120,7 +120,9 @@ const MainDataView = ({
     },
     onError: (error, dbName) => {
       updateDatabaseTree(dbName, { isLoadingTables: false });
-      console.error("Error fetching tables:", error);
+      toast.error("Error fetching tables", {
+        description: `Error fetching tables for ${dbName}: ${error}`,
+      });
     },
   });
 
