@@ -134,59 +134,6 @@ const MainDataView = ({
     },
   });
 
-  // const {
-  //   mutate: fetchTableData,
-  //   isPending: isFetchingTableData,
-  //   data: tableData,
-  // } = useMutation({
-  //   mutationFn: ({
-  //     tableName,
-  //     dbName,
-  //     pageSize,
-  //     pageIndex,
-  //     filters,
-  //   }: {
-  //     tableName: string;
-  //     dbName: string;
-  //     pageSize: number;
-  //     pageIndex: number;
-  //     filters: ServerSideFilter[];
-  //   }) => {
-  //     const filterObject = filters.length > 0 ? { filters } : null;
-  //     console.log(
-  //       "fetching table data",
-  //       dbName,
-  //       tableName,
-  //       pageSize,
-  //       pageIndex,
-  //       filterObject,
-  //     );
-  //     return GetTableData(
-  //       dbName,
-  //       tableName,
-  //       pageSize,
-  //       pageIndex * pageSize,
-  //       filterObject,
-  //     );
-  //   },
-  //   onMutate: (variables) => {
-  //     onUpdateTitle(
-  //       `Fetching data from ${variables.dbName}.${variables.tableName}...`,
-  //     );
-  //   },
-  //   onSuccess: (_data, variables) => {
-  //     onUpdateTitle(`${variables.dbName}.${variables.tableName}`);
-  //   },
-  //   onError: (error, variables) => {
-  //     onUpdateTitle(
-  //       `Error fetching ${variables.dbName}.${variables.tableName}`,
-  //     );
-  //     toast.error("Error fetching table data", {
-  //       description: `Error fetching ${variables.dbName}.${variables.tableName}: ${error}`,
-  //     });
-  //   },
-  // });
-
   const { isPending: isFetchingTableData, data: tableData } = useQuery({
     enabled: !!currentDb && !!currentTable,
     queryKey: [
