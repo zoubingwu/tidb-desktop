@@ -5,22 +5,14 @@ import { SettingsIcon, UnplugIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   ColumnDef,
-  flexRender,
   getCoreRowModel,
   useReactTable,
   getPaginationRowModel,
   PaginationState,
   Updater,
+  Table as ReactTable,
 } from "@tanstack/react-table";
 import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import {
   DataTableFilter,
@@ -32,7 +24,8 @@ import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
 import { Button } from "@/components/ui/button";
 import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
 import TablePlaceholder from "./TablePlaceHolder";
-import { SettingsModal } from "./SettingModal";
+import SettingsModal from "./SettingModal";
+import DataTable from "./DataTable";
 
 // Use `any` for row data initially, can be refined if needed
 type TableRowData = Record<string, any>;
@@ -289,7 +282,7 @@ const MainDataView = ({
   });
 
   // --- TanStack Table Instance ---
-  const table = useReactTable({
+  const table: ReactTable<TableRowData> = useReactTable({
     data: tableData?.rows || [],
     columns,
     state: {
@@ -323,55 +316,8 @@ const MainDataView = ({
         <div className="flex-grow overflow-auto relative">
           <TablePlaceholder animate={tableViewState === "loading"} />
 
-          {tableViewState !== "loading" && (
-            <Table className="z-10 bg-white">
-              <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <TableHead
-                        key={header.id}
-                        style={{
-                          width:
-                            header.getSize() === Number.MAX_SAFE_INTEGER
-                              ? "auto"
-                              : header.getSize(),
-                        }}
-                        className="px-4 select-text!"
-                      >
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {tableData?.rows?.length &&
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="odd:bg-muted/50"
-                      data-state={row.getIsSelected() && "selected"}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell
-                          key={cell.id}
-                          style={{ width: cell.column.getSize() }}
-                          className="max-w-[250px] truncate px-4 select-text!"
-                        >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
+          {tableViewState === "data" && (
+            <DataTable<TableRowData> table={table} />
           )}
         </div>
 
