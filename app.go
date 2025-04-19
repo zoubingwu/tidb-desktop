@@ -190,6 +190,15 @@ func (a *App) GetTableData(dbName string, tableName string, limit int, offset in
 	return a.dbService.GetTableData(a.ctx, *a.activeConnection, dbName, tableName, limit, offset, filterParams)
 }
 
+// GetTableSchema retrieves the detailed schema/structure for a specific table.
+func (a *App) GetTableSchema(dbName string, tableName string) (*services.TableSchema, error) {
+	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
+	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
+
+	// Delegate to DatabaseService
+	return a.dbService.GetTableSchema(a.ctx, *a.activeConnection, dbName, tableName)
+}
+
 // --- Theme Settings ---
 
 // GetThemeSettings retrieves the currently saved theme settings.
