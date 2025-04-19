@@ -110,6 +110,11 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 	a.activeConnection = &details
 	fmt.Printf("Session connection activated using saved connection '%s': %+v\n", name, *a.activeConnection)
 
+	// Update MCP service with the active connection
+	if a.mcpService != nil {
+		a.mcpService.SetActiveConnection(&details)
+	}
+
 	// Record usage timestamp in config
 	if err := a.configService.RecordConnectionUsage(name); err != nil {
 		// Log the error but don't fail the connection for this
@@ -126,6 +131,10 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 func (a *App) Disconnect() {
 	fmt.Println("Disconnecting session...")
 	a.activeConnection = nil
+	// Clear active connection in MCP service
+	if a.mcpService != nil {
+		a.mcpService.SetActiveConnection(nil)
+	}
 	// Optionally emit an event if the frontend needs to react specifically
 	runtime.EventsEmit(a.ctx, "connection:disconnected") // Notify frontend
 }
