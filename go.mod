@@ -4,7 +4,6 @@ go 1.24
 
 require (
 	github.com/go-sql-driver/mysql v1.9.2
-	github.com/mark3labs/mcp-go v0.21.1
 	github.com/wailsapp/wails/v2 v2.10.1
 )
 
@@ -32,7 +31,6 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.19 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
-	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect

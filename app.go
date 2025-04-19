@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/zoubingwu/tidb-desktop/services"
@@ -13,38 +12,22 @@ import (
 type App struct {
 	ctx              context.Context
 	dbService        *services.DatabaseService
-	aiService        *services.AIService
-	configService    *services.ConfigService       // Add Config Service
-	mcpService       *services.MCPService        // Add MCP Service
-	activeConnection *services.ConnectionDetails // Still useful for current session
+	configService    *services.ConfigService
+	activeConnection *services.ConnectionDetails
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	dbService := services.NewDatabaseService()
-	aiService, err := services.NewAIService()
-	if err != nil {
-		fmt.Printf("Error initializing AI Service: %v. AI features disabled.\n", err)
-		aiService = nil
-	}
-	configService, err := services.NewConfigService() // Initialize Config Service
+	configService, err := services.NewConfigService()
 	if err != nil {
 		// This is more critical, perhaps panic or return error if config cannot be handled
 		panic(fmt.Sprintf("FATAL: Failed to initialize Config Service: %v", err))
 	}
 
-	mcpService, err := services.NewMCPService(dbService) // Initialize MCP Service
-	if err != nil {
-		// Decide how to handle MCP service init failure (log, disable, panic?)
-		fmt.Printf("Error initializing MCP Service: %v. MCP features may be unavailable.\n", err)
-		mcpService = nil // Or handle differently
-	}
-
 	return &App{
 		dbService:     dbService,
-		aiService:     aiService,
 		configService: configService,
-		mcpService:    mcpService,
 		// activeConnection starts as nil
 	}
 }
@@ -53,18 +36,6 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	runtime.WindowCenter(a.ctx)
-	// Decide if/when to start the MCP server.
-	// Starting it here via Stdio might block the main app or interfere.
-	// Consider running it in a goroutine if needed, or maybe it's intended
-	// to be run separately or triggered differently.
-	// if a.mcpService != nil {
-	//  go func() {
-	//      err := a.mcpService.Start()
-	//      if err != nil {
-	//          fmt.Printf("MCP Service failed to start: %v\n", err)
-	//      }
-	//  }()
-	// }
 }
 
 // shutdown is called when the app terminates.
@@ -110,11 +81,6 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 	a.activeConnection = &details
 	fmt.Printf("Session connection activated using saved connection '%s': %+v\n", name, *a.activeConnection)
 
-	// Update MCP service with the active connection
-	if a.mcpService != nil {
-		a.mcpService.SetActiveConnection(&details)
-	}
-
 	// Record usage timestamp in config
 	if err := a.configService.RecordConnectionUsage(name); err != nil {
 		// Log the error but don't fail the connection for this
@@ -131,10 +97,6 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 func (a *App) Disconnect() {
 	fmt.Println("Disconnecting session...")
 	a.activeConnection = nil
-	// Clear active connection in MCP service
-	if a.mcpService != nil {
-		a.mcpService.SetActiveConnection(nil)
-	}
 	// Optionally emit an event if the frontend needs to react specifically
 	runtime.EventsEmit(a.ctx, "connection:disconnected") // Notify frontend
 }
@@ -207,32 +169,6 @@ func (a *App) ReadClipboard() (string, error) {
 		return "", fmt.Errorf("app context not initialized")
 	}
 	return runtime.ClipboardGetText(a.ctx)
-}
-
-// InferConnectionDetailsFromClipboard reads clipboard and asks AI to infer details.
-func (a *App) InferConnectionDetailsFromClipboard() (*services.ConnectionDetails, error) {
-	if a.ctx == nil {
-		return nil, fmt.Errorf("app context not initialized")
-	}
-	if a.aiService == nil {
-		return nil, fmt.Errorf("AI service is not available (check API key or initialization errors)")
-	}
-
-	clipboardText, err := a.ReadClipboard()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read clipboard: %w", err)
-	}
-
-	if strings.TrimSpace(clipboardText) == "" {
-		return nil, fmt.Errorf("clipboard is empty")
-	}
-
-	return a.aiService.InferConnectionDetails(a.ctx, clipboardText)
-}
-
-// Greet function remains as an example binding
-func (a *App) Greet(name string) string {
-	return fmt.Sprintf("Hello %s, It's show time!", name)
 }
 
 // ListDatabases retrieves a list of database/schema names accessible by the connection.
