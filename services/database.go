@@ -385,56 +385,173 @@ func (s *DatabaseService) GetTableData(ctx context.Context, details ConnectionDe
 		// return nil, fmt.Errorf("no columns found for table '%s.%s'", targetDB, tableName)
 	}
 
-	// 2. Construct the SELECT query with filtering and pagination
-	selectCols := "*" // Select all columns for simplicity, could be specific later
-	// Be cautious with user-provided table/db names - escaping is done via backticks
-	query := fmt.Sprintf("SELECT %s FROM `%s`.`%s`", selectCols, targetDB, tableName)
-
-	// Basic WHERE clause construction (needs improvement for security and complexity)
-	// WARNING: This simple concatenation is vulnerable to SQL injection if filterParams keys/values
-	// come directly from user input without proper sanitization or prepared statements.
-	// For internal use or trusted input, it might be okay, but needs care.
-	// A proper implementation should use parameterized queries.
-	whereClauses := []string{}
+	// 2. Build the WHERE clause from filterParams
+	whereClause := ""
+	// Restore the more detailed filter logic from app.go
 	if filterParams != nil {
-		for key, value := range *filterParams {
-			// TODO: Sanitize key? Escape value? Use placeholders?
-			// Simple string equality for now
-			whereClauses = append(whereClauses, fmt.Sprintf("`%s` = '%v'", key, value)) // VERY UNSAFE - demo only
+		filters, filtersExist := (*filterParams)["filters"]
+		if filtersExist {
+			// Cast filters to expected type (array of filter objects)
+			if filtersArr, ok := filters.([]interface{}); ok && len(filtersArr) > 0 {
+				conditions := []string{}
+
+				for _, filter := range filtersArr {
+					if filterMap, ok := filter.(map[string]interface{}); ok {
+						columnId, hasColumnId := filterMap["columnId"].(string)
+						operator, hasOperator := filterMap["operator"].(string)
+						filterType, hasType := filterMap["type"].(string)
+						values, hasValues := filterMap["values"].([]interface{})
+
+						if hasColumnId && hasOperator && hasType && hasValues && len(values) > 0 {
+							condition := ""
+							// WARNING: Parameterize these values for security!
+							// Map frontend filter operators to SQL operators (Needs proper escaping/parameterization)
+							switch filterType {
+							case "text":
+								if operator == "contains" {
+									condition = fmt.Sprintf("`%s` LIKE '%%%v%%'", columnId, values[0]) // Simplified
+								} else if operator == "does not contain" {
+									condition = fmt.Sprintf("`%s` NOT LIKE '%%%v%%'", columnId, values[0]) // Simplified
+								}
+							case "number":
+								switch operator {
+								case "is":
+									condition = fmt.Sprintf("`%s` = %v", columnId, values[0])
+								case "is not":
+									condition = fmt.Sprintf("`%s` != %v", columnId, values[0])
+								case "is greater than":
+									condition = fmt.Sprintf("`%s` > %v", columnId, values[0])
+								case "is greater than or equal to":
+									condition = fmt.Sprintf("`%s` >= %v", columnId, values[0])
+								case "is less than":
+									condition = fmt.Sprintf("`%s` < %v", columnId, values[0])
+								case "is less than or equal to":
+									condition = fmt.Sprintf("`%s` <= %v", columnId, values[0])
+								case "is between":
+									if len(values) >= 2 {
+										condition = fmt.Sprintf("`%s` BETWEEN %v AND %v", columnId, values[0], values[1])
+									}
+								case "is not between":
+									if len(values) >= 2 {
+										condition = fmt.Sprintf("`%s` NOT BETWEEN %v AND %v", columnId, values[0], values[1])
+									}
+								}
+							case "date":
+								// Date handling needs robust parsing and formatting
+								switch operator {
+								case "is":
+									condition = fmt.Sprintf("DATE(`%s`) = DATE('%v')", columnId, values[0])
+								case "is not":
+									condition = fmt.Sprintf("DATE(`%s`) != DATE('%v')", columnId, values[0])
+								case "is between":
+									if len(values) >= 2 {
+										condition = fmt.Sprintf("DATE(`%s`) BETWEEN DATE('%v') AND DATE('%v')", columnId, values[0], values[1])
+									}
+								case "is not between":
+									if len(values) >= 2 {
+										condition = fmt.Sprintf("DATE(`%s`) NOT BETWEEN DATE('%v') AND DATE('%v')", columnId, values[0], values[1])
+									}
+								}
+							case "option", "multiOption": // Simplified IN / NOT IN
+								var valueStrings []string
+								// Handle single option or multiOption array
+								if multiValues, ok := values[0].([]interface{}); ok {
+									for _, v := range multiValues {
+										if strVal, ok := v.(string); ok {
+											valueStrings = append(valueStrings, fmt.Sprintf("'%s'", strVal)) // Basic escaping
+										}
+									}
+								} else if strVal, ok := values[0].(string); ok { // Single value case
+									valueStrings = append(valueStrings, fmt.Sprintf("'%s'", strVal))
+								}
+
+								if len(valueStrings) > 0 {
+									valuesStr := strings.Join(valueStrings, ", ")
+									switch operator {
+									case "is", "is any of", "include", "include any of":
+										condition = fmt.Sprintf("`%s` IN (%s)", columnId, valuesStr)
+									case "is not", "is none of", "exclude", "exclude if any of":
+										condition = fmt.Sprintf("`%s` NOT IN (%s)", columnId, valuesStr)
+									}
+								}
+							}
+
+							if condition != "" {
+								conditions = append(conditions, condition)
+							}
+						}
+					}
+				}
+
+				if len(conditions) > 0 {
+					whereClause = " WHERE " + strings.Join(conditions, " AND ")
+				}
+			}
 		}
 	}
-	if len(whereClauses) > 0 {
-		query += " WHERE " + strings.Join(whereClauses, " AND ")
-	}
+
+	// 3. Construct the SELECT query for data rows
+	selectCols := "*" // Select all columns for simplicity
+	dataQuery := fmt.Sprintf("SELECT %s FROM `%s`.`%s`%s", selectCols, targetDB, tableName, whereClause)
 
 	// Add LIMIT and OFFSET
 	if limit <= 0 {
 		limit = 100 // Default limit
 	}
-	query += fmt.Sprintf(" LIMIT %d", limit)
+	dataQuery += fmt.Sprintf(" LIMIT %d", limit)
 	if offset > 0 {
-		query += fmt.Sprintf(" OFFSET %d", offset)
+		dataQuery += fmt.Sprintf(" OFFSET %d", offset)
 	}
-	query += ";"
+	dataQuery += ";"
 
-	// 3. Execute the SELECT query
-	dataResult, err := s.ExecuteSQL(ctx, details, query)
+	// 4. Execute the data query
+	dataResult, err := s.ExecuteSQL(ctx, details, dataQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch data for table '%s.%s': %w", targetDB, tableName, err)
 	}
 
 	dataRows, ok := dataResult.([]map[string]any)
 	if !ok {
-		// Handle case where ExecuteSQL returns non-row data (e.g., execution summary), though unlikely for SELECT
-		return nil, fmt.Errorf("unexpected result format when fetching data for '%s.%s'", targetDB, tableName)
+		// If ExecuteSQL returns non-row data or nil, treat as empty unless there was an error
+		log.Printf("Warning: Unexpected result type (%T) or nil returned for data query on %s.%s, assuming empty.", dataResult, targetDB, tableName)
+		dataRows = []map[string]any{} // Ensure empty slice
 	}
 
-	// 4. Construct the response
-	// TODO: Add total row count if needed (requires a separate COUNT(*) query)
+	// 5. Get Total Row Count (with the same filters)
+	var totalRows *int64 // Pointer to distinguish 0 from not fetched
+	countQuery := fmt.Sprintf("SELECT COUNT(*) as total FROM `%s`.`%s`%s;", targetDB, tableName, whereClause)
+	countResult, countErr := s.ExecuteSQL(ctx, details, countQuery)
+	if countErr == nil {
+		if countRows, ok := countResult.([]map[string]any); ok && len(countRows) > 0 {
+			if totalValRaw, ok := countRows[0]["total"]; ok {
+				switch v := totalValRaw.(type) {
+				case int64:
+					totalRows = &v
+				case int:
+					temp := int64(v)
+					totalRows = &temp
+				case float64: // Handle potential float result from COUNT
+					temp := int64(v)
+					totalRows = &temp
+				default:
+					log.Printf("Warning: Unexpected type for COUNT(*) result: %T\n", v)
+				}
+			} else {
+				log.Printf("Warning: COUNT(*) query for %s.%s returned rows but no 'total' column.", targetDB, tableName)
+			}
+		} else {
+			log.Printf("Warning: COUNT(*) query for %s.%s returned unexpected format: %T", targetDB, tableName, countResult)
+		}
+	} else {
+		log.Printf("Warning: Failed to get total row count for table %s.%s: %v", targetDB, tableName, countErr)
+		// Proceed without total count if query fails
+	}
+
+	// 6. Construct the response
 	resp := &TableDataResponse{
-		Columns: columns,
-		Rows:    dataRows,
-		// TotalRows: &total, // Add total count later
+		Columns:   columns,
+		Rows:      dataRows,
+		TotalRows: totalRows, // Include the total count
 	}
 
 	return resp, nil
