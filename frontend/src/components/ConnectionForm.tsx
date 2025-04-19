@@ -14,12 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { services } from "wailsjs/go/models";
-import {
-  TestConnection,
-  InferConnectionDetailsFromClipboard,
-  SaveConnection,
-} from "wailsjs/go/main/App";
+import { TestConnection, SaveConnection } from "wailsjs/go/main/App";
 import { Loader2 } from "lucide-react";
+import { ClipboardGetText } from "wailsjs/runtime/runtime";
+import { inferConnectionDetails } from "@/lib/ai";
 
 // Type definition for the connection details state
 type ConnectionFormState = Pick<
@@ -143,7 +141,9 @@ export function ConnectionFormDialog({
   const handleReadFromClipboard = async () => {
     setIsInferring(true);
     try {
-      const inferredDetails = await InferConnectionDetailsFromClipboard();
+      const textFromClipboard = await ClipboardGetText();
+      console.log("textFromClipboard", textFromClipboard);
+      const inferredDetails = await inferConnectionDetails(textFromClipboard);
       if (inferredDetails) {
         console.log("inferredDetails", inferredDetails);
         setFormState((prev) => {
