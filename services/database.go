@@ -59,7 +59,7 @@ func buildDSN(details ConnectionDetails) (string, bool) {
 }
 
 // getDBConnection handles creating the DB connection, including TLS setup
-func getDBConnection(ctx context.Context, details ConnectionDetails) (*sql.DB, error) {
+func getDBConnection(details ConnectionDetails) (*sql.DB, error) {
 	dsn, useTLS := buildDSN(details)
 
 	if useTLS {
@@ -95,7 +95,7 @@ func getDBConnection(ctx context.Context, details ConnectionDetails) (*sql.DB, e
 
 // TestConnection attempts to ping the database
 func (s *DatabaseService) TestConnection(ctx context.Context, details ConnectionDetails) (bool, error) {
-	db, err := getDBConnection(ctx, details) // Use the helper
+	db, err := getDBConnection(details) // Use the helper, removed ctx
 	if err != nil {
 		// Wrap the error from getDBConnection
 		return false, fmt.Errorf("connection setup failed: %w", err)
@@ -103,7 +103,7 @@ func (s *DatabaseService) TestConnection(ctx context.Context, details Connection
 	defer db.Close()
 
 	// Ping the database to verify connection
-	err = db.PingContext(ctx)
+	err = db.Ping()
 	if err != nil {
 		return false, fmt.Errorf("failed to ping database: %w", err)
 	}
@@ -112,7 +112,7 @@ func (s *DatabaseService) TestConnection(ctx context.Context, details Connection
 
 // ExecuteSQL runs a query and returns results or execution status
 func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDetails, query string) (any, error) {
-	db, err := getDBConnection(ctx, details) // Use the helper
+	db, err := getDBConnection(details) // Use the helper, removed ctx
 	if err != nil {
 		// Wrap the error from getDBConnection
 		return nil, fmt.Errorf("connection setup failed: %w", err)
@@ -120,7 +120,7 @@ func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDeta
 	defer db.Close()
 
 	// Try running as a query first (SELECT)
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := db.Query(query)
 	if err == nil {
 		defer rows.Close()
 		columns, err := rows.Columns()
@@ -160,8 +160,8 @@ func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDeta
 		return results, nil
 	}
 
-	// If QueryContext failed, try ExecContext (INSERT, UPDATE, DELETE, etc.)
-	result, execErr := db.ExecContext(ctx, query)
+	// If Query failed, try Exec (INSERT, UPDATE, DELETE, etc.)
+	result, execErr := db.Exec(query)
 	if execErr != nil {
 		// Return a combined error if both attempts failed
 		return nil, fmt.Errorf("query failed: Query error (%v), Exec error (%v)", err, execErr)
