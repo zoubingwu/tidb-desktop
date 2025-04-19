@@ -1,7 +1,12 @@
 import { generateObject, generateText, tool } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
-import { ListDatabases, ListTables, GetTableSchema } from "wailsjs/go/main/App";
+import {
+  ListDatabases,
+  ListTables,
+  GetTableSchema,
+  ExecuteSQL,
+} from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
 
 type TableSchema = services.TableSchema;
@@ -68,6 +73,26 @@ const dbTools = {
       } catch (error: any) {
         console.error("Error calling GetTableSchema:", error);
         return { success: false, error: error.message };
+      }
+    },
+  }),
+  executeSql: tool({
+    description:
+      "Executes a given SQL query against the currently active database connection. Use this for SELECT queries to fetch data or potentially for other SQL commands IF the user explicitly confirms the action. Be very careful with non-SELECT statements.",
+    parameters: z.object({
+      query: z.string().describe("The SQL query string to execute."),
+    }),
+    execute: async ({ query }) => {
+      try {
+        // WARNING: Executing AI-generated SQL directly is risky.
+        // User confirmation is assumed to happen elsewhere.
+        const result = await ExecuteSQL(query);
+        return { success: true, result: result };
+      } catch (error: any) {
+        console.error(`Error executing SQL query \"${query}\":`, error);
+        // Attempt to return a structured error if possible
+        const errorMessage = error.message || "Unknown execution error";
+        return { success: false, error: errorMessage };
       }
     },
   }),
