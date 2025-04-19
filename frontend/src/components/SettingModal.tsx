@@ -23,12 +23,13 @@ import {
   type ThemeMode,
 } from "@/components/ThemeProvider";
 import { capitalize } from "@/lib/utils";
+import { memo } from "react";
 
 interface SettingsModalProps {
   children: React.ReactNode; // To wrap the trigger button
 }
 
-export function SettingsModal({ children }: SettingsModalProps) {
+function SettingsModal({ children }: SettingsModalProps) {
   const { baseTheme, mode, setBaseTheme, setMode } = useTheme();
 
   const handleBaseThemeChange = (newBaseTheme: string) => {
@@ -103,3 +104,5 @@ export function SettingsModal({ children }: SettingsModalProps) {
     </Dialog>
   );
 }
+
+export default memo(SettingsModal);

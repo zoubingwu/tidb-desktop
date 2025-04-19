@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 
 const ROW_HEIGHT_PX = 36;
 
@@ -59,4 +59,4 @@ const TablePlaceholder = ({
   );
 };
 
-export default TablePlaceholder;
+export default memo(TablePlaceholder);
