@@ -20,7 +20,7 @@ type MCPService struct {
 	mu               sync.Mutex
 }
 
-// NewMCPService creates a new MCP service instance.
+// NewMCPService creates a new MCP service instance and registers tools.
 func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 	if dbService == nil {
 		log.Println("Warning: MCPService initialized with nil DatabaseService. DB tools will fail.")
@@ -39,15 +39,27 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 		dbService: dbService,
 	}
 
-	// --- Tool: List Tables ---
-	listTablesTool := mcp.NewTool("list_tables",
+	// Register all tools
+	addListTablesTool(mcpSvc, s)
+	addExecuteQueryTool(mcpSvc, s)
+	addExecuteStatementTool(mcpSvc, s)
+	addShowCreateTableTool(mcpSvc, s)
+	addGetConnectionInfoTool(mcpSvc, s)
+	addCalculatorTool(mcpSvc, s) // Keep example tool
+
+	return mcpSvc, nil
+}
+
+
+func addListTablesTool(mcpSvc *MCPService, s *server.MCPServer) {
+	tool := mcp.NewTool("list_tables",
 		mcp.WithDescription("Show all tables in a specific database for the active connection."),
 		mcp.WithString("database_name",
 			mcp.Required(),
 			mcp.Description("The name of the database/schema to list tables from."),
 		),
 	)
-	listTablesHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if mcpSvc.dbService == nil {
 			return mcp.NewToolResultError("DatabaseService not available"), nil
 		}
@@ -72,21 +84,22 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 		}
 		return mcp.NewToolResultText(string(jsonData)), nil
 	}
-	s.AddTool(listTablesTool, listTablesHandler)
+	s.AddTool(tool, handler)
+}
 
-	// --- Tool: Execute SQL Query ---
-	executeQueryTool := mcp.NewTool("execute_query",
+func addExecuteQueryTool(mcpSvc *MCPService, s *server.MCPServer) {
+	tool := mcp.NewTool("execute_query",
 		mcp.WithDescription("Execute a SQL SELECT, SHOW, DESCRIBE, or EXPLAIN query against a specific database using the active connection. Use 'execute_statement' for INSERT/UPDATE/DELETE etc."),
 		mcp.WithString("database_name",
 			mcp.Required(),
-			mcp.Description("The database context for the query (will execute USE database_name). If empty, uses the connection's default."),
+			mcp.Description("The database context for the query. If empty, uses the connection's default."),
 		),
 		mcp.WithString("sql_query",
 			mcp.Required(),
 			mcp.Description("The SQL SELECT/SHOW/DESCRIBE/EXPLAIN query string to execute. Should ideally include LIMIT."),
 		),
 	)
-	executeQueryHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if mcpSvc.dbService == nil {
 			return mcp.NewToolResultError("DatabaseService not available"), nil
 		}
@@ -95,7 +108,7 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 			return mcp.NewToolResultError("No active database connection established."), nil
 		}
 
-		dbName, _ := request.Params.Arguments["database_name"].(string) // Optional, might be empty
+		dbName, _ := request.Params.Arguments["database_name"].(string)
 		sql, ok := request.Params.Arguments["sql_query"].(string)
 		if !ok || sql == "" {
 			return mcp.NewToolResultError("missing or invalid 'sql_query' argument"), nil
@@ -104,20 +117,14 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 		upperSQL := strings.TrimSpace(strings.ToUpper(sql))
 		if !strings.HasPrefix(upperSQL, "SELECT") &&
 			!strings.HasPrefix(upperSQL, "SHOW") &&
-			!strings.HasPrefix(upperSQL, "DESC") && // DESCRIBE is covered by DESC
+			!strings.HasPrefix(upperSQL, "DESC") &&
 			!strings.HasPrefix(upperSQL, "EXPLAIN") {
 			return mcp.NewToolResultError("this tool is only for SELECT, SHOW, DESCRIBE, EXPLAIN queries. Use 'execute_statement' for modifications."), nil
 		}
 
 		connToUse := *activeConn
-		// If dbName is provided, clone the connection details and set the DBName
-		// Note: ExecuteSQL does not implicitly USE the dbName, the query must be qualified
-		// or the connection must already be using the correct default DB.
-		// For simplicity, we are assuming the user query is qualified or targets the default DB.
-		// A more robust solution might involve explicitly executing `USE dbName` via dbService if required.
 		if dbName != "" {
 			log.Printf("MCP execute_query: Targeting database '%s' (query should be qualified or connection default matches)", dbName)
-			// Potentially modify connToUse.DBName = dbName if ExecuteSQL handled USE logic.
 		}
 
 		result, err := mcpSvc.dbService.ExecuteSQL(ctx, connToUse, sql)
@@ -132,21 +139,22 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 		}
 		return mcp.NewToolResultText(string(jsonData)), nil
 	}
-	s.AddTool(executeQueryTool, executeQueryHandler)
+	s.AddTool(tool, handler)
+}
 
-	// --- Tool: Execute SQL Statement ---
-	executeStatementTool := mcp.NewTool("execute_statement",
-		mcp.WithDescription("Execute one or more SQL non-query statements (INSERT, UPDATE, DELETE, CREATE, DROP, etc.) against a specific database using the active connection. Use 'execute_query' for SELECT/SHOW etc."),
+func addExecuteStatementTool(mcpSvc *MCPService, s *server.MCPServer) {
+	tool := mcp.NewTool("execute_statement",
+		mcp.WithDescription("Execute a single SQL non-query statement (INSERT, UPDATE, DELETE, CREATE, DROP, etc.) against a specific database using the active connection. Use 'execute_query' for SELECT/SHOW etc."),
 		mcp.WithString("database_name",
 			mcp.Required(),
-			mcp.Description("The database context for the statements. If empty, uses the connection's default."),
+			mcp.Description("The database context for the statement. If empty, uses the connection's default."),
 		),
 		mcp.WithString("sql_statement",
 			mcp.Required(),
 			mcp.Description("A single SQL statement string to execute."),
 		),
 	)
-	executeStatementHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if mcpSvc.dbService == nil {
 			return mcp.NewToolResultError("DatabaseService not available"), nil
 		}
@@ -155,7 +163,7 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 			return mcp.NewToolResultError("No active database connection established."), nil
 		}
 
-		dbName, _ := request.Params.Arguments["database_name"].(string) // Optional
+		dbName, _ := request.Params.Arguments["database_name"].(string)
 		sql, ok := request.Params.Arguments["sql_statement"].(string)
 		if !ok || sql == "" {
 			return mcp.NewToolResultError("missing or invalid 'sql_statement' argument"), nil
@@ -189,10 +197,11 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 			return mcp.NewToolResultError(fmt.Sprintf("Unexpected result format after execution: %T", result)), nil
 		}
 	}
-	s.AddTool(executeStatementTool, executeStatementHandler)
+	s.AddTool(tool, handler)
+}
 
-	// --- Tool: Show Create Table ---
-	showCreateTableTool := mcp.NewTool("show_create_table",
+func addShowCreateTableTool(mcpSvc *MCPService, s *server.MCPServer) {
+	tool := mcp.NewTool("show_create_table",
 		mcp.WithDescription("Show the CREATE TABLE statement for a table in a specific database using the active connection."),
 		mcp.WithString("database_name",
 			mcp.Required(),
@@ -203,7 +212,7 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 			mcp.Description("The name of the table."),
 		),
 	)
-	showCreateTableHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if mcpSvc.dbService == nil {
 			return mcp.NewToolResultError("DatabaseService not available"), nil
 		}
@@ -222,7 +231,6 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 		}
 
 		connToUse := *activeConn
-		// Query needs qualification
 		query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`;", dbName, tblName)
 
 		result, err := mcpSvc.dbService.ExecuteSQL(ctx, connToUse, query)
@@ -236,10 +244,8 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 			return mcp.NewToolResultError(fmt.Sprintf("unexpected result format for SHOW CREATE TABLE '%s.%s'", dbName, tblName)), nil
 		}
 
-		// Try standard keys first
 		createStmt, ok := rows[0]["Create Table"].(string)
 		if !ok {
-			// Fallback for potential variations (e.g., different case)
 			for k, v := range rows[0] {
 				if strings.EqualFold(k, "Create Table") {
 					if stmt, okConv := v.(string); okConv {
@@ -256,13 +262,14 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 		}
 		return mcp.NewToolResultText(createStmt), nil
 	}
-	s.AddTool(showCreateTableTool, showCreateTableHandler)
+	s.AddTool(tool, handler)
+}
 
-	// --- Tool: Get Connection Info ---
-	getConnectionInfoTool := mcp.NewTool("get_connection_info",
+func addGetConnectionInfoTool(mcpSvc *MCPService, s *server.MCPServer) {
+	tool := mcp.NewTool("get_connection_info",
 		mcp.WithDescription("Get details about the current active database connection (host, port, user, database)."),
 	)
-	getConnectionInfoHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		activeConn := mcpSvc.getActiveConnection()
 		if activeConn == nil {
 			return mcp.NewToolResultError("No active database connection established."), nil
@@ -281,10 +288,11 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 		}
 		return mcp.NewToolResultText(string(jsonData)), nil
 	}
-	s.AddTool(getConnectionInfoTool, getConnectionInfoHandler)
+	s.AddTool(tool, handler)
+}
 
-	// --- Example Tool: Calculator (Keep for reference/testing) ---
-	calculatorTool := mcp.NewTool("calculate",
+func addCalculatorTool(mcpSvc *MCPService, s *server.MCPServer) {
+	tool := mcp.NewTool("calculate",
 		mcp.WithDescription("Perform basic arithmetic operations"),
 		mcp.WithString("operation",
 			mcp.Required(),
@@ -294,7 +302,7 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 		mcp.WithNumber("x", mcp.Required(), mcp.Description("First number")),
 		mcp.WithNumber("y", mcp.Required(), mcp.Description("Second number")),
 	)
-	calculatorHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		op, _ := request.Params.Arguments["operation"].(string)
 		x, xOK := request.Params.Arguments["x"].(float64)
 		y, yOK := request.Params.Arguments["y"].(float64)
@@ -319,10 +327,10 @@ func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 		}
 		return mcp.NewToolResultText(fmt.Sprintf("%.2f", result)), nil
 	}
-	s.AddTool(calculatorTool, calculatorHandler)
-
-	return mcpSvc, nil
+	s.AddTool(tool, handler)
 }
+
+// --- Service Lifecycle Methods ---
 
 // SetActiveConnection safely updates the active connection details for the service.
 func (s *MCPService) SetActiveConnection(details *ConnectionDetails) {
