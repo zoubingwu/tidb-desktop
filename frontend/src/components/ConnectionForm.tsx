@@ -142,20 +142,10 @@ export function ConnectionFormDialog({
     setIsInferring(true);
     try {
       const textFromClipboard = await ClipboardGetText();
-      console.log("textFromClipboard", textFromClipboard);
       const inferredDetails = await inferConnectionDetails(textFromClipboard);
       if (inferredDetails) {
-        console.log("inferredDetails", inferredDetails);
         setFormState((prev) => {
-          const updated = { ...prev };
-          if (inferredDetails.host) updated.host = inferredDetails.host;
-          if (inferredDetails.port) updated.port = inferredDetails.port;
-          if (inferredDetails.user) updated.user = inferredDetails.user;
-          if (inferredDetails.password)
-            updated.password = inferredDetails.password;
-          if (inferredDetails.dbName) updated.dbName = inferredDetails.dbName;
-          if (inferredDetails.useTLS) updated.useTLS = inferredDetails.useTLS;
-          return updated;
+          return { ...prev, ...inferredDetails };
         });
         if (inferredDetails.host && !connectionName) {
           const suggestedName = `${inferredDetails.user || "user"}@${inferredDetails.host.split(".")[0]}`;
@@ -171,7 +161,6 @@ export function ConnectionFormDialog({
         });
       }
     } catch (error: any) {
-      console.error("Clipboard/Infer Error:", error);
       toast.error("Clipboard/Inference Error", {
         description:
           typeof error === "string"
