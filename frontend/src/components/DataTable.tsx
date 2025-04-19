@@ -1,4 +1,3 @@
-import { memo } from "react";
 import {
   flexRender,
   Table as ReactTable,
@@ -83,6 +82,4 @@ function DataTable<TData>({ table }: DataTableProps<TData>) {
   );
 }
 
-export default memo(DataTable) as <TData>(
-  props: DataTableProps<TData>,
-) => React.ReactElement;
+export default DataTable;
