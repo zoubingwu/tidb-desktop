@@ -337,7 +337,7 @@ const MainDataView = ({
                               ? "auto"
                               : header.getSize(),
                         }}
-                        className="px-4"
+                        className="px-4 select-text!"
                       >
                         {flexRender(
                           header.column.columnDef.header,
@@ -360,7 +360,7 @@ const MainDataView = ({
                         <TableCell
                           key={cell.id}
                           style={{ width: cell.column.getSize() }}
-                          className="max-w-[250px] truncate px-4"
+                          className="max-w-[250px] truncate px-4 select-text!"
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
