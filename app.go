@@ -83,32 +83,6 @@ func (a *App) TestConnection(details services.ConnectionDetails) (bool, error) {
 	return a.dbService.TestConnection(a.ctx, details)
 }
 
-// ConnectUsingDetails establishes the *current active* connection using provided details.
-// It does NOT save the connection permanently. Use SaveConnection for that.
-// Returns the connection details on success for frontend confirmation.
-func (a *App) ConnectUsingDetails(details services.ConnectionDetails) (*services.ConnectionDetails, error) {
-	if a.ctx == nil {
-		return nil, fmt.Errorf("app context not initialized")
-	}
-	// Test the connection first
-	success, err := a.dbService.TestConnection(a.ctx, details)
-	if err != nil {
-		return nil, fmt.Errorf("connection test failed: %w", err)
-	}
-	if !success {
-		return nil, fmt.Errorf("connection test reported failure, please check details")
-	}
-
-	// Store as the *active* connection for this session
-	a.activeConnection = &details
-	fmt.Printf("Session connection activated: %+v\n", *a.activeConnection)
-
-	// Emit event to notify frontend the active session is ready
-	runtime.EventsEmit(a.ctx, "connection:established", details)
-
-	return &details, nil // Return details on success
-}
-
 // ConnectUsingSaved establishes the *current active* connection using a saved connection name.
 // Returns the connection details on success.
 func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error) {
