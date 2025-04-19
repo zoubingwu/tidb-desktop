@@ -158,6 +158,24 @@ type TableColumn struct {
 	Type string `json:"type"`
 }
 
+// ColumnSchema holds detailed metadata for a table column based on information_schema.
+type ColumnSchema struct {
+	ColumnName       string         `json:"column_name"`
+	ColumnType       string         `json:"column_type"` // Full type definition, e.g., varchar(255)
+	CharacterSetName sql.NullString `json:"character_set_name"`
+	CollationName    sql.NullString `json:"collation_name"`
+	IsNullable       string         `json:"is_nullable"` // "YES" or "NO"
+	ColumnDefault    sql.NullString `json:"column_default"`
+	Extra            string         `json:"extra"` // e.g., auto_increment, on update CURRENT_TIMESTAMP
+	ColumnComment    string         `json:"column_comment"`
+}
+
+// TableSchema represents the detailed structure of a table.
+type TableSchema struct {
+	Name    string         `json:"name"`
+	Columns []ColumnSchema `json:"columns"`
+}
+
 // TableDataResponse holds data and column definitions for a table query.
 type TableDataResponse struct {
 	Columns   []TableColumn    `json:"columns"`
@@ -471,6 +489,93 @@ func (s *DatabaseService) GetTableData(ctx context.Context, details ConnectionDe
 	}
 
 	return resp, nil
+}
+
+// GetTableSchema retrieves the detailed schema/structure for a specific table using information_schema.
+func (s *DatabaseService) GetTableSchema(ctx context.Context, details ConnectionDetails, dbName string, tableName string) (*TableSchema, error) {
+	targetDB := dbName
+	if targetDB == "" {
+		targetDB = details.DBName
+	}
+	if targetDB == "" {
+		return nil, fmt.Errorf("database name is required either explicitly or in connection details")
+	}
+	if tableName == "" {
+		return nil, fmt.Errorf("table name is required")
+	}
+
+	// Query information_schema for detailed column information
+	query := `
+		SELECT
+			COLUMN_NAME,
+			COLUMN_TYPE,
+			CHARACTER_SET_NAME,
+			COLLATION_NAME,
+			IS_NULLABLE,
+			COLUMN_DEFAULT,
+			EXTRA,
+			COLUMN_COMMENT
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+		ORDER BY ORDINAL_POSITION;`
+
+	// Need to use the raw *sql.DB connection here to handle potential nulls correctly with Scan
+	db, err := getDBConnection(details)
+	if err != nil {
+		return nil, fmt.Errorf("connection setup failed for GetTableSchema: %w", err)
+	}
+	defer db.Close()
+
+	rows, err := db.QueryContext(ctx, query, targetDB, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query information_schema.COLUMNS for '%s.%s': %w", targetDB, tableName, err)
+	}
+	defer rows.Close()
+
+	schema := &TableSchema{
+		Name:    tableName,
+		Columns: make([]ColumnSchema, 0),
+	}
+
+	for rows.Next() {
+		var col ColumnSchema
+		err := rows.Scan(
+			&col.ColumnName,
+			&col.ColumnType,
+			&col.CharacterSetName,
+			&col.CollationName,
+			&col.IsNullable,
+			&col.ColumnDefault,
+			&col.Extra,
+			&col.ColumnComment,
+		)
+		if err != nil {
+			log.Printf("Error scanning information_schema row for %s.%s: %v", targetDB, tableName, err)
+			// Decide if we should continue or return error. Continuing might give partial results.
+			continue // Skip this column
+		}
+		schema.Columns = append(schema.Columns, col)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating information_schema.COLUMNS results for '%s.%s': %w", targetDB, tableName, err)
+	}
+
+	if len(schema.Columns) == 0 {
+		// Check if the table actually exists, as Query might succeed but return no rows.
+		existsQuery := "SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1;"
+		var exists int
+		existsErr := db.QueryRowContext(ctx, existsQuery, targetDB, tableName).Scan(&exists)
+		if existsErr != nil && existsErr != sql.ErrNoRows {
+			log.Printf("Warning: Could not verify existence of table %s.%s: %v", targetDB, tableName, existsErr)
+		} else if existsErr == sql.ErrNoRows {
+			return nil, fmt.Errorf("table '%s.%s' not found", targetDB, tableName)
+		}
+		// Table exists but has no columns? Or query failed silently?
+		log.Printf("Warning: No columns found for table '%s.%s', returning empty schema.", targetDB, tableName)
+	}
+
+	return schema, nil
 }
 
 
