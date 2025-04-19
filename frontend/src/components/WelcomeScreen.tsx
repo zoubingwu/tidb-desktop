@@ -10,8 +10,8 @@ import {
   DeleteSavedConnection,
 } from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
-import { SettingsModal } from "./SettingModal";
 import { formatDistanceToNow } from "date-fns";
+import SettingsModal from "./SettingModal";
 
 type SavedConnectionsMap = Record<string, services.ConnectionDetails>;
 
