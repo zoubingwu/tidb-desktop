@@ -2,8 +2,11 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
+	"sync"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -11,18 +14,18 @@ import (
 
 // MCPService handles MCP server setup and tool registration.
 type MCPService struct {
-	mcpServer *server.MCPServer
-	dbService *DatabaseService // Inject DatabaseService
-	// configService *ConfigService // Inject if needed for other tools
+	mcpServer        *server.MCPServer
+	dbService        *DatabaseService
+	activeConnection *ConnectionDetails
+	mu               sync.Mutex
 }
 
 // NewMCPService creates a new MCP service instance.
-func NewMCPService(dbService *DatabaseService /*, configService *ConfigService*/) (*MCPService, error) {
+func NewMCPService(dbService *DatabaseService) (*MCPService, error) {
 	if dbService == nil {
-		fmt.Println("Warning: MCPService initialized with nil DatabaseService. DB tools will fail.")
+		log.Println("Warning: MCPService initialized with nil DatabaseService. DB tools will fail.")
 	}
 
-	// Initialize the MCP server
 	s := server.NewMCPServer(
 		"TiDB Desktop Agent",
 		"0.1.0",
@@ -31,7 +34,256 @@ func NewMCPService(dbService *DatabaseService /*, configService *ConfigService*/
 		server.WithRecovery(),
 	)
 
-	// --- Example Tool: Add Calculator ---
+	mcpSvc := &MCPService{
+		mcpServer: s,
+		dbService: dbService,
+	}
+
+	// --- Tool: List Tables ---
+	listTablesTool := mcp.NewTool("list_tables",
+		mcp.WithDescription("Show all tables in a specific database for the active connection."),
+		mcp.WithString("database_name",
+			mcp.Required(),
+			mcp.Description("The name of the database/schema to list tables from."),
+		),
+	)
+	listTablesHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if mcpSvc.dbService == nil {
+			return mcp.NewToolResultError("DatabaseService not available"), nil
+		}
+		activeConn := mcpSvc.getActiveConnection()
+		if activeConn == nil {
+			return mcp.NewToolResultError("No active database connection established."), nil
+		}
+
+		dbName, ok := request.Params.Arguments["database_name"].(string)
+		if !ok || dbName == "" {
+			return mcp.NewToolResultError("missing or invalid 'database_name' argument"), nil
+		}
+
+		tableNames, err := mcpSvc.dbService.ListTables(ctx, *activeConn, dbName)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to list tables from '%s': %v", dbName, err)), nil
+		}
+
+		jsonData, err := json.Marshal(tableNames)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to marshal table names to JSON: %v", err)), nil
+		}
+		return mcp.NewToolResultText(string(jsonData)), nil
+	}
+	s.AddTool(listTablesTool, listTablesHandler)
+
+	// --- Tool: Execute SQL Query ---
+	executeQueryTool := mcp.NewTool("execute_query",
+		mcp.WithDescription("Execute a SQL SELECT, SHOW, DESCRIBE, or EXPLAIN query against a specific database using the active connection. Use 'execute_statement' for INSERT/UPDATE/DELETE etc."),
+		mcp.WithString("database_name",
+			mcp.Required(),
+			mcp.Description("The database context for the query (will execute USE database_name). If empty, uses the connection's default."),
+		),
+		mcp.WithString("sql_query",
+			mcp.Required(),
+			mcp.Description("The SQL SELECT/SHOW/DESCRIBE/EXPLAIN query string to execute. Should ideally include LIMIT."),
+		),
+	)
+	executeQueryHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if mcpSvc.dbService == nil {
+			return mcp.NewToolResultError("DatabaseService not available"), nil
+		}
+		activeConn := mcpSvc.getActiveConnection()
+		if activeConn == nil {
+			return mcp.NewToolResultError("No active database connection established."), nil
+		}
+
+		dbName, _ := request.Params.Arguments["database_name"].(string) // Optional, might be empty
+		sql, ok := request.Params.Arguments["sql_query"].(string)
+		if !ok || sql == "" {
+			return mcp.NewToolResultError("missing or invalid 'sql_query' argument"), nil
+		}
+
+		upperSQL := strings.TrimSpace(strings.ToUpper(sql))
+		if !strings.HasPrefix(upperSQL, "SELECT") &&
+			!strings.HasPrefix(upperSQL, "SHOW") &&
+			!strings.HasPrefix(upperSQL, "DESC") && // DESCRIBE is covered by DESC
+			!strings.HasPrefix(upperSQL, "EXPLAIN") {
+			return mcp.NewToolResultError("this tool is only for SELECT, SHOW, DESCRIBE, EXPLAIN queries. Use 'execute_statement' for modifications."), nil
+		}
+
+		connToUse := *activeConn
+		// If dbName is provided, clone the connection details and set the DBName
+		// Note: ExecuteSQL does not implicitly USE the dbName, the query must be qualified
+		// or the connection must already be using the correct default DB.
+		// For simplicity, we are assuming the user query is qualified or targets the default DB.
+		// A more robust solution might involve explicitly executing `USE dbName` via dbService if required.
+		if dbName != "" {
+			log.Printf("MCP execute_query: Targeting database '%s' (query should be qualified or connection default matches)", dbName)
+			// Potentially modify connToUse.DBName = dbName if ExecuteSQL handled USE logic.
+		}
+
+		result, err := mcpSvc.dbService.ExecuteSQL(ctx, connToUse, sql)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to execute query '%s': %v", sql, err)), nil
+		}
+
+		jsonData, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			log.Printf("MCP execute_query: Failed to marshal result to JSON (%v), returning text.", err)
+			return mcp.NewToolResultText(fmt.Sprintf("Result (non-JSON): %+v", result)), nil
+		}
+		return mcp.NewToolResultText(string(jsonData)), nil
+	}
+	s.AddTool(executeQueryTool, executeQueryHandler)
+
+	// --- Tool: Execute SQL Statement ---
+	executeStatementTool := mcp.NewTool("execute_statement",
+		mcp.WithDescription("Execute one or more SQL non-query statements (INSERT, UPDATE, DELETE, CREATE, DROP, etc.) against a specific database using the active connection. Use 'execute_query' for SELECT/SHOW etc."),
+		mcp.WithString("database_name",
+			mcp.Required(),
+			mcp.Description("The database context for the statements. If empty, uses the connection's default."),
+		),
+		mcp.WithString("sql_statement",
+			mcp.Required(),
+			mcp.Description("A single SQL statement string to execute."),
+		),
+	)
+	executeStatementHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if mcpSvc.dbService == nil {
+			return mcp.NewToolResultError("DatabaseService not available"), nil
+		}
+		activeConn := mcpSvc.getActiveConnection()
+		if activeConn == nil {
+			return mcp.NewToolResultError("No active database connection established."), nil
+		}
+
+		dbName, _ := request.Params.Arguments["database_name"].(string) // Optional
+		sql, ok := request.Params.Arguments["sql_statement"].(string)
+		if !ok || sql == "" {
+			return mcp.NewToolResultError("missing or invalid 'sql_statement' argument"), nil
+		}
+
+		connToUse := *activeConn
+		if dbName != "" {
+			log.Printf("MCP execute_statement: Targeting database '%s' (statement should be qualified or connection default matches)", dbName)
+		}
+
+		upperSQL := strings.TrimSpace(strings.ToUpper(sql))
+		if strings.HasPrefix(upperSQL, "SELECT") || strings.HasPrefix(upperSQL, "SHOW") || strings.HasPrefix(upperSQL, "DESC") || strings.HasPrefix(upperSQL, "EXPLAIN") {
+			return mcp.NewToolResultError("Use execute_query tool for SELECT/SHOW/DESCRIBE/EXPLAIN statements."), nil
+		}
+
+		result, err := mcpSvc.dbService.ExecuteSQL(ctx, connToUse, sql)
+		if err != nil {
+			log.Printf("MCP execute_statement: Error executing statement (%s): %v", sql, err)
+			return mcp.NewToolResultError(fmt.Sprintf("Error executing statement: %v", err)), nil
+		}
+
+		if resultMap, ok := result.(map[string]any); ok {
+			jsonData, err := json.MarshalIndent(resultMap, "", "  ")
+			if err != nil {
+				log.Printf("MCP execute_statement: Failed to marshal result map: %v", err)
+				return mcp.NewToolResultText(fmt.Sprintf("Execution Result (non-JSON): %+v", resultMap)), nil
+			}
+			return mcp.NewToolResultText(string(jsonData)), nil
+		} else {
+			log.Printf("MCP execute_statement: Unexpected result type for statement (%s): %T", sql, result)
+			return mcp.NewToolResultError(fmt.Sprintf("Unexpected result format after execution: %T", result)), nil
+		}
+	}
+	s.AddTool(executeStatementTool, executeStatementHandler)
+
+	// --- Tool: Show Create Table ---
+	showCreateTableTool := mcp.NewTool("show_create_table",
+		mcp.WithDescription("Show the CREATE TABLE statement for a table in a specific database using the active connection."),
+		mcp.WithString("database_name",
+			mcp.Required(),
+			mcp.Description("The name of the database/schema containing the table."),
+		),
+		mcp.WithString("table_name",
+			mcp.Required(),
+			mcp.Description("The name of the table."),
+		),
+	)
+	showCreateTableHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if mcpSvc.dbService == nil {
+			return mcp.NewToolResultError("DatabaseService not available"), nil
+		}
+		activeConn := mcpSvc.getActiveConnection()
+		if activeConn == nil {
+			return mcp.NewToolResultError("No active database connection established."), nil
+		}
+
+		dbName, ok := request.Params.Arguments["database_name"].(string)
+		if !ok || dbName == "" {
+			return mcp.NewToolResultError("missing or invalid 'database_name' argument"), nil
+		}
+		tblName, ok := request.Params.Arguments["table_name"].(string)
+		if !ok || tblName == "" {
+			return mcp.NewToolResultError("missing or invalid 'table_name' argument"), nil
+		}
+
+		connToUse := *activeConn
+		// Query needs qualification
+		query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`;", dbName, tblName)
+
+		result, err := mcpSvc.dbService.ExecuteSQL(ctx, connToUse, query)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to get create table for '%s.%s': %v", dbName, tblName, err)), nil
+		}
+
+		rows, ok := result.([]map[string]any)
+		if !ok || len(rows) != 1 {
+			log.Printf("MCP show_create_table: Unexpected result format: %T, Len: %d", result, len(rows))
+			return mcp.NewToolResultError(fmt.Sprintf("unexpected result format for SHOW CREATE TABLE '%s.%s'", dbName, tblName)), nil
+		}
+
+		// Try standard keys first
+		createStmt, ok := rows[0]["Create Table"].(string)
+		if !ok {
+			// Fallback for potential variations (e.g., different case)
+			for k, v := range rows[0] {
+				if strings.EqualFold(k, "Create Table") {
+					if stmt, okConv := v.(string); okConv {
+						createStmt = stmt
+						ok = true
+						break
+					}
+				}
+			}
+		}
+
+		if !ok {
+			return mcp.NewToolResultError(fmt.Sprintf("could not extract create statement from result for '%s.%s'", dbName, tblName)), nil
+		}
+		return mcp.NewToolResultText(createStmt), nil
+	}
+	s.AddTool(showCreateTableTool, showCreateTableHandler)
+
+	// --- Tool: Get Connection Info ---
+	getConnectionInfoTool := mcp.NewTool("get_connection_info",
+		mcp.WithDescription("Get details about the current active database connection (host, port, user, database)."),
+	)
+	getConnectionInfoHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		activeConn := mcpSvc.getActiveConnection()
+		if activeConn == nil {
+			return mcp.NewToolResultError("No active database connection established."), nil
+		}
+
+		info := map[string]string{
+			"host":     activeConn.Host,
+			"port":     activeConn.Port,
+			"user":     activeConn.User,
+			"database": activeConn.DBName,
+			"useTLS":   fmt.Sprintf("%t", activeConn.UseTLS),
+		}
+		jsonData, err := json.MarshalIndent(info, "", "  ")
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to marshal connection info to JSON: %v", err)), nil
+		}
+		return mcp.NewToolResultText(string(jsonData)), nil
+	}
+	s.AddTool(getConnectionInfoTool, getConnectionInfoHandler)
+
+	// --- Example Tool: Calculator (Keep for reference/testing) ---
 	calculatorTool := mcp.NewTool("calculate",
 		mcp.WithDescription("Perform basic arithmetic operations"),
 		mcp.WithString("operation",
@@ -39,29 +291,16 @@ func NewMCPService(dbService *DatabaseService /*, configService *ConfigService*/
 			mcp.Description("The operation to perform (add, subtract, multiply, divide)"),
 			mcp.Enum("add", "subtract", "multiply", "divide"),
 		),
-		mcp.WithNumber("x",
-			mcp.Required(),
-			mcp.Description("First number"),
-		),
-		mcp.WithNumber("y",
-			mcp.Required(),
-			mcp.Description("Second number"),
-		),
+		mcp.WithNumber("x", mcp.Required(), mcp.Description("First number")),
+		mcp.WithNumber("y", mcp.Required(), mcp.Description("Second number")),
 	)
 	calculatorHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		op, ok := request.Params.Arguments["operation"].(string)
-		if !ok {
-			return mcp.NewToolResultError("invalid or missing 'operation' argument"), nil
+		op, _ := request.Params.Arguments["operation"].(string)
+		x, xOK := request.Params.Arguments["x"].(float64)
+		y, yOK := request.Params.Arguments["y"].(float64)
+		if !xOK || !yOK {
+			return mcp.NewToolResultError("Invalid number arguments"), nil
 		}
-		x, ok := request.Params.Arguments["x"].(float64)
-		if !ok {
-			return mcp.NewToolResultError("invalid or missing 'x' argument"), nil
-		}
-		y, ok := request.Params.Arguments["y"].(float64)
-		if !ok {
-			return mcp.NewToolResultError("invalid or missing 'y' argument"), nil
-		}
-
 		var result float64
 		switch op {
 		case "add":
@@ -82,205 +321,39 @@ func NewMCPService(dbService *DatabaseService /*, configService *ConfigService*/
 	}
 	s.AddTool(calculatorTool, calculatorHandler)
 
-	// --- Tool: List Tables ---
-	listTablesTool := mcp.NewTool("list_tables",
-		mcp.WithDescription("Show all tables in a specific database for the active connection."),
-		mcp.WithString("database_name",
-			mcp.Required(),
-			mcp.Description("The name of the database/schema to list tables from."),
-		),
-	)
-	listTablesHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		if dbService == nil {
-			return mcp.NewToolResultError("DatabaseService not available"), nil
-		}
-		// TODO: Need access to the *active* connection from App struct here.
-		dbName, ok := request.Params.Arguments["database_name"].(string)
-		if !ok || dbName == "" {
-			return mcp.NewToolResultError("missing or invalid 'database_name' argument"), nil
-		}
+	return mcpSvc, nil
+}
 
-		// Placeholder - needs active connection details
-		return mcp.NewToolResultError(fmt.Sprintf("Cannot list tables for '%s': Active connection details unavailable in MCP context.", dbName)), nil
-		/*
-			// --- Ideal Implementation (requires active connection) ---
-			activeConn := getActiveConnectionFromSomewhere(ctx) // Function needed
-			if activeConn == nil {
-			    return mcp.NewToolResultError("no active database connection"), nil
-			}
-			query := fmt.Sprintf("SHOW TABLES FROM `%s`;", dbName)
-			result, err := dbService.ExecuteSQL(ctx, *activeConn, query)
-			if err != nil {
-			    return mcp.NewToolResultError(fmt.Sprintf("failed to list tables from '%s': %v", dbName, err)), nil
-			}
-			tableRows, ok := result.([]map[string]any)
-			if !ok {
-			    return mcp.NewToolResultError(fmt.Sprintf("unexpected result format listing tables from '%s'", dbName)), nil
-			}
-			var tableNames []string
-			columnKey := ""
-			if len(tableRows) > 0 {
-			    for k := range tableRows[0] {
-			        columnKey = k
-			        break
-			    }
-			}
-			for _, row := range tableRows {
-			    if name, ok := row[columnKey].(string); ok {
-			        tableNames = append(tableNames, name)
-			    }
-			}
-			jsonData, err := json.Marshal(tableNames)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal table names to JSON: %v", err)), nil
-			}
-			return mcp.NewToolResultJSON(string(jsonData)), nil
-		*/
+// SetActiveConnection safely updates the active connection details for the service.
+func (s *MCPService) SetActiveConnection(details *ConnectionDetails) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.activeConnection = details
+	if details != nil {
+		log.Printf("MCPService: Active connection set to: %s@%s:%s/%s", details.User, details.Host, details.Port, details.DBName)
+	} else {
+		log.Printf("MCPService: Active connection cleared.")
 	}
-	s.AddTool(listTablesTool, listTablesHandler) // Pass pointer
+}
 
-	// --- Tool: Execute SQL Query ---
-	executeQueryTool := mcp.NewTool("execute_query",
-		mcp.WithDescription("Execute a SQL SELECT query against a specific database using the active connection. Use 'execute_statement' for INSERT/UPDATE/DELETE etc."),
-		mcp.WithString("database_name",
-			mcp.Required(),
-			mcp.Description("The database context for the query. Can be empty if the query includes the database name."),
-		),
-		mcp.WithString("sql_query",
-			mcp.Required(),
-			mcp.Description("The SQL SELECT query string to execute. Should include LIMIT."),
-		),
-	)
-	executeQueryHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		if dbService == nil {
-			return mcp.NewToolResultError("DatabaseService not available"), nil
-		}
-		// TODO: Needs access to the *active* connection from App struct here.
-		dbName, _ := request.Params.Arguments["database_name"].(string) // Optional, might be in query
-		sql, ok := request.Params.Arguments["sql_query"].(string)
-		if !ok || sql == "" {
-			return mcp.NewToolResultError("missing or invalid 'sql_query' argument"), nil
-		}
-
-		if !strings.HasPrefix(strings.TrimSpace(strings.ToUpper(sql)), "SELECT") &&
-		   !strings.HasPrefix(strings.TrimSpace(strings.ToUpper(sql)), "SHOW") &&
-		   !strings.HasPrefix(strings.TrimSpace(strings.ToUpper(sql)), "DESC") &&
-		   !strings.HasPrefix(strings.TrimSpace(strings.ToUpper(sql)), "EXPLAIN") {
-			return mcp.NewToolResultError("this tool is only for SELECT, SHOW, DESCRIBE, EXPLAIN queries. Use 'execute_statement' for modifications."), nil
-		}
-
-		// Placeholder - needs active connection details
-		return mcp.NewToolResultError(fmt.Sprintf("Cannot execute query '%s' in db '%s': Active connection details unavailable in MCP context.", sql, dbName)), nil
-		/*
-			// --- Ideal Implementation (requires active connection) ---
-			activeConn := getActiveConnectionFromSomewhere(ctx)
-			if activeConn == nil {
-			    return mcp.NewToolResultError("no active database connection"), nil
-			}
-			// Potentially set the DB context if provided and different from connection's default
-			connToUse := *activeConn
-			if dbName != "" && connToUse.DBName != dbName {
-				// Need to execute a 'USE dbName' first, or handle this in dbService
-				// Simpler: Assume ExecuteSQL handles the db context if needed, or the query includes it.
-				fmt.Printf("Warning: Tool specified db '%s' but connection default is '%s'. Ensure query is qualified or connection allows switching.", dbName, connToUse.DBName)
-			}
-
-			result, err := dbService.ExecuteSQL(ctx, connToUse, sql)
-			if err != nil {
-			    return mcp.NewToolResultError(fmt.Sprintf("failed to execute query '%s': %v", sql, err)), nil
-			}
-
-			// Attempt to marshal result to JSON
-			jsonData, err := json.MarshalIndent(result, "", "  ") // Pretty print JSON
-			if err != nil {
-			    // Fallback to simple string representation if JSON fails
-			    return mcp.NewToolResultText(fmt.Sprintf("Result (non-JSON): %+v", result)), nil
-			}
-			return mcp.NewToolResultJSON(string(jsonData)), nil
-		*/
+// getActiveConnection safely retrieves the current active connection.
+func (s *MCPService) getActiveConnection() *ConnectionDetails {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.activeConnection == nil {
+		return nil
 	}
-	s.AddTool(executeQueryTool, executeQueryHandler) // Pass pointer
-
-	// --- Tool: Show Create Table ---
-	showCreateTableTool := mcp.NewTool("show_create_table",
-		mcp.WithDescription("Show the CREATE TABLE statement for a table in a specific database using the active connection."),
-		mcp.WithString("database_name",
-			mcp.Required(),
-			mcp.Description("The name of the database/schema containing the table."),
-		),
-		mcp.WithString("table_name",
-			mcp.Required(),
-			mcp.Description("The name of the table."),
-		),
-	)
-	showCreateTableHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		if dbService == nil {
-			return mcp.NewToolResultError("DatabaseService not available"), nil
-		}
-		// TODO: Needs access to the *active* connection from App struct here.
-		dbName, ok := request.Params.Arguments["database_name"].(string)
-		if !ok || dbName == "" {
-			return mcp.NewToolResultError("missing or invalid 'database_name' argument"), nil
-		}
-		tblName, ok := request.Params.Arguments["table_name"].(string)
-		if !ok || tblName == "" {
-			return mcp.NewToolResultError("missing or invalid 'table_name' argument"), nil
-		}
-
-		// Placeholder - needs active connection details
-		return mcp.NewToolResultError(fmt.Sprintf("Cannot show create table for '%s.%s': Active connection details unavailable in MCP context.", dbName, tblName)), nil
-		/*
-			// --- Ideal Implementation (requires active connection) ---
-			activeConn := getActiveConnectionFromSomewhere(ctx)
-			if activeConn == nil {
-			    return mcp.NewToolResultError("no active database connection"), nil
-			}
-			query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`;", dbName, tblName)
-			result, err := dbService.ExecuteSQL(ctx, *activeConn, query)
-			if err != nil {
-			    return mcp.NewToolResultError(fmt.Sprintf("failed to get create table for '%s.%s': %v", dbName, tblName, err)), nil
-			}
-
-			// Expect result like: [map[string]any{"Table": "tblName", "Create Table": "CREATE TABLE ..."}]
-			rows, ok := result.([]map[string]any)
-			if !ok || len(rows) != 1 {
-			    return mcp.NewToolResultError(fmt.Sprintf("unexpected result format for SHOW CREATE TABLE '%s.%s'", dbName, tblName)), nil
-			}
-			createStmt, ok := rows[0]["Create Table"].(string) // Key might vary slightly by DB driver
-			if !ok {
-				// Try other potential keys if necessary based on testing
-				createStmt, ok = rows[0]["CREATE TABLE"].(string)
-			}
-			if !ok {
-				return mcp.NewToolResultError(fmt.Sprintf("could not extract create statement from result for '%s.%s'", dbName, tblName)), nil
-			}
-			return mcp.NewToolResultText(createStmt), nil
-		*/
-	}
-	s.AddTool(showCreateTableTool, showCreateTableHandler) // Pass pointer
-
-	// TODO: Add 'execute_statement' tool for INSERT/UPDATE/DELETE/CREATE/DROP etc.
-	// TODO: Add tools for user management if feasible/secure.
-	// TODO: Add tool to get connection info if needed.
-
-	return &MCPService{
-		mcpServer: s,
-		dbService: dbService,
-	}, nil
+	detailsCopy := *s.activeConnection
+	return &detailsCopy
 }
 
 // Start runs the MCP server, typically blocking until completion or error.
-// It uses Stdio for communication as per the example.
 func (s *MCPService) Start() error {
-	fmt.Println("Starting MCP Server via Stdio...")
+	log.Println("Starting MCP Server via Stdio...")
 	if err := server.ServeStdio(s.mcpServer); err != nil {
-		fmt.Printf("MCP Server error: %v\n", err)
+		log.Printf("MCP Server error: %v\n", err)
 		return fmt.Errorf("MCP server failed: %w", err)
 	}
-	fmt.Println("MCP Server finished.")
+	log.Println("MCP Server finished.")
 	return nil
 }
-
-// TODO: Add methods to define tools that interact with other services (ConfigService, DatabaseService)
-// Example: A tool to list saved connections would need access to ConfigService.
-// NewMCPService might need to accept other services as arguments.
