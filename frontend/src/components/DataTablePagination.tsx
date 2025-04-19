@@ -40,7 +40,7 @@ export function DataTablePagination<TData>({
         {totalRowCount != null && totalRowCount > 0 // Check if totalRowCount is known and > 0
           ? `${firstRowIndex} - ${lastRowIndex} of ${totalRowCount}`
           : !disabled
-            ? "0 rows"
+            ? `${table.getRowCount()} rows`
             : null}
       </div>
 
