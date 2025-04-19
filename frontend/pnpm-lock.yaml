@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@ai-sdk/react':
+        specifier: 1.2.9
+        version: 1.2.9(react@19.1.0)(zod@3.24.3)
       '@openrouter/ai-sdk-provider':
         specifier: 0.4.5
         version: 0.4.5(zod@3.24.3)
@@ -116,6 +119,9 @@ importers:
       zod:
         specifier: 3.24.3
         version: 3.24.3
+      zod-to-json-schema:
+        specifier: 3.24.5
+        version: 3.24.5(zod@3.24.3)
     devDependencies:
       '@biomejs/biome':
         specifier: 1.9.4
