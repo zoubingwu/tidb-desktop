@@ -161,16 +161,6 @@ func (a *App) ExecuteSQL(query string) (any, error) {
 	return a.dbService.ExecuteSQL(a.ctx, *a.activeConnection, query)
 }
 
-// --- AI Related Methods ---
-
-// ReadClipboard reads text content from the system clipboard.
-func (a *App) ReadClipboard() (string, error) {
-	if a.ctx == nil {
-		return "", fmt.Errorf("app context not initialized")
-	}
-	return runtime.ClipboardGetText(a.ctx)
-}
-
 // ListDatabases retrieves a list of database/schema names accessible by the connection.
 func (a *App) ListDatabases() ([]string, error) {
 	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
