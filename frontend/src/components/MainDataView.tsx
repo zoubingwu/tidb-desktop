@@ -192,11 +192,13 @@ const MainDataView = ({
             const value = info.getValue();
             if (value === null || value === undefined) {
               // Style NULL values
-              return <span className="text-muted-foreground">NULL</span>;
+              return <span className="text-muted-foreground italic">NULL</span>;
             }
             if (value === "") {
               // Style empty strings differently
-              return <span className="text-muted-foreground ">""</span>;
+              return (
+                <span className="text-muted-foreground italic">EMPTY</span>
+              );
             }
             // Render other values as strings
             return String(value);
