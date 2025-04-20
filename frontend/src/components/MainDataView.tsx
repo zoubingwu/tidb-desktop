@@ -386,7 +386,7 @@ const MainDataView = ({
             <DataTableFilter
               table={table}
               onChange={handleFilterChange}
-              disabled={tableViewState !== "data"}
+              disabled={tableViewState !== "data" || !!sqlFromAIResult}
             />
           </div>
 
