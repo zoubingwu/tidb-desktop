@@ -6,6 +6,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { generateSqlAgent, SqlAgentResponse } from "@/lib/ai";
 import {
@@ -148,7 +153,7 @@ export const DataTableFilterAI = ({
                   {
                     id: `${uniqueId}-${call.toolCallId}-call`,
                     type: "ai-tool-call",
-                    content: `Calling tool: \`${call.toolName}\``,
+                    content: `Calling tool: ${call.toolName}`,
                     meta: call, // Store full call if needed
                   },
                 ]);
@@ -157,14 +162,13 @@ export const DataTableFilterAI = ({
 
             if (toolResults?.length) {
               toolResults.forEach((result) => {
-                // Truncate potentially large results for display
-                const preview = JSON.stringify(result.result).slice(0, 200);
+                JSON.stringify(result.result).slice(0, 200);
                 setDisplayBlocks((prev) => [
                   ...prev,
                   {
                     id: `${uniqueId}-${result.toolCallId}-result`,
                     type: "ai-tool-result",
-                    content: `Tool \`${result.toolName}\` result: ${preview}${preview.length === 200 ? "..." : ""}`,
+                    content: `Tool ${result.toolName} call finished`,
                     meta: result, // Store full result if needed
                   },
                 ]);
@@ -265,23 +269,30 @@ export const DataTableFilterAI = ({
       case "ai-tool-call":
         return (
           <div
-            className={`ai-tool-call ${baseClasses} bg-blue-500/10 text-blue-700 dark:text-blue-300 flex items-center gap-2`}
+            className={`ai-tool-call ${baseClasses} bg-muted/50 flex items-center gap-2`}
           >
             <Terminal className="w-4 h-4 flex-shrink-0" />
-            <code>{block.content as string}</code>
+            <p>{block.content as string}</p>
           </div>
         );
       case "ai-tool-result":
         return (
-          <div
-            className={`ai-tool-result ${baseClasses} bg-purple-500/10 text-purple-700 dark:text-purple-300`}
-          >
-            {block.content as string}
+          <div className={`ai-tool-result ${baseClasses} bg-muted/50`}>
+            <Collapsible>
+              <CollapsibleTrigger>
+                <div className="cursor-pointer">{block.content as string}</div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-sm overflow-x-auto">
+                  {JSON.stringify(block.meta.result, null, 2)}
+                </pre>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         );
       case "ai-final":
         return (
-          <div className={`ai-final ${baseClasses} bg-green-500/10`}>
+          <div className={`ai-final ${baseClasses} bg-muted/50`}>
             {block.content}
           </div>
         );
