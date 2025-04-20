@@ -184,6 +184,9 @@ const sqlAgentResponseSchema = z.object({
     .describe(
       "The type of the generated SQL query. 'NONE' if no query was generated.",
     ),
+  success: z
+    .boolean()
+    .describe("True if the query was generated successfully."),
 });
 
 // --- Define the return type based on the Zod schema ---
@@ -299,6 +302,7 @@ Agent Steps:
             validationResult.error.message,
           requiresConfirmation: true,
           type: "NONE",
+          success: false,
         };
       }
     } else {
@@ -317,6 +321,7 @@ Agent Steps:
           : fallbackExplanation,
         requiresConfirmation: true,
         type: "NONE",
+        success: false,
       };
     }
   } catch (error: any) {
@@ -326,6 +331,7 @@ Agent Steps:
       explanation: `An unexpected error occurred: ${error.message}`,
       requiresConfirmation: true,
       type: "NONE",
+      success: false,
     };
   }
 };

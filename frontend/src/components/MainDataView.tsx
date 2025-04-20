@@ -33,6 +33,7 @@ import TablePlaceholder from "./TablePlaceHolder";
 import SettingsModal from "./SettingModal";
 import DataTable from "./DataTable";
 import { DataTableFilterAI } from "@/components/DataTableFilterAI";
+import { SqlAgentResponse } from "@/lib/ai";
 
 // Use `any` for row data initially, can be refined if needed
 type TableRowData = Record<string, any>;
@@ -334,9 +335,15 @@ const MainDataView = ({
     onClose();
   });
 
-  const handleApplyFilter = (query: string) => {
-    resetTableDataPrameters();
-    setSqlFromAI(query);
+  const handleApplyAIGeneratedQuery = (result: SqlAgentResponse) => {
+    if (result.success) {
+      resetTableDataPrameters();
+      setSqlFromAI(result.query);
+    } else {
+      toast.error("Error applying AI generated query", {
+        description: result.explanation,
+      });
+    }
   };
 
   const table: ReactTable<TableRowData> = useReactTable({
@@ -386,7 +393,9 @@ const MainDataView = ({
               disabled={tableViewState !== "data"}
             />
 
-            <DataTableFilterAI onApplyQueryFromAI={handleApplyFilter} />
+            <DataTableFilterAI
+              onApplyQueryFromAI={handleApplyAIGeneratedQuery}
+            />
           </div>
 
           <div className="flex flex-nowrap items-center gap-2 ">
