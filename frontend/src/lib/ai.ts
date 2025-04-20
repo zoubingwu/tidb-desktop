@@ -286,7 +286,7 @@ Agent Steps:
     // --- Process the Stream ---
     for await (const part of fullStream) {
       // Log every part for debugging
-      console.log("Stream Part:", JSON.stringify(part, null, 2));
+      console.log("Stream Part:", part);
 
       // Yield intermediate steps based on the stream part type
       switch (part.type) {
