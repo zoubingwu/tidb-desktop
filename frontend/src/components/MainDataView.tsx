@@ -258,7 +258,7 @@ const MainDataView = ({
 
     return [];
   }, [tableData?.columns, sqlFromAIResult]);
-  console.log(columns);
+
   const totalRowCount = tableData?.totalRows;
 
   // --- Calculate pagination values ---
@@ -279,9 +279,6 @@ const MainDataView = ({
 
   const tableViewState = (() => {
     if (isFetchingTableData || isLoadingDatabases || isExecutingSQLFromAI) {
-      console.log("isFetchingTableData", isFetchingTableData);
-      console.log("isLoadingDatabases", isLoadingDatabases);
-      console.log("isExecutingSQLFromAI", isExecutingSQLFromAI);
       return "loading";
     }
 
@@ -300,8 +297,6 @@ const MainDataView = ({
 
     return "empty";
   })();
-
-  console.log("tableViewState", tableViewState);
 
   const handleSelectDatabase = useMemoizedFn((dbName: string) => {
     fetchTables(dbName);
