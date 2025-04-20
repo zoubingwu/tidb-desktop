@@ -17,12 +17,11 @@ const openrouter = createOpenRouter({
 
 // Use a model known to work well with tools and reasoning
 // Consider gpt-4o or claude-3.5-sonnet if gemini-pro struggles
-// const model = openrouter.chat("anthropic/claude-3.5-sonnet");
-const model = openrouter.chat("google/gemini-2.5-pro-exp-03-25:free");
+const defaultModel = openrouter.chat("anthropic/claude-3.5-sonnet");
 
 export const inferConnectionDetails = async (textFromClipboard: string) => {
   const { object } = await generateObject({
-    model,
+    model: openrouter.chat("google/gemini-2.5-pro-exp-03-25:free"),
     prompt: `
     Analyze the following text and extract database connection details. Respond ONLY with a JSON object containing the keys "host", "port", "user", "password", "dbName", and "useTLS" (boolean, true if TLS/SSL is mentioned or implied or it is tidbcloud.com, otherwise false). If a value is not found, use an empty string "" for string fields or false for the boolean.
 
@@ -254,7 +253,7 @@ Agent Steps:
   try {
     // --- Run the Agent ---
     const { toolCalls, finishReason, text, usage } = await generateText({
-      model,
+      model: defaultModel,
       system: systemPrompt,
       prompt: userPrompt,
       tools: agentTools,
