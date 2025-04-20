@@ -52,6 +52,7 @@ import {
 } from "@/lib/filters";
 import type { ColumnOption, ElementType } from "@/lib/filters";
 import { useUncontrolled } from "@/hooks/use-uncontrolled";
+import { TooltipTrigger } from "@/components/ui/tooltip";
 
 // Type to represent a serializable filter that can be sent to the server
 export type ServerSideFilter = {
@@ -259,14 +260,16 @@ export function FilterSelector<TData>({
       }}
     >
       <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(hasFilters && "w-fit !px-2")}
-          disabled={disabled}
-        >
-          <Filter className="size-4" />
-        </Button>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(hasFilters && "w-fit !px-2")}
+            disabled={disabled}
+          >
+            <Filter className="size-4" />
+          </Button>
+        </TooltipTrigger>
       </PopoverTrigger>
       <PopoverContent
         align="start"

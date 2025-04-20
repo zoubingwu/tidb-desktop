@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,7 @@ import {
   type ThemeMode,
 } from "@/components/ThemeProvider";
 import { capitalize } from "@/lib/utils";
-import { memo } from "react";
+import { TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SettingsModalProps {
   children: React.ReactNode; // To wrap the trigger button
@@ -42,7 +43,9 @@ function SettingsModal({ children }: SettingsModalProps) {
 
   return (
     <Dialog>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogTrigger asChild>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+      </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Preferences</DialogTitle>

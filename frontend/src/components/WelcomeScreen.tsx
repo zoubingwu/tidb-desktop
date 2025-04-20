@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import { Loader2Icon, PlusCircleIcon, SettingsIcon } from "lucide-react";
-import { ConnectionCard } from "./ConnectionCard";
-import { ConnectionFormDialog } from "./ConnectionForm";
 import {
   ListSavedConnections,
   ConnectUsingSaved,
@@ -12,6 +11,8 @@ import {
 import { services } from "wailsjs/go/models";
 import { formatDistanceToNow } from "date-fns";
 import SettingsModal from "./SettingModal";
+import { ConnectionCard } from "./ConnectionCard";
+import { ConnectionFormDialog } from "./ConnectionForm";
 
 type SavedConnectionsMap = Record<string, services.ConnectionDetails>;
 
@@ -98,12 +99,14 @@ const WelcomeScreen = () => {
             <PlusCircleIcon className="mr-2 h-4 w-4" /> Add New Connection
           </Button>
 
-          <SettingsModal>
-            <Button variant="outline" className="size-9">
-              <SettingsIcon className="h-4 w-4" />
-              <span className="sr-only">Preferences</span>
-            </Button>
-          </SettingsModal>
+          <Tooltip>
+            <SettingsModal>
+              <Button variant="outline" className="size-9">
+                <SettingsIcon className="h-4 w-4" />
+                <span className="sr-only">Preferences</span>
+              </Button>
+            </SettingsModal>
+          </Tooltip>
         </div>
       </header>
 

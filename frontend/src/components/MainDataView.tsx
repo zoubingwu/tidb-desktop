@@ -24,6 +24,12 @@ import { ColumnDataTypeIcons, mapDbColumnTypeToFilterType } from "@/lib/utils";
 import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
 import { Button } from "@/components/ui/button";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   ListTables,
   ListDatabases,
   ExecuteSQL,
@@ -383,45 +389,69 @@ const MainDataView = ({
 
         <div className="flex items-center justify-between px-2 py-2 bg-background gap-2">
           <div className="flex gap-2">
-            <DataTableFilter
-              table={table}
-              onChange={handleFilterChange}
-              disabled={tableViewState !== "data" || !!sqlFromAIResult}
-            />
+            <Tooltip>
+              <DataTableFilter
+                table={table}
+                onChange={handleFilterChange}
+                disabled={tableViewState !== "data" || !!sqlFromAIResult}
+              />
+              <TooltipContent>
+                <p>Filter</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
 
-          <div className="flex flex-nowrap items-center gap-2">
-            <DataTablePagination
-              table={table}
-              totalRowCount={totalRowCount}
-              disabled={tableViewState !== "data"}
-            />
-
-            <div className="flex gap-2">
-              <DataTableFilterAI
-                currentDb={currentDb}
-                currentTable={currentTable}
-                onApplyQueryFromAI={handleApplyAIGeneratedQuery}
+          <TooltipProvider delayDuration={0}>
+            <div className="flex flex-nowrap items-center gap-2">
+              <DataTablePagination
+                table={table}
+                totalRowCount={totalRowCount}
+                disabled={tableViewState !== "data"}
               />
 
-              <SettingsModal>
-                <Button title="Preferences" variant="ghost" size="icon">
-                  <SettingsIcon className="h-4 w-4" />
-                  <span className="sr-only">Preferences</span>
-                </Button>
-              </SettingsModal>
+              <div className="flex gap-2">
+                <Tooltip>
+                  <DataTableFilterAI
+                    currentDb={currentDb}
+                    currentTable={currentTable}
+                    onApplyQueryFromAI={handleApplyAIGeneratedQuery}
+                  />
+                  <TooltipContent>
+                    <p>Ask AI</p>
+                  </TooltipContent>
+                </Tooltip>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleClose}
-                title="Disconnect"
-              >
-                <UnplugIcon className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-              </Button>
+                <Tooltip>
+                  <SettingsModal>
+                    <Button title="Preferences" variant="ghost" size="icon">
+                      <SettingsIcon className="h-4 w-4" />
+                      <span className="sr-only">Preferences</span>
+                    </Button>
+                  </SettingsModal>
+                  <TooltipContent>
+                    <p>Preferences</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleClose}
+                      title="Disconnect"
+                    >
+                      <UnplugIcon className="h-4 w-4" />
+                      <span className="sr-only">Disconnect</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Disconnect</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
-          </div>
+          </TooltipProvider>
         </div>
       </div>
     </div>

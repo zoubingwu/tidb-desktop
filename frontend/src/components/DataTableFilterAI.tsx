@@ -21,6 +21,7 @@ import {
   EyeIcon,
 } from "lucide-react";
 import { format } from "sql-formatter";
+import { TooltipTrigger } from "./ui/tooltip";
 
 // Expanded message type to better represent stream states
 type DisplayBlock = {
@@ -312,10 +313,12 @@ export const DataTableFilterAI = ({
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <SparkleIcon className="size-4" />
-          <span className="sr-only">AI Filter</span>
-        </Button>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon">
+            <SparkleIcon className="size-4" />
+            <span className="sr-only">AI Filter</span>
+          </Button>
+        </TooltipTrigger>
       </PopoverTrigger>
       <PopoverContent className="w-[400px] p-0" align="end">
         <div className="flex flex-col w-full">
