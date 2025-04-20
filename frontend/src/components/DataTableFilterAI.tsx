@@ -255,7 +255,7 @@ export const DataTableFilterAI = ({
     switch (block.type) {
       case "user":
         return (
-          <div className={`user ${baseClasses} bg-muted/50 mb-2`}>
+          <div className={`user ${baseClasses} bg-muted mb-2`}>
             {block.content}
           </div>
         );
