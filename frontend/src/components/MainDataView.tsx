@@ -1,5 +1,5 @@
 import { useMemoizedFn } from "ahooks";
-import { useMemo, useEffect, memo } from "react";
+import { useMemo, useEffect, memo, useState } from "react";
 import { useImmer } from "use-immer";
 import { SettingsIcon, UnplugIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import {
   PaginationState,
   Updater,
   Table as ReactTable,
+  CellContext,
 } from "@tanstack/react-table";
 import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -22,10 +23,16 @@ import { filterFn } from "@/lib/filters";
 import { ColumnDataTypeIcons, mapDbColumnTypeToFilterType } from "@/lib/utils";
 import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
 import { Button } from "@/components/ui/button";
-import { ListTables, GetTableData, ListDatabases } from "wailsjs/go/main/App";
+import {
+  ListTables,
+  ListDatabases,
+  ExecuteSQL,
+  GetTableData,
+} from "wailsjs/go/main/App";
 import TablePlaceholder from "./TablePlaceHolder";
 import SettingsModal from "./SettingModal";
 import DataTable from "./DataTable";
+import { DataTableFilterAI } from "@/components/DataTableFilterAI";
 
 // Use `any` for row data initially, can be refined if needed
 type TableRowData = Record<string, any>;
@@ -34,6 +41,13 @@ type TableRowData = Record<string, any>;
 type DatabaseTreeData = DatabaseTreeItem[];
 
 const defaultPageSize = 50;
+const defaultTableDataParameters = {
+  dbName: "",
+  tableName: "",
+  pageSize: defaultPageSize,
+  pageIndex: 0,
+  serverFilters: [],
+};
 
 const MainDataView = ({
   onClose,
@@ -49,18 +63,18 @@ const MainDataView = ({
     pageSize: number;
     pageIndex: number;
     serverFilters: ServerSideFilter[];
-  }>({
-    dbName: "",
-    tableName: "",
-    pageSize: defaultPageSize,
-    pageIndex: 0,
-    serverFilters: [],
-  });
+  }>(defaultTableDataParameters);
   const currentDb = tableDataPrameters.dbName;
   const currentTable = tableDataPrameters.tableName;
   const currentPageSize = tableDataPrameters.pageSize;
   const currentPageIndex = tableDataPrameters.pageIndex;
   const currentServerFilters = tableDataPrameters.serverFilters;
+
+  const resetTableDataPrameters = useMemoizedFn(() => {
+    setTableDataPrameters(defaultTableDataParameters);
+  });
+
+  const [sqlFromAI, setSqlFromAI] = useState<string>("");
 
   const updateDatabaseTree = (
     dbName: string,
@@ -128,7 +142,7 @@ const MainDataView = ({
     },
   });
 
-  const { isPending: isFetchingTableData, data: tableData } = useQuery({
+  const { data: tableData, isFetching: isFetchingTableData } = useQuery({
     enabled: !!currentDb && !!currentTable,
     queryKey: [
       "tableData",
@@ -136,7 +150,6 @@ const MainDataView = ({
       currentTable,
       currentPageSize,
       currentPageIndex,
-      currentServerFilters,
     ],
     queryFn: async () => {
       const dbName = currentDb;
@@ -146,8 +159,12 @@ const MainDataView = ({
           ? { filters: currentServerFilters }
           : null;
 
+      const titleTarget = tableName
+        ? `${dbName}.${tableName}`
+        : "SQL Query Result";
+
       try {
-        onUpdateTitle(`Fetching data from ${dbName}.${tableName}...`);
+        onUpdateTitle(`Fetching data from ${titleTarget}...`);
         const res = await GetTableData(
           dbName,
           tableName,
@@ -159,9 +176,9 @@ const MainDataView = ({
 
         return res;
       } catch (error) {
-        onUpdateTitle(`Error fetching ${dbName}.${tableName}`);
+        onUpdateTitle(`Error fetching ${titleTarget}`);
         toast.error("Error fetching table data", {
-          description: `Error fetching ${dbName}.${tableName}: ${error}`,
+          description: `Error fetching ${titleTarget}: ${error}`,
         });
         throw error;
       }
@@ -169,7 +186,24 @@ const MainDataView = ({
     placeholderData: keepPreviousData,
   });
 
-  // --- Handle server-side filter changes ---
+  const { data: sqlFromAIResult, isFetching: isExecutingSQLFromAI } = useQuery({
+    enabled: !!sqlFromAI,
+    queryKey: ["sqlFromAI", sqlFromAI],
+    queryFn: async () => {
+      try {
+        onUpdateTitle("Executing SQL from AI...");
+        const res = await ExecuteSQL(sqlFromAI);
+        onUpdateTitle("SQL from AI executed");
+        return res;
+      } catch (error) {
+        toast.error("Error fetching SQL from AI", {
+          description: `Error fetching SQL from AI: ${error}`,
+        });
+        throw error;
+      }
+    },
+  });
+
   const handleFilterChange = useMemoizedFn((filters: ServerSideFilter[]) => {
     setTableDataPrameters((draft) => {
       draft.serverFilters = filters;
@@ -177,43 +211,54 @@ const MainDataView = ({
     });
   });
 
-  // --- Derive columns and data from table data ---
   const columns = useMemo<ColumnDef<TableRowData>[]>(() => {
-    if (!tableData?.columns) return [];
+    const renderCell = (info: CellContext<TableRowData, unknown>) => {
+      const value = info.getValue();
+      if (value === null || value === undefined) {
+        // Style NULL values
+        return <span className="text-muted-foreground italic">NULL</span>;
+      }
+      if (value === "") {
+        // Style empty strings differently
+        return <span className="text-muted-foreground italic">EMPTY</span>;
+      }
+      // Render other values as strings
+      return String(value);
+    };
+    if (tableData?.columns) {
+      return [
+        ...(tableData.columns.map((col): ColumnDef<TableRowData> => {
+          const type = mapDbColumnTypeToFilterType(col.type);
 
-    return [
-      ...(tableData.columns.map((col): ColumnDef<TableRowData> => {
-        const type = mapDbColumnTypeToFilterType(col.type);
+          return {
+            accessorKey: col.name,
+            header: col.name,
+            cell: renderCell,
+            filterFn: filterFn(type),
+            meta: {
+              displayName: col.name,
+              type: type,
+              icon: ColumnDataTypeIcons[type],
+            },
+          };
+        }) || []),
+      ];
+    }
 
+    if (sqlFromAIResult?.rows?.length) {
+      const row = sqlFromAIResult.rows.at(0);
+      return Object.entries(row).map(([key]) => {
         return {
-          accessorKey: col.name,
-          header: col.name,
-          cell: (info) => {
-            const value = info.getValue();
-            if (value === null || value === undefined) {
-              // Style NULL values
-              return <span className="text-muted-foreground italic">NULL</span>;
-            }
-            if (value === "") {
-              // Style empty strings differently
-              return (
-                <span className="text-muted-foreground italic">EMPTY</span>
-              );
-            }
-            // Render other values as strings
-            return String(value);
-          },
-          filterFn: filterFn(type),
-          meta: {
-            displayName: col.name,
-            type: type,
-            icon: ColumnDataTypeIcons[type],
-          },
+          accessorKey: key,
+          header: key,
+          cell: renderCell,
         };
-      }) || []),
-    ];
-  }, [tableData?.columns]);
+      });
+    }
 
+    return [];
+  }, [tableData?.columns, sqlFromAIResult]);
+  console.log(columns);
   const totalRowCount = tableData?.totalRows;
 
   // --- Calculate pagination values ---
@@ -233,19 +278,30 @@ const MainDataView = ({
   }, [totalRowCount, currentPageSize]);
 
   const tableViewState = (() => {
-    if (isFetchingTableData || isLoadingDatabases) return "loading";
+    if (isFetchingTableData || isLoadingDatabases || isExecutingSQLFromAI) {
+      console.log("isFetchingTableData", isFetchingTableData);
+      console.log("isLoadingDatabases", isLoadingDatabases);
+      console.log("isExecutingSQLFromAI", isExecutingSQLFromAI);
+      return "loading";
+    }
 
     if (
       currentDb &&
       currentTable &&
       tableData?.rows?.length &&
-      tableData?.columns.length
+      tableData?.columns?.length
     ) {
       return "data";
     }
 
+    if (sqlFromAIResult) {
+      return "ai";
+    }
+
     return "empty";
   })();
+
+  console.log("tableViewState", tableViewState);
 
   const handleSelectDatabase = useMemoizedFn((dbName: string) => {
     fetchTables(dbName);
@@ -283,7 +339,11 @@ const MainDataView = ({
     onClose();
   });
 
-  // --- TanStack Table Instance ---
+  const handleApplyFilter = (query: string) => {
+    resetTableDataPrameters();
+    setSqlFromAI(query);
+  };
+
   const table: ReactTable<TableRowData> = useReactTable({
     data: tableData?.rows || [],
     columns,
@@ -324,31 +384,41 @@ const MainDataView = ({
         </div>
 
         <div className="flex items-center justify-between px-2 py-2 bg-background gap-2">
-          <DataTableFilter table={table} onChange={handleFilterChange} />
-
-          <DataTablePagination
-            table={table}
-            totalRowCount={totalRowCount}
-            disabled={isFetchingTableData || !tableData}
-          />
-
           <div className="flex gap-2">
-            <SettingsModal>
-              <Button title="Preferences" variant="ghost" size="icon">
-                <SettingsIcon className="h-4 w-4" />
-                <span className="sr-only">Preferences</span>
-              </Button>
-            </SettingsModal>
+            <DataTableFilter
+              table={table}
+              onChange={handleFilterChange}
+              disabled={tableViewState !== "data"}
+            />
 
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleClose}
-              title="Disconnect"
-            >
-              <UnplugIcon className="h-4 w-4" />
-              <span className="sr-only">Close</span>
-            </Button>
+            <DataTableFilterAI onApplyQueryFromAI={handleApplyFilter} />
+          </div>
+
+          <div className="flex flex-nowrap items-center gap-2 ">
+            <DataTablePagination
+              table={table}
+              totalRowCount={totalRowCount}
+              disabled={tableViewState !== "data"}
+            />
+
+            <div className="flex gap-2">
+              <SettingsModal>
+                <Button title="Preferences" variant="ghost" size="icon">
+                  <SettingsIcon className="h-4 w-4" />
+                  <span className="sr-only">Preferences</span>
+                </Button>
+              </SettingsModal>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleClose}
+                title="Disconnect"
+              >
+                <UnplugIcon className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
