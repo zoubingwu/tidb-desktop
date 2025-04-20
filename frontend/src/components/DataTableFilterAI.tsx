@@ -15,6 +15,7 @@ import {
   Loader2,
   Terminal, // For tool calls/results
 } from "lucide-react";
+import { format } from "sql-formatter";
 
 // Expanded message type to better represent stream states
 type DisplayBlock = {
@@ -48,6 +49,8 @@ export const DataTableFilterAI = ({
   const [isLoading, setIsLoading] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const uniqueId = useId(); // For generating keys
+
+  console.log("displayBlocks", displayBlocks);
 
   useEffect(() => {
     // Scroll to bottom when blocks change
@@ -184,7 +187,7 @@ export const DataTableFilterAI = ({
                     <p>{finalResult.explanation}</p>
                     {finalResult.query && (
                       <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-sm overflow-x-auto">
-                        {finalResult.query}
+                        {format(finalResult.query, { language: "tidb" })}
                       </pre>
                     )}
                   </div>
@@ -238,7 +241,7 @@ export const DataTableFilterAI = ({
 
   const renderBlockContent = (block: DisplayBlock) => {
     const baseClasses =
-      "max-w-[366px] rounded-md break-words text-sm mb-3 p-2 w-full";
+      "max-w-[366px] rounded-md break-words text-sm mb-3 p-2 w-full select-text!";
     switch (block.type) {
       case "user":
         return (
