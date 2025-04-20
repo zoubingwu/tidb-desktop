@@ -274,7 +274,7 @@ Agent Steps:
 
   try {
     // --- Stream the Agent's Response ---
-    const { fullStream } = await streamText({
+    const { fullStream } = streamText({
       model: defaultModel,
       system: systemPrompt,
       prompt: userPrompt,
