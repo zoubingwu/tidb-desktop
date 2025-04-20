@@ -49,6 +49,9 @@ const defaultTableDataParameters = {
   pageIndex: 0,
   serverFilters: [],
 };
+const TITLE_BAR_HEIGHT = 28;
+const FOOTER_HEIGHT = 40;
+const TABLE_HEIGHT = window.innerHeight - TITLE_BAR_HEIGHT - FOOTER_HEIGHT;
 
 const MainDataView = ({
   onClose,
@@ -375,10 +378,10 @@ const MainDataView = ({
 
       <div className="flex-grow flex flex-col overflow-hidden">
         <div className="flex-grow overflow-auto relative">
-          <TablePlaceholder animate={tableViewState === "loading"} />
-
-          {tableViewState === "data" && (
-            <DataTable<TableRowData> table={table} />
+          {tableViewState === "data" ? (
+            <DataTable<TableRowData> table={table} height={TABLE_HEIGHT} />
+          ) : (
+            <TablePlaceholder animate={tableViewState === "loading"} />
           )}
         </div>
 
