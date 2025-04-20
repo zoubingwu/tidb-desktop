@@ -150,7 +150,7 @@ func (a *App) DeleteSavedConnection(name string) error {
 // --- SQL Execution Method ---
 
 // ExecuteSQL uses the *active session connection* details to execute a query.
-func (a *App) ExecuteSQL(query string) (any, error) {
+func (a *App) ExecuteSQL(query string) (*services.SQLResult, error) {
 	if a.ctx == nil {
 		return nil, fmt.Errorf("app context not initialized")
 	}

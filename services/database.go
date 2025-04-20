@@ -23,6 +23,14 @@ type ConnectionDetails struct {
 	LastUsed string `json:"lastUsed,omitempty"`
 }
 
+// SQLResult defines a standard structure for SQL execution results.
+type SQLResult struct {
+	Rows         []map[string]any `json:"rows,omitempty"`         // Used for SELECT queries
+	RowsAffected *int64           `json:"rowsAffected,omitempty"` // Used for INSERT/UPDATE/DELETE
+	LastInsertId *int64           `json:"lastInsertId,omitempty"` // Used for INSERT
+	Message      string           `json:"message,omitempty"`      // Optional message (e.g., for commands like USE)
+}
+
 // DatabaseService handles DB operations.
 type DatabaseService struct{}
 
@@ -89,19 +97,24 @@ func (s *DatabaseService) TestConnection(ctx context.Context, details Connection
 	return true, nil
 }
 
-// ExecuteSQL runs a query and returns results or execution status.
-func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDetails, query string) (any, error) {
+// ExecuteSQL runs a query and returns results or execution status in a structured format.
+func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDetails, query string) (*SQLResult, error) {
 	db, err := getDBConnection(details)
 	if err != nil {
 		return nil, fmt.Errorf("connection setup failed: %w", err)
 	}
 	defer db.Close()
 
-	rows, err := db.Query(query)
-	if err == nil {
+	// Attempt to execute as a query first (SELECT, SHOW, DESCRIBE, etc.)
+	rows, queryErr := db.QueryContext(ctx, query)
+	if queryErr == nil {
 		defer rows.Close()
 		columns, err := rows.Columns()
 		if err != nil {
+			// This specific error check is useful for queries like `USE database;` which succeed but return no columns/rows.
+			if strings.Contains(err.Error(), "no columns in result set") {
+				return &SQLResult{Message: fmt.Sprintf("Command executed successfully: %s", query)}, nil
+			}
 			return nil, fmt.Errorf("failed to get columns: %w", err)
 		}
 
@@ -115,38 +128,72 @@ func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDeta
 
 			err = rows.Scan(scanArgs...)
 			if err != nil {
+				// Log the specific row scanning error
+				log.Printf("Error scanning row for query [%s]: %v", query, err)
+				// Depending on requirements, you might want to return partial results or a specific error
 				return nil, fmt.Errorf("failed to scan row: %w", err)
 			}
 
 			rowMap := make(map[string]any)
 			for i, col := range columns {
 				val := values[i]
+				// Convert []byte to string for better JSON representation
 				if b, ok := val.([]byte); ok {
 					rowMap[col] = string(b)
 				} else {
-					rowMap[col] = val
+					rowMap[col] = val // Keep other types as they are (int, float, null, etc.)
 				}
 			}
 			results = append(results, rowMap)
 		}
+
+		// Check for errors encountered during iteration
 		if err = rows.Err(); err != nil {
 			return nil, fmt.Errorf("error iterating rows: %w", err)
 		}
-		return results, nil
+
+		// Success, return rows
+		return &SQLResult{Rows: results}, nil
 	}
 
-	result, execErr := db.Exec(query)
+	// If db.Query failed, try db.Exec (INSERT, UPDATE, DELETE, etc.)
+	result, execErr := db.ExecContext(ctx, query)
 	if execErr != nil {
-		// Return a combined error if both Query and Exec failed.
-		return nil, fmt.Errorf("query failed: Query error (%v), Exec error (%v)", err, execErr)
+		// If both Query and Exec failed, return a combined or more specific error.
+		// The initial queryErr might be more indicative (e.g., syntax error)
+		// Or execErr might be more relevant (e.g., constraint violation)
+		return nil, fmt.Errorf("SQL execution failed. Query attempt error: [%v]. Exec attempt error: [%v]", queryErr, execErr)
 	}
 
-	rowsAffected, _ := result.RowsAffected()
-	lastInsertId, _ := result.LastInsertId()
+	// Exec succeeded, return affected rows and last insert ID
+	rowsAffected, errRA := result.RowsAffected()
+	if errRA != nil {
+		log.Printf("Warning: could not get RowsAffected for query [%s]: %v", query, errRA)
+		// Don't fail the whole operation, just omit RowsAffected
+	}
 
-	return map[string]any{
-		"rowsAffected": rowsAffected,
-		"lastInsertId": lastInsertId,
+	lastInsertId, errLI := result.LastInsertId()
+	if errLI != nil {
+		// This error is common if the statement wasn't an INSERT or the table has no auto-increment key
+		// Log it but don't treat as fatal error for the operation itself
+		log.Printf("Notice: could not get LastInsertId for query [%s] (may not be applicable): %v", query, errLI)
+	}
+
+	// Use pointers for optional fields
+	var rowsAffectedPtr *int64
+	if errRA == nil {
+		rowsAffectedPtr = &rowsAffected
+	}
+	var lastInsertIdPtr *int64
+	// Only include LastInsertId if it's likely valid (>= 0) and there was no error getting it
+	if errLI == nil && lastInsertId >= 0 {
+		lastInsertIdPtr = &lastInsertId
+	}
+
+	return &SQLResult{
+		RowsAffected: rowsAffectedPtr,
+		LastInsertId: lastInsertIdPtr,
+		Message:      "Command executed successfully.", // Provide a generic success message for Exec results
 	}, nil
 }
 
@@ -184,38 +231,21 @@ type TableDataResponse struct {
 }
 
 // ListDatabases retrieves a list of database/schema names accessible by the connection.
+// Note: This function specifically expects rows, so we handle the SQLResult directly.
 func (s *DatabaseService) ListDatabases(ctx context.Context, details ConnectionDetails) ([]string, error) {
 	query := "SHOW DATABASES;"
-	result, err := s.ExecuteSQL(ctx, details, query)
+	sqlResult, err := s.ExecuteSQL(ctx, details, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list databases: %w", err)
 	}
 
-	dbRows, ok := result.([]map[string]any)
-	if !ok {
-		// Attempt to handle single-column results (less common but possible).
-		log.Printf("Debug: Unexpected result format (%T) when listing databases, attempting single-column parse.", result)
-		if rows, ok := result.([]any); ok {
-			var dbNames []string
-			for _, row := range rows {
-				if dbMap, ok := row.(map[string]any); ok {
-					for _, v := range dbMap {
-						if name, ok := v.(string); ok {
-							if name != "information_schema" && name != "performance_schema" && name != "mysql" && name != "sys" {
-								dbNames = append(dbNames, name)
-							}
-							break
-						}
-					}
-				}
-			}
-			if len(dbNames) > 0 {
-				return dbNames, nil
-			}
-		}
-		return nil, fmt.Errorf("unexpected result format when listing databases")
+	if sqlResult == nil || sqlResult.Rows == nil {
+		// This shouldn't happen for SHOW DATABASES unless there's a connection issue masked earlier
+		log.Printf("Debug: Unexpected nil result or nil rows when listing databases.")
+		return nil, fmt.Errorf("unexpected result format when listing databases (expected rows)")
 	}
 
+	dbRows := sqlResult.Rows
 	var dbNames []string
 	columnKey := ""
 	if len(dbRows) > 0 {
@@ -241,6 +271,7 @@ func (s *DatabaseService) ListDatabases(ctx context.Context, details ConnectionD
 }
 
 // ListTables retrieves a list of table names from the specified database.
+// Note: This function specifically expects rows, so we handle the SQLResult directly.
 func (s *DatabaseService) ListTables(ctx context.Context, details ConnectionDetails, dbName string) ([]string, error) {
 	targetDB := dbName
 	if targetDB == "" {
@@ -251,19 +282,18 @@ func (s *DatabaseService) ListTables(ctx context.Context, details ConnectionDeta
 	}
 
 	query := fmt.Sprintf("SHOW TABLES FROM `%s`;", targetDB)
-	result, err := s.ExecuteSQL(ctx, details, query)
+	sqlResult, err := s.ExecuteSQL(ctx, details, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tables from database '%s': %w", targetDB, err)
 	}
 
-	tableRows, ok := result.([]map[string]any)
-	if !ok {
-		log.Printf("Debug: Unexpected result format (%T) when listing tables from %s.", targetDB, result)
-		if result == nil {
-			return []string{}, nil // Assume no tables found
-		}
-		return nil, fmt.Errorf("unexpected result format when listing tables from database '%s'", targetDB)
+	if sqlResult == nil || sqlResult.Rows == nil {
+		// SHOW TABLES returns empty result set (not error) if no tables, handle this.
+		log.Printf("Debug: SHOW TABLES for '%s' returned nil result or nil rows. Assuming no tables.", targetDB)
+		return []string{}, nil // No tables found is not an error
 	}
+
+	tableRows := sqlResult.Rows
 	if len(tableRows) == 0 {
 		return []string{}, nil // No tables found
 	}
@@ -291,8 +321,8 @@ func (s *DatabaseService) ListTables(ctx context.Context, details ConnectionDeta
 }
 
 // GetTableData retrieves data (rows and columns) for a specific table with pagination and filtering.
+// Note: This function uses ExecuteSQL internally, needs careful handling of results.
 func (s *DatabaseService) GetTableData(ctx context.Context, details ConnectionDetails, dbName string, tableName string, limit int, offset int, filterParams *map[string]any) (*TableDataResponse, error) {
-
 	targetDB := dbName
 	if targetDB == "" {
 		targetDB = details.DBName
@@ -304,17 +334,25 @@ func (s *DatabaseService) GetTableData(ctx context.Context, details ConnectionDe
 		return nil, fmt.Errorf("table name is required")
 	}
 
-	// 1. Get column information.
+	// 1. Get column information using DESCRIBE.
 	descQuery := fmt.Sprintf("DESCRIBE `%s`.`%s`;", targetDB, tableName)
-	descResult, err := s.ExecuteSQL(ctx, details, descQuery)
+	descSQLResult, err := s.ExecuteSQL(ctx, details, descQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to describe table '%s.%s': %w", targetDB, tableName, err)
 	}
-	descRows, ok := descResult.([]map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("unexpected result format when describing table '%s.%s'", targetDB, tableName)
+	if descSQLResult == nil || descSQLResult.Rows == nil {
+		// Check if table exists before failing completely
+		exists, existsErr := s.checkTableExists(ctx, details, targetDB, tableName)
+		if existsErr != nil {
+			log.Printf("Warning: Failed to verify existence of table %s.%s after DESCRIBE failed: %v", targetDB, tableName, existsErr)
+		}
+		if !exists {
+			return nil, fmt.Errorf("table '%s.%s' not found", targetDB, tableName)
+		}
+		return nil, fmt.Errorf("unexpected result format when describing table '%s.%s' (expected rows)", targetDB, tableName)
 	}
 
+	descRows := descSQLResult.Rows // Extract rows from SQLResult
 	var columns []TableColumn
 	for _, row := range descRows {
 		colName, _ := row["Field"].(string)
@@ -442,43 +480,43 @@ func (s *DatabaseService) GetTableData(ctx context.Context, details ConnectionDe
 	dataQuery += ";"
 
 	// 4. Execute the data query.
-	dataResult, err := s.ExecuteSQL(ctx, details, dataQuery)
+	dataSQLResult, err := s.ExecuteSQL(ctx, details, dataQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch data for table '%s.%s': %w", targetDB, tableName, err)
 	}
-	dataRows, ok := dataResult.([]map[string]any)
-	if !ok {
-		log.Printf("Warning: Unexpected result type (%T) or nil returned for data query on %s.%s, assuming empty.", dataResult, targetDB, tableName)
-		dataRows = []map[string]any{} // Ensure empty slice
+
+	var dataRows []map[string]any
+	if dataSQLResult != nil && dataSQLResult.Rows != nil {
+		dataRows = dataSQLResult.Rows // Use rows if available
+	} else {
+		log.Printf("Warning: Data query for %s.%s returned no rows or unexpected result type (%T), assuming empty.", targetDB, tableName, dataSQLResult)
+		dataRows = []map[string]any{} // Ensure empty slice if no rows returned
 	}
 
 	// 5. Get Total Row Count (with the same filters).
 	var totalRows *int64
 	countQuery := fmt.Sprintf("SELECT COUNT(*) as total FROM `%s`.`%s`%s;", targetDB, tableName, whereClause)
-	countResult, countErr := s.ExecuteSQL(ctx, details, countQuery)
-	if countErr == nil {
-		if countRows, ok := countResult.([]map[string]any); ok && len(countRows) > 0 {
-			if totalValRaw, ok := countRows[0]["total"]; ok {
-				switch v := totalValRaw.(type) {
-				case int64:
-					totalRows = &v
-				case int:
-					temp := int64(v)
-					totalRows = &temp
-				case float64:
-					temp := int64(v)
-					totalRows = &temp
-				default:
-					log.Printf("Warning: Unexpected type for COUNT(*) result: %T\n", v)
-				}
-			} else {
-				log.Printf("Warning: COUNT(*) query for %s.%s returned rows but no 'total' column.", targetDB, tableName)
+	countSQLResult, countErr := s.ExecuteSQL(ctx, details, countQuery) // Use ExecuteSQL here too
+	if countErr == nil && countSQLResult != nil && countSQLResult.Rows != nil && len(countSQLResult.Rows) > 0 {
+		countRows := countSQLResult.Rows // Extract rows
+		if totalValRaw, ok := countRows[0]["total"]; ok {
+			switch v := totalValRaw.(type) {
+			case int64:
+				totalRows = &v
+			case int:
+				temp := int64(v)
+				totalRows = &temp
+			case float64:
+				temp := int64(v)
+				totalRows = &temp
+			default:
+				log.Printf("Warning: Unexpected type for COUNT(*) result: %T\n", v)
 			}
 		} else {
-			log.Printf("Warning: COUNT(*) query for %s.%s returned unexpected format: %T", targetDB, tableName, countResult)
+			log.Printf("Warning: COUNT(*) query for %s.%s returned rows but no 'total' column.", targetDB, tableName)
 		}
 	} else {
-		log.Printf("Warning: Failed to get total row count for table %s.%s: %v", targetDB, tableName, countErr)
+		log.Printf("Warning: Failed to get total row count for table %s.%s: %v (Result: %+v)", targetDB, tableName, countErr, countSQLResult)
 	}
 
 	// 6. Construct the response.
@@ -492,6 +530,7 @@ func (s *DatabaseService) GetTableData(ctx context.Context, details ConnectionDe
 }
 
 // GetTableSchema retrieves the detailed schema/structure for a specific table using information_schema.
+// This needs direct *sql.DB access for Scan handling with nulls, so it doesn't use ExecuteSQL.
 func (s *DatabaseService) GetTableSchema(ctx context.Context, details ConnectionDetails, dbName string, tableName string) (*TableSchema, error) {
 	targetDB := dbName
 	if targetDB == "" {
@@ -576,6 +615,26 @@ func (s *DatabaseService) GetTableSchema(ctx context.Context, details Connection
 	}
 
 	return schema, nil
+}
+
+// Helper function to check if a table exists (used in GetTableData error handling)
+func (s *DatabaseService) checkTableExists(ctx context.Context, details ConnectionDetails, dbName string, tableName string) (bool, error) {
+	db, err := getDBConnection(details)
+	if err != nil {
+		return false, fmt.Errorf("connection setup failed for table existence check: %w", err)
+	}
+	defer db.Close()
+
+	query := "SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1;"
+	var exists int
+	err = db.QueryRowContext(ctx, query, dbName, tableName).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil // Table does not exist
+	}
+	if err != nil {
+		return false, fmt.Errorf("error checking table existence for '%s.%s': %w", dbName, tableName, err)
+	}
+	return exists == 1, nil
 }
 
 
