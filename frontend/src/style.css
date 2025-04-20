@@ -61,6 +61,9 @@
   --shadow-2xl: var(--shadow-2xl);
 }
 
+/* https://tailwindcss.com/docs/dark-mode#toggling-dark-mode-manually */
+@custom-variant dark (&:where(.dark, .dark *));
+
 * {
   user-select: none;
   -webkit-user-select: none; /* Safari */
