@@ -12,4 +12,11 @@ export default defineConfig({
       wailsjs: path.resolve(__dirname, "./wailsjs"),
     },
   },
+  // https://github.com/wailsapp/wails/issues/3064#issuecomment-2053632869
+  server: {
+    hmr: {
+      host: "localhost",
+      protocol: "ws",
+    },
+  },
 });
