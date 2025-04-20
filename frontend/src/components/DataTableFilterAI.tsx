@@ -18,7 +18,7 @@ import {
   CircleAlert,
   SparkleIcon,
   Loader2,
-  Terminal, // For tool calls/results
+  EyeIcon,
 } from "lucide-react";
 import { format } from "sql-formatter";
 
@@ -153,7 +153,7 @@ export const DataTableFilterAI = ({
                   {
                     id: `${uniqueId}-${call.toolCallId}-call`,
                     type: "ai-tool-call",
-                    content: `Calling tool: ${call.toolName}`,
+                    content: `Calling tool ${call.toolName}`,
                     meta: call, // Store full call if needed
                   },
                 ]);
@@ -199,7 +199,6 @@ export const DataTableFilterAI = ({
             ]);
             // Apply the query
             onApplyQueryFromAI(finalResult);
-            setIsOpen(false); // Close popover on success
             break;
 
           case "error":
@@ -243,47 +242,48 @@ export const DataTableFilterAI = ({
 
   const renderBlockContent = (block: DisplayBlock) => {
     const baseClasses =
-      "max-w-[366px] rounded-md break-words text-sm mb-3 p-2 w-full select-text!";
+      "max-w-[366px] rounded-md break-words text-sm p-2 w-full select-text!";
     switch (block.type) {
       case "user":
         return (
-          <div className={`user ${baseClasses} text-right`}>
+          <div className={`user ${baseClasses} bg-muted/50 mb-2`}>
             {block.content}
           </div>
         );
       case "ai-thinking":
         return (
           <div
-            className={`ai-thinking ${baseClasses} bg-muted/50 text-muted-foreground italic flex items-center gap-2`}
+            className={`ai-thinking ${baseClasses}  text-muted-foreground italic flex items-center gap-2`}
           >
             <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
             <span>{block.content}</span>
           </div>
         );
       case "ai-text":
-        return (
-          <div className={`ai-text ${baseClasses} bg-muted/50`}>
-            {block.content}
-          </div>
-        );
+        return <div className={`ai-text ${baseClasses} `}>{block.content}</div>;
       case "ai-tool-call":
         return (
           <div
-            className={`ai-tool-call ${baseClasses} bg-muted/50 flex items-center gap-2`}
+            className={`ai-tool-call ${baseClasses} flex items-center gap-2 text-muted-foreground text-xs`}
           >
-            <Terminal className="w-4 h-4 flex-shrink-0" />
+            <EyeIcon className="size-3 flex-shrink-0" />
             <p>{block.content as string}</p>
           </div>
         );
       case "ai-tool-result":
         return (
-          <div className={`ai-tool-result ${baseClasses} bg-muted/50`}>
+          <div
+            className={`ai-tool-result ${baseClasses} text-muted-foreground text-xs`}
+          >
             <Collapsible>
               <CollapsibleTrigger>
-                <div className="cursor-pointer">{block.content as string}</div>
+                <div className="cursor-pointer flex items-center gap-2">
+                  <EyeIcon className="size-3 flex-shrink-0" />
+                  <p>{block.content as string}</p>
+                </div>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-sm overflow-x-auto">
+                <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs max-h-[200px] overflow-auto">
                   {JSON.stringify(block.meta.result, null, 2)}
                 </pre>
               </CollapsibleContent>
@@ -292,9 +292,7 @@ export const DataTableFilterAI = ({
         );
       case "ai-final":
         return (
-          <div className={`ai-final ${baseClasses} bg-muted/50`}>
-            {block.content}
-          </div>
+          <div className={`ai-final ${baseClasses} `}>{block.content}</div>
         );
       case "error":
         return (
