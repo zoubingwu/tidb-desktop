@@ -1,4 +1,10 @@
-import { generateObject, generateText, tool } from "ai";
+import {
+  generateObject,
+  streamText,
+  tool,
+  type ToolCallPart,
+  type ToolResultPart,
+} from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 import {
@@ -55,6 +61,7 @@ const dbTools = {
         console.log("Tool Call: listDatabases");
         const dbs = await ListDatabases();
         console.log("Tool Result: listDatabases ->", dbs);
+        // Yielding intermediate tool results might be noisy, consider if needed
         return { success: true, databases: dbs };
       } catch (error: any) {
         console.error("Error calling ListDatabases:", error);
@@ -191,8 +198,21 @@ const sqlAgentResponseSchema = z.object({
 // --- Define the return type based on the Zod schema ---
 export type SqlAgentResponse = z.infer<typeof sqlAgentResponseSchema>;
 
+// --- Define the type for yielded events from the generator ---
+export type AgentStreamEvent =
+  | {
+      type: "step";
+      data: {
+        text?: string; // Intermediate text/thought from the LLM
+        toolCalls?: ToolCallPart[]; // Requested tool calls
+        toolResults?: ToolResultPart[]; // Results from executed tools
+        finishReason?: string; // Reason the step finished
+      };
+    }
+  | { type: "final"; data: SqlAgentResponse } // The final structured answer
+  | { type: "error"; error: string }; // An error occurred
+
 // --- The "Answer" Tool ---
-// This tool doesn't execute anything; its purpose is to structure the final output.
 const finalAnswerTool = tool({
   description:
     "Use this tool *only* as the final step to provide the generated SQL query and related information.",
@@ -200,23 +220,21 @@ const finalAnswerTool = tool({
   // No execute function means calling this tool terminates the agent's run.
 });
 
-// --- The New Agent Function ---
-export const generateSqlAgent = async (
+// --- The New Agent Generator Function ---
+export async function* generateSqlAgent(
   userPrompt: string,
   currentDbName?: string | null,
   currentTableName?: string | null,
-): Promise<SqlAgentResponse> => {
+): AsyncGenerator<AgentStreamEvent, void, unknown> {
   console.log(
-    `Starting generateSqlAgent for prompt: "${userPrompt}" (DB: ${currentDbName}, Table: ${currentTableName})`,
+    `Starting generateSqlAgent streamer for prompt: "${userPrompt}" (DB: ${currentDbName}, Table: ${currentTableName})`,
   );
 
-  // Combine dbTools and the final answer tool
   const agentTools = {
     ...dbTools,
     provideFinalAnswer: finalAnswerTool,
   };
 
-  // --- System Prompt for the Agent ---
   const systemPrompt = `
 You are an expert AI database assistant. Your goal is to translate the user's natural language request into a precise SQL query (compatible with MySQL/TiDB).
 
@@ -250,105 +268,182 @@ Agent Steps:
 **Respond ONLY by calling the \`provideFinalAnswer\` tool.**
 `.trim();
 
+  let accumulatedText = ""; // To accumulate text deltas if needed
+  let finalCallArgs: any = null; // To store the args for the final answer tool
+  let finalAnswerYielded = false; // Flag to ensure final answer is yielded only once
+
   try {
-    // --- Run the Agent ---
-    const { toolCalls, finishReason, text, usage } = await generateText({
+    // --- Stream the Agent's Response ---
+    const { fullStream } = await streamText({
       model: defaultModel,
       system: systemPrompt,
       prompt: userPrompt,
       tools: agentTools,
-      toolChoice: "required", // Force the final response into the answer tool
-      maxSteps: 8, // Allow multiple tool calls (adjust as needed)
-      // Optional: Callback for observing steps
-      onStepFinish: ({ text, toolCalls, toolResults, finishReason, usage }) => {
-        console.log("--- Step Finished ---");
-        console.log("Finish Reason:", finishReason);
-        if (text) console.log("Text:", text);
-        if (toolCalls)
-          console.log("Tool Calls:", JSON.stringify(toolCalls, null, 2));
-        if (toolResults)
-          console.log("Tool Results:", JSON.stringify(toolResults, null, 2));
-        console.log("Usage:", usage);
-        console.log("-------------------------");
-      },
+      toolChoice: "auto",
+      maxSteps: 5,
     });
 
-    console.log("Agent finished. Reason:", finishReason);
-    console.log("Final tool calls:", JSON.stringify(toolCalls, null, 2));
-    console.log("Usage:", usage);
+    // --- Process the Stream ---
+    for await (const part of fullStream) {
+      // Log every part for debugging
+      console.log("Stream Part:", JSON.stringify(part, null, 2));
 
-    // Extract the arguments from the final 'provideFinalAnswer' tool call
-    const finalCall = toolCalls?.find(
-      (call) => call.toolName === "provideFinalAnswer",
-    );
+      // Yield intermediate steps based on the stream part type
+      switch (part.type) {
+        case "text-delta":
+          accumulatedText += part.textDelta;
+          // Yield text delta as a step - can be noisy, might want to aggregate
+          yield {
+            type: "step",
+            data: { text: part.textDelta }, // Yielding delta directly
+          };
+          break;
 
-    if (finalCall && finalCall.type === "tool-call") {
-      // Validate the arguments against the schema
-      const validationResult = sqlAgentResponseSchema.safeParse(finalCall.args);
-      if (validationResult.success) {
-        console.log("Final Answer Parsed:", validationResult.data);
-        return validationResult.data;
-      } else {
-        console.error(
-          "Agent Error: Final answer tool arguments failed validation:",
-          validationResult.error,
-        );
-        // Fallback response if validation fails
-        return {
-          query: "",
-          explanation:
+        case "tool-call":
+          // Check if it's the final answer tool
+          if (part.toolName === "provideFinalAnswer") {
+            finalCallArgs = part.args; // Store args for final processing
+            // Don't yield yet, wait for stream end or explicit finish
+          } else {
+            // Yield the request for other tools
+            yield {
+              type: "step",
+              data: { toolCalls: [part] },
+            };
+          }
+          break;
+
+        case "tool-result":
+          // Yield the result of a tool execution
+          yield {
+            type: "step",
+            data: { toolResults: [part] },
+          };
+          break;
+
+        case "finish":
+          // Handle the finish event - might contain the final text if no tool was called last
+          console.log("Stream Finished. Reason:", part.finishReason);
+          console.log("Usage:", part.usage);
+          // If there was remaining text and no final tool call args captured, yield it
+          if (accumulatedText && !finalCallArgs && !finalAnswerYielded) {
+            yield {
+              type: "step",
+              data: { text: accumulatedText, finishReason: part.finishReason },
+            };
+          }
+          break;
+
+        case "error":
+          // Handle stream-level errors
+          console.error("Stream Error:", part.error);
+          yield { type: "error", error: `Stream error: ${part.error}` };
+          finalAnswerYielded = true; // Prevent yielding fallback final answer later
+          break;
+
+        default:
+          // Handle other potential part types if the API evolves
+          console.warn("Unhandled stream part type:", (part as any).type);
+      }
+
+      // If we have the final call arguments, process and yield the final answer
+      if (finalCallArgs && !finalAnswerYielded) {
+        const validationResult =
+          sqlAgentResponseSchema.safeParse(finalCallArgs);
+        if (validationResult.success) {
+          console.log("Final Answer Parsed:", validationResult.data);
+          yield { type: "final", data: validationResult.data };
+        } else {
+          console.error(
+            "Agent Error: Final answer tool arguments failed validation:",
+            validationResult.error,
+          );
+          const errorMsg =
             "Error: AI agent failed to provide a valid final answer structure. Validation failed: " +
-            validationResult.error.message,
+            validationResult.error.message;
+          yield { type: "error", error: errorMsg };
+          // Optionally yield a fallback final structure
+          yield {
+            type: "final",
+            data: {
+              query: "",
+              explanation: errorMsg,
+              requiresConfirmation: true,
+              type: "NONE",
+              success: false,
+            },
+          };
+        }
+        finalAnswerYielded = true; // Mark as yielded
+        finalCallArgs = null; // Clear args
+      }
+    }
+
+    // Fallback if the stream finishes without a proper final tool call yield
+    if (!finalAnswerYielded) {
+      console.error(
+        "Agent Warning: Stream finished, but 'provideFinalAnswer' tool call was not processed or yielded.",
+      );
+      const fallbackExplanation =
+        "Error: AI agent did not conclude with the expected final answer structure.";
+      const errorMsg = accumulatedText
+        ? `${fallbackExplanation}\nAgent final text output: ${accumulatedText}`
+        : fallbackExplanation;
+      yield { type: "error", error: errorMsg };
+      yield {
+        type: "final",
+        data: {
+          query: "",
+          explanation: errorMsg,
           requiresConfirmation: true,
           type: "NONE",
           success: false,
-        };
-      }
-    } else {
-      console.error(
-        "Agent Error: Did not receive the expected 'provideFinalAnswer' tool call.",
-      );
-      // Fallback response if the expected tool call is missing
-      const fallbackExplanation =
-        "Error: AI agent did not conclude with the expected final answer structure.";
-      // Attempt to extract any text generated as a potential explanation
-      const rawText = typeof text === "string" ? text : "";
-      return {
-        query: "",
-        explanation: rawText
-          ? `${fallbackExplanation}\nAgent raw text output: ${rawText}`
-          : fallbackExplanation,
-        requiresConfirmation: true,
-        type: "NONE",
-        success: false,
+        },
       };
     }
   } catch (error: any) {
-    console.error("Error during generateSqlAgent execution:", error);
-    return {
-      query: "",
-      explanation: `An unexpected error occurred: ${error.message}`,
-      requiresConfirmation: true,
-      type: "NONE",
-      success: false,
-    };
+    console.error("Error during generateSqlAgent stream processing:", error);
+    const errorMsg = `An unexpected error occurred: ${error.message}`;
+    if (!finalAnswerYielded) {
+      // Avoid double error/final yield
+      yield { type: "error", error: errorMsg };
+      yield {
+        type: "final",
+        data: {
+          query: "",
+          explanation: errorMsg,
+          requiresConfirmation: true,
+          type: "NONE",
+          success: false,
+        },
+      };
+    }
   }
-};
+}
 
 // --- Example Usage (replace with your actual call) ---
-// async function testAgent() {
+// async function testAgentGenerator() {
 //   const db = 'testDB';
 //   const table = 'users';
-//   const prompt = `update the user with id 5 set their status to 'inactive'`;
-//   // const prompt = "list all tables in the 'information_schema' database";
-//   // const prompt = "show me 3 products with price > 100 order by name";
-//   // const prompt = "drop the customers table"; // Example of a dangerous request
-//   // const prompt = "what tables are there?"; // Example requiring tool use
+//   const prompt = `show me the 5 newest users`;
 
-//   const result = await generateSqlAgent(prompt, db, table);
-//   console.log('\n--- FINAL AGENT RESULT ---');
-//   console.log(JSON.stringify(result, null, 2));
-//   console.log('--------------------------');
+//   console.log('\n--- STARTING AGENT GENERATOR ---');
+//   try {
+//     for await (const event of generateSqlAgent(prompt, db, table)) {
+//       console.log(`\n--- Received Event (Type: ${event.type}) ---`);
+//       if (event.type === 'step') {
+//         console.log('Step Data:', event.data);
+//       } else if (event.type === 'final') {
+//         console.log('Final Result:', event.data);
+//       } else if (event.type === 'error') {
+//         console.error('Error Event:', event.error);
+//       }
+//       console.log('------------------------------------');
+//     }
+//     console.log('\n--- AGENT GENERATOR FINISHED ---');
+//   } catch (e) {
+//     console.error("\n--- AGENT GENERATOR FAILED ---", e);
+//   }
 // }
 
-// testAgent(); // Uncomment to run a test
+// testAgentGenerator(); // Uncomment to run a test

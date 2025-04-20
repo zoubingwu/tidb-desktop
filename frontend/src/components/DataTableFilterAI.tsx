@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -9,18 +9,27 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { generateSqlAgent, SqlAgentResponse } from "@/lib/ai";
 import {
-  Bot,
   SendHorizonal,
-  User,
   CircleAlert,
   SparkleIcon,
+  Loader2,
+  Terminal, // For tool calls/results
 } from "lucide-react";
 
-interface Message {
+// Expanded message type to better represent stream states
+type DisplayBlock = {
   id: string;
-  role: "user" | "assistant" | "system" | "error";
-  content: string;
-}
+  type:
+    | "user"
+    | "ai-thinking"
+    | "ai-text"
+    | "ai-tool-call"
+    | "ai-tool-result"
+    | "ai-final"
+    | "error";
+  content: string | React.ReactNode; // Allow React nodes for better formatting
+  meta?: any; // Store raw tool call/result data if needed
+};
 
 interface DataTableFilterAIProps {
   onApplyQueryFromAI: (query: SqlAgentResponse) => void;
@@ -35,102 +44,246 @@ export const DataTableFilterAI = ({
 }: DataTableFilterAIProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [displayBlocks, setDisplayBlocks] = useState<DisplayBlock[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const uniqueId = useId(); // For generating keys
 
   useEffect(() => {
-    // Scroll to bottom when messages change
+    // Scroll to bottom when blocks change
     if (scrollAreaRef.current) {
       const scrollViewport = scrollAreaRef.current.querySelector(
         "div[data-radix-scroll-area-viewport]",
       );
       if (scrollViewport) {
-        scrollViewport.scrollTop = scrollViewport.scrollHeight;
+        // Use requestAnimationFrame for smoother scrolling after render
+        requestAnimationFrame(() => {
+          scrollViewport.scrollTop = scrollViewport.scrollHeight;
+        });
       }
     }
-  }, [messages]);
+  }, [displayBlocks]);
 
   const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
     if (e) e.preventDefault();
     if (!inputValue.trim() || isLoading) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: inputValue,
+    const userPrompt = inputValue;
+    const userBlock: DisplayBlock = {
+      id: `${uniqueId}-${Date.now()}-user`,
+      type: "user",
+      content: userPrompt,
     };
-    setMessages((prev) => [...prev, userMessage]);
+    setDisplayBlocks((prev) => [...prev, userBlock]);
     setInputValue("");
     setIsLoading(true);
 
+    let currentThinkingBlockId: string | null = null;
+    let currentTextBlockId: string | null = null;
+    let accumulatedText = "";
+
     try {
-      const result = await generateSqlAgent(
-        userMessage.content,
-        currentDb,
-        currentTable,
+      const agentStream = generateSqlAgent(
+        userPrompt,
+        currentDb ?? undefined, // Pass undefined if null/empty
+        currentTable ?? undefined,
       );
 
-      console.log("AI Generated SQL:", result);
+      for await (const event of agentStream) {
+        // Remove "Thinking..." block when the first real event arrives
+        if (currentThinkingBlockId) {
+          setDisplayBlocks((prev) =>
+            prev.filter((b) => b.id !== currentThinkingBlockId),
+          );
+          currentThinkingBlockId = null;
+        }
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString() + "-assist",
-          role: "assistant",
-          content: `Applying filter based on your description.`,
-        },
-      ]);
-      onApplyQueryFromAI(result); // Apply the generated filter
-      setIsOpen(false); // Close popover on success
+        switch (event.type) {
+          case "step":
+            const { text, toolCalls, toolResults } = event.data;
+
+            if (text) {
+              accumulatedText += text;
+              if (currentTextBlockId) {
+                // Update existing text block
+                setDisplayBlocks((prev) =>
+                  prev.map((b) =>
+                    b.id === currentTextBlockId
+                      ? { ...b, content: accumulatedText }
+                      : b,
+                  ),
+                );
+              } else {
+                // Create new text block
+                const newBlockId = `${uniqueId}-${Date.now()}-ai-text`;
+                currentTextBlockId = newBlockId; // Track the ID of the block we are currently adding text to
+                setDisplayBlocks((prev) => [
+                  ...prev,
+                  // Use the newBlockId which is guaranteed to be a string here
+                  {
+                    id: newBlockId,
+                    type: "ai-text",
+                    content: accumulatedText,
+                  },
+                ]);
+              }
+            } else {
+              // If a step event arrives without text, it signifies the end of the previous text block.
+              // Reset tracker vars so the next text delta starts a new block.
+              currentTextBlockId = null;
+              accumulatedText = "";
+            }
+
+            // Reset text tracking if tool calls/results arrive, forcing a new text block after
+            if (toolCalls?.length || toolResults?.length) {
+              currentTextBlockId = null;
+              accumulatedText = "";
+            }
+
+            if (toolCalls?.length) {
+              toolCalls.forEach((call) => {
+                setDisplayBlocks((prev) => [
+                  ...prev,
+                  {
+                    id: `${uniqueId}-${call.toolCallId}-call`,
+                    type: "ai-tool-call",
+                    content: `Calling tool: \`${call.toolName}\``,
+                    meta: call, // Store full call if needed
+                  },
+                ]);
+              });
+            }
+
+            if (toolResults?.length) {
+              toolResults.forEach((result) => {
+                // Truncate potentially large results for display
+                const preview = JSON.stringify(result.result).slice(0, 200);
+                setDisplayBlocks((prev) => [
+                  ...prev,
+                  {
+                    id: `${uniqueId}-${result.toolCallId}-result`,
+                    type: "ai-tool-result",
+                    content: `Tool \`${result.toolName}\` result: ${preview}${preview.length === 200 ? "..." : ""}`,
+                    meta: result, // Store full result if needed
+                  },
+                ]);
+              });
+            }
+            break;
+
+          case "final":
+            const finalResult = event.data;
+            // Display final explanation/query in a block
+            setDisplayBlocks((prev) => [
+              ...prev,
+              {
+                id: `${uniqueId}-${Date.now()}-final`,
+                type: "ai-final",
+                content: (
+                  <div>
+                    <p>{finalResult.explanation}</p>
+                    {finalResult.query && (
+                      <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-sm overflow-x-auto">
+                        {finalResult.query}
+                      </pre>
+                    )}
+                  </div>
+                ),
+                meta: finalResult,
+              },
+            ]);
+            // Apply the query
+            onApplyQueryFromAI(finalResult);
+            setIsOpen(false); // Close popover on success
+            break;
+
+          case "error":
+            setDisplayBlocks((prev) => [
+              ...prev,
+              {
+                id: `${uniqueId}-${Date.now()}-error`,
+                type: "error",
+                content: event.error,
+              },
+            ]);
+            break;
+        }
+      }
     } catch (error: any) {
-      console.error("Error calling filterTableData:", error);
-      setMessages((prev) => [
+      console.error("Error processing AI stream:", error);
+      // Ensure thinking block is removed on error
+      if (currentThinkingBlockId) {
+        setDisplayBlocks((prev) =>
+          prev.filter((b) => b.id !== currentThinkingBlockId),
+        );
+      }
+      setDisplayBlocks((prev) => [
         ...prev,
         {
-          id: Date.now().toString() + "-error",
-          role: "error",
-          content: `An error occurred: ${error.message || "Unknown error"}`,
+          id: `${uniqueId}-${Date.now()}-catch-error`,
+          type: "error",
+          content: `An unexpected error occurred: ${error.message || "Unknown error"}`,
         },
       ]);
     } finally {
+      // Ensure thinking block is removed finally
+      if (currentThinkingBlockId) {
+        setDisplayBlocks((prev) =>
+          prev.filter((b) => b.id !== currentThinkingBlockId),
+        );
+      }
       setIsLoading(false);
     }
   };
 
-  const renderMessageContent = (message: Message) => {
-    switch (message.role) {
+  const renderBlockContent = (block: DisplayBlock) => {
+    const baseClasses = "p-3 rounded-md break-words text-xs mb-3"; // Added mb-3 for spacing
+    switch (block.type) {
       case "user":
+        return <div className={`${baseClasses} ml-auto`}>{block.content}</div>;
+      case "ai-thinking":
         return (
-          <div className="flex items-start gap-2 justify-end">
-            <span className="bg-primary text-primary-foreground p-2 rounded-md max-w-[80%] break-words">
-              {message.content}
-            </span>
-            <User className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-1" />
+          <div
+            className={`${baseClasses} bg-muted/50 text-muted-foreground italic flex items-center gap-2`}
+          >
+            <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+            <span>{block.content}</span>
           </div>
         );
-      case "assistant":
+      case "ai-text":
         return (
-          <div className="flex items-start gap-2">
-            <Bot className="w-5 h-5 text-blue-500 flex-shrink-0 mt-1" />
-            <span className="bg-muted p-2 rounded-md max-w-[80%] break-words">
-              {message.content}
-            </span>
+          <div className={`${baseClasses} bg-muted/50`}>{block.content}</div>
+        );
+      case "ai-tool-call":
+        return (
+          <div
+            className={`${baseClasses} bg-blue-500/10 text-blue-700 dark:text-blue-300 flex items-center gap-2`}
+          >
+            <Terminal className="w-4 h-4 flex-shrink-0" />
+            <code>{block.content as string}</code>
           </div>
         );
-      case "system":
+      case "ai-tool-result":
         return (
-          <div className="text-xs text-muted-foreground italic text-center py-2">
-            {message.content}
+          <div
+            className={`${baseClasses} bg-purple-500/10 text-purple-700 dark:text-purple-300 text-xs`}
+          >
+            {block.content as string}
+          </div>
+        );
+      case "ai-final":
+        return (
+          <div className={`${baseClasses} bg-green-500/10`}>
+            {block.content}
           </div>
         );
       case "error":
         return (
-          <div className="flex items-start gap-2">
-            <CircleAlert className="w-5 h-5 text-destructive flex-shrink-0 mt-1" />
-            <span className="bg-destructive/10 text-destructive p-2 rounded-md max-w-[80%] break-words">
-              {message.content}
-            </span>
+          <div
+            className={`${baseClasses} bg-destructive/10 text-destructive flex items-start gap-2`}
+          >
+            <CircleAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span>{block.content as string}</span>
           </div>
         );
       default:
@@ -143,28 +296,29 @@ export const DataTableFilterAI = ({
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon">
           <SparkleIcon className="size-4" />
+          <span className="sr-only">AI Filter</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-0">
-        <div className="flex flex-col h-[50vh] max-h-[600px]">
-          <ScrollArea className="flex-grow p-3" ref={scrollAreaRef}>
-            <div className="space-y-3">
-              {messages.map((msg) => (
-                <React.Fragment key={msg.id}>
-                  {renderMessageContent(msg)}
-                </React.Fragment>
-              ))}
-              {isLoading && (
-                <div className="flex items-start gap-2">
-                  <Bot className="w-5 h-5 text-blue-500 flex-shrink-0 mt-1 animate-pulse" />
-                  <span className="bg-muted p-2 rounded-md max-w-[80%] italic text-muted-foreground">
-                    Thinking...
-                  </span>
-                </div>
-              )}
-            </div>
+      <PopoverContent className="w-96 p-0" align="end">
+        <div className="flex flex-col">
+          <ScrollArea
+            className="flex-grow p-2 h-[60vh] max-h-[700px]"
+            ref={scrollAreaRef}
+          >
+            {displayBlocks.map((block) => (
+              <React.Fragment key={block.id}>
+                {renderBlockContent(block)}
+              </React.Fragment>
+            ))}
+            {isLoading &&
+              !displayBlocks.some((b) => b.type === "ai-thinking") &&
+              renderBlockContent({
+                id: `${uniqueId}-initial-thinking`,
+                type: "ai-thinking",
+                content: "Thinking...",
+              })}
           </ScrollArea>
-          <div className="p-3 border-t">
+          <div className="p-2 border-t bg-background">
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
               <Input
                 value={inputValue}
@@ -179,6 +333,7 @@ export const DataTableFilterAI = ({
                 type="submit"
                 size="icon"
                 disabled={isLoading || !inputValue.trim()}
+                aria-label="Send message"
               >
                 <SendHorizonal className="h-4 w-4" />
               </Button>
