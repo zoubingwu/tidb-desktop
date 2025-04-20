@@ -153,7 +153,7 @@ export const DataTableFilterAI = ({
                   {
                     id: `${uniqueId}-${call.toolCallId}-call`,
                     type: "ai-tool-call",
-                    content: `Calling tool ${call.toolName}`,
+                    content: `Tool ${call.toolName} call started`,
                     meta: call, // Store full call if needed
                   },
                 ]);
@@ -264,7 +264,7 @@ export const DataTableFilterAI = ({
       case "ai-tool-call":
         return (
           <div
-            className={`ai-tool-result ${baseClasses} text-muted-foreground text-xs`}
+            className={`ai-tool-result ${baseClasses} text-muted-foreground text-xs py-0 mb-1`}
           >
             <Collapsible>
               <CollapsibleTrigger>
@@ -284,7 +284,7 @@ export const DataTableFilterAI = ({
       case "ai-tool-result":
         return (
           <div
-            className={`ai-tool-result ${baseClasses} text-muted-foreground text-xs`}
+            className={`ai-tool-result ${baseClasses} text-muted-foreground text-xs py-0`}
           >
             <Collapsible>
               <CollapsibleTrigger>
