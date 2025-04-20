@@ -237,14 +237,19 @@ export const DataTableFilterAI = ({
   };
 
   const renderBlockContent = (block: DisplayBlock) => {
-    const baseClasses = "p-3 rounded-md break-words text-xs mb-3"; // Added mb-3 for spacing
+    const baseClasses =
+      "max-w-[366px] rounded-md break-words text-sm mb-3 p-2 w-full";
     switch (block.type) {
       case "user":
-        return <div className={`${baseClasses} ml-auto`}>{block.content}</div>;
+        return (
+          <div className={`user ${baseClasses} text-right`}>
+            {block.content}
+          </div>
+        );
       case "ai-thinking":
         return (
           <div
-            className={`${baseClasses} bg-muted/50 text-muted-foreground italic flex items-center gap-2`}
+            className={`ai-thinking ${baseClasses} bg-muted/50 text-muted-foreground italic flex items-center gap-2`}
           >
             <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
             <span>{block.content}</span>
@@ -252,12 +257,14 @@ export const DataTableFilterAI = ({
         );
       case "ai-text":
         return (
-          <div className={`${baseClasses} bg-muted/50`}>{block.content}</div>
+          <div className={`ai-text ${baseClasses} bg-muted/50`}>
+            {block.content}
+          </div>
         );
       case "ai-tool-call":
         return (
           <div
-            className={`${baseClasses} bg-blue-500/10 text-blue-700 dark:text-blue-300 flex items-center gap-2`}
+            className={`ai-tool-call ${baseClasses} bg-blue-500/10 text-blue-700 dark:text-blue-300 flex items-center gap-2`}
           >
             <Terminal className="w-4 h-4 flex-shrink-0" />
             <code>{block.content as string}</code>
@@ -266,21 +273,21 @@ export const DataTableFilterAI = ({
       case "ai-tool-result":
         return (
           <div
-            className={`${baseClasses} bg-purple-500/10 text-purple-700 dark:text-purple-300 text-xs`}
+            className={`ai-tool-result ${baseClasses} bg-purple-500/10 text-purple-700 dark:text-purple-300`}
           >
             {block.content as string}
           </div>
         );
       case "ai-final":
         return (
-          <div className={`${baseClasses} bg-green-500/10`}>
+          <div className={`ai-final ${baseClasses} bg-green-500/10`}>
             {block.content}
           </div>
         );
       case "error":
         return (
           <div
-            className={`${baseClasses} bg-destructive/10 text-destructive flex items-start gap-2`}
+            className={`error ${baseClasses} bg-destructive/10 text-destructive flex items-start gap-2`}
           >
             <CircleAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span>{block.content as string}</span>
@@ -299,10 +306,10 @@ export const DataTableFilterAI = ({
           <span className="sr-only">AI Filter</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-0" align="end">
-        <div className="flex flex-col">
+      <PopoverContent className="w-[400px] p-0" align="end">
+        <div className="flex flex-col w-full">
           <ScrollArea
-            className="flex-grow p-2 h-[60vh] max-h-[700px]"
+            className="flex-grow p-4 w-full h-[60vh] max-h-[700px]"
             ref={scrollAreaRef}
           >
             {displayBlocks.map((block) => (
