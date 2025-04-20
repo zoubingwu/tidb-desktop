@@ -264,10 +264,21 @@ export const DataTableFilterAI = ({
       case "ai-tool-call":
         return (
           <div
-            className={`ai-tool-call ${baseClasses} flex items-center gap-2 text-muted-foreground text-xs`}
+            className={`ai-tool-result ${baseClasses} text-muted-foreground text-xs`}
           >
-            <EyeIcon className="size-3 flex-shrink-0" />
-            <p>{block.content as string}</p>
+            <Collapsible>
+              <CollapsibleTrigger>
+                <div className="cursor-pointer flex items-center gap-2">
+                  <EyeIcon className="size-3 flex-shrink-0" />
+                  <p>{block.content as string}</p>
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs max-h-[200px] overflow-auto">
+                  {JSON.stringify(block.meta, null, 2)}
+                </pre>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         );
       case "ai-tool-result":
