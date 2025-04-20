@@ -337,7 +337,7 @@ export const DataTableFilterAI = ({
                 content: "Thinking...",
               })}
           </ScrollArea>
-          <div className="p-2 border-t bg-background">
+          <div className="p-2  bg-background rounded-b-md">
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
               <Input
                 value={inputValue}
