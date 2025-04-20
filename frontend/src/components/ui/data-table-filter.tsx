@@ -155,14 +155,16 @@ export const DataTableFilterProvider = ({
 
 type DataTableFilterProps<TData> = {
   table: Table<TData>;
-  onChange?: (filters: ServerSideFilter[]) => void; // Parent notification still useful
+  onChange?: (filters: ServerSideFilter[]) => void;
   initialFilters?: ServerSideFilter[];
+  disabled?: boolean;
 };
 
 export const DataTableFilter = <TData,>({
   table,
   onChange,
   initialFilters,
+  disabled = false,
 }: DataTableFilterProps<TData>) => {
   return (
     // Wrap the filter UI with the Provider
@@ -173,7 +175,7 @@ export const DataTableFilter = <TData,>({
       <div className="flex w-full flex-grow items-start justify-between gap-2">
         <div className="flex md:flex-wrap gap-2 w-full flex-1">
           {/* Pass table for metadata, but filter logic uses context */}
-          <FilterSelector table={table} />
+          <FilterSelector table={table} disabled={disabled} />
           <ActiveFilters table={table} />
         </div>
       </div>
@@ -181,7 +183,13 @@ export const DataTableFilter = <TData,>({
   );
 };
 
-export function FilterSelector<TData>({ table }: { table: Table<TData> }) {
+export function FilterSelector<TData>({
+  table,
+  disabled,
+}: {
+  table: Table<TData>;
+  disabled: boolean;
+}) {
   const { filters } = useDataTableFilter();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
@@ -255,6 +263,7 @@ export function FilterSelector<TData>({ table }: { table: Table<TData> }) {
           variant="ghost"
           size="icon"
           className={cn(hasFilters && "w-fit !px-2")}
+          disabled={disabled}
         >
           <Filter className="size-4" />
         </Button>
