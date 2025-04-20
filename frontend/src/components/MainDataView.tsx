@@ -284,16 +284,13 @@ const MainDataView = ({
     }
 
     if (
-      currentDb &&
-      currentTable &&
-      tableData?.rows?.length &&
-      tableData?.columns?.length
+      (currentDb &&
+        currentTable &&
+        tableData?.rows?.length &&
+        tableData?.columns?.length) ||
+      sqlFromAIResult
     ) {
       return "data";
-    }
-
-    if (sqlFromAIResult) {
-      return "ai";
     }
 
     return "empty";
@@ -380,7 +377,7 @@ const MainDataView = ({
         <div className="flex-grow overflow-auto relative">
           <TablePlaceholder animate={tableViewState === "loading"} />
 
-          {tableViewState !== "loading" && (
+          {tableViewState === "data" && (
             <DataTable<TableRowData> table={table} />
           )}
         </div>
