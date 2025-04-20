@@ -262,7 +262,7 @@ export const DataTableFilterAI = ({
       case "ai-thinking":
         return (
           <div
-            className={`ai-thinking ${baseClasses}  text-muted-foreground italic flex items-center gap-2 text-xs`}
+            className={`ai-thinking ${baseClasses}  text-muted-foreground italic flex items-center gap-1 text-xs`}
           >
             <Loader2 className="size-3 animate-spin flex-shrink-0" />
             <span>{block.content}</span>
@@ -275,11 +275,11 @@ export const DataTableFilterAI = ({
         const metaContent = isFinished ? block.meta?.result : block.meta;
         return (
           <div
-            className={`ai-tool-call-result ${baseClasses} text-muted-foreground text-xs py-0 ${isFinished ? "" : "mb-1"}`}
+            className={`ai-tool-call ${baseClasses} text-muted-foreground text-xs py-0`}
           >
             <Collapsible>
               <CollapsibleTrigger>
-                <div className="cursor-pointer flex items-center gap-1">
+                <div className="cursor-pointer flex items-start gap-1">
                   <EyeIcon className="size-3 flex-shrink-0" />
                   <p>{block.content as string}</p>
                 </div>
