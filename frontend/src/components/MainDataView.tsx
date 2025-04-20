@@ -260,7 +260,7 @@ const MainDataView = ({
     return [];
   }, [tableData?.columns, sqlFromAIResult]);
 
-  const totalRowCount = tableData?.totalRows;
+  const totalRowCount = sqlFromAIResult ? null : tableData?.totalRows;
 
   // --- Calculate pagination values ---
   const pagination = useMemo(
@@ -347,7 +347,7 @@ const MainDataView = ({
   };
 
   const table: ReactTable<TableRowData> = useReactTable({
-    data: tableData?.rows || [],
+    data: (sqlFromAIResult ? sqlFromAIResult.rows : tableData?.rows) || [],
     columns,
     state: {
       pagination,
@@ -380,7 +380,7 @@ const MainDataView = ({
         <div className="flex-grow overflow-auto relative">
           <TablePlaceholder animate={tableViewState === "loading"} />
 
-          {tableViewState === "data" && (
+          {tableViewState !== "loading" && (
             <DataTable<TableRowData> table={table} />
           )}
         </div>
@@ -392,13 +392,9 @@ const MainDataView = ({
               onChange={handleFilterChange}
               disabled={tableViewState !== "data"}
             />
-
-            <DataTableFilterAI
-              onApplyQueryFromAI={handleApplyAIGeneratedQuery}
-            />
           </div>
 
-          <div className="flex flex-nowrap items-center gap-2 ">
+          <div className="flex flex-nowrap items-center gap-2">
             <DataTablePagination
               table={table}
               totalRowCount={totalRowCount}
@@ -406,6 +402,12 @@ const MainDataView = ({
             />
 
             <div className="flex gap-2">
+              <DataTableFilterAI
+                currentDb={currentDb}
+                currentTable={currentTable}
+                onApplyQueryFromAI={handleApplyAIGeneratedQuery}
+              />
+
               <SettingsModal>
                 <Button title="Preferences" variant="ghost" size="icon">
                   <SettingsIcon className="h-4 w-4" />
