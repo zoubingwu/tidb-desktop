@@ -253,14 +253,14 @@ export const DataTableFilterAI = ({
       case "ai-thinking":
         return (
           <div
-            className={`ai-thinking ${baseClasses}  text-muted-foreground italic flex items-center gap-2`}
+            className={`ai-thinking ${baseClasses}  text-muted-foreground italic flex items-center gap-2 text-xs`}
           >
             <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
             <span>{block.content}</span>
           </div>
         );
       case "ai-text":
-        return <div className={`ai-text ${baseClasses} `}>{block.content}</div>;
+        return <div className={`ai-text ${baseClasses}`}>{block.content}</div>;
       case "ai-tool-call":
         return (
           <div
