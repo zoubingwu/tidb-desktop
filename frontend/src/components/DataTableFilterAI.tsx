@@ -50,8 +50,6 @@ export const DataTableFilterAI = ({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const uniqueId = useId(); // For generating keys
 
-  console.log("displayBlocks", displayBlocks);
-
   useEffect(() => {
     // Scroll to bottom when blocks change
     if (scrollAreaRef.current) {
