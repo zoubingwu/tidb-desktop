@@ -339,10 +339,6 @@ const MainDataView = ({
     if (result.success) {
       resetTableDataPrameters();
       setSqlFromAI(result.query);
-    } else {
-      toast.error("Error applying AI generated query", {
-        description: result.explanation,
-      });
     }
   };
 
