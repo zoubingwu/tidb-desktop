@@ -138,7 +138,7 @@ const MainDataView = ({
     onError: (error, dbName) => {
       updateDatabaseTree(dbName, { isLoadingTables: false });
       toast.error("Error fetching tables", {
-        description: `Error fetching tables for ${dbName}: ${error}`,
+        description: error.message,
       });
     },
   });
@@ -176,10 +176,10 @@ const MainDataView = ({
         onUpdateTitle(`${dbName}.${tableName}`);
 
         return res;
-      } catch (error) {
+      } catch (error: any) {
         onUpdateTitle(`Error fetching ${titleTarget}`);
         toast.error("Error fetching table data", {
-          description: `Error fetching ${titleTarget}: ${error}`,
+          description: error.message,
         });
         throw error;
       }
@@ -196,9 +196,9 @@ const MainDataView = ({
         const res = await ExecuteSQL(sqlFromAI);
         onUpdateTitle("SQL from AI executed");
         return res;
-      } catch (error) {
+      } catch (error: any) {
         toast.error("Error fetching SQL from AI", {
-          description: `Error fetching SQL from AI: ${error}`,
+          description: error.message,
         });
         throw error;
       }
