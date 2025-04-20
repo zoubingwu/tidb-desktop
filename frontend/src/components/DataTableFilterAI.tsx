@@ -264,7 +264,7 @@ export const DataTableFilterAI = ({
           <div
             className={`ai-thinking ${baseClasses}  text-muted-foreground italic flex items-center gap-2 text-xs`}
           >
-            <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+            <Loader2 className="size-3 animate-spin flex-shrink-0" />
             <span>{block.content}</span>
           </div>
         );
@@ -344,7 +344,7 @@ export const DataTableFilterAI = ({
               <Input
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                placeholder="e.g., users created last month"
+                placeholder="e.g., list users created last month in db.users"
                 disabled={isLoading}
                 className="flex-grow"
                 autoComplete="off"
