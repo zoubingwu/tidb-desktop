@@ -30,11 +30,11 @@ type DisplayBlock = {
     | "ai-thinking"
     | "ai-text"
     | "ai-tool-call"
-    | "ai-tool-result"
     | "ai-final"
     | "error";
   content: string | React.ReactNode; // Allow React nodes for better formatting
   meta?: any; // Store raw tool call/result data if needed
+  status?: "started" | "finished"; // Added status for the combined type
 };
 
 interface DataTableFilterAIProps {
@@ -153,8 +153,9 @@ export const DataTableFilterAI = ({
                   {
                     id: `${uniqueId}-${call.toolCallId}-call`,
                     type: "ai-tool-call",
+                    status: "started",
                     content: `Tool ${call.toolName} call started`,
-                    meta: call, // Store full call if needed
+                    meta: call,
                   },
                 ]);
               });
@@ -162,16 +163,23 @@ export const DataTableFilterAI = ({
 
             if (toolResults?.length) {
               toolResults.forEach((result) => {
-                JSON.stringify(result.result).slice(0, 200);
-                setDisplayBlocks((prev) => [
-                  ...prev,
-                  {
-                    id: `${uniqueId}-${result.toolCallId}-result`,
-                    type: "ai-tool-result",
-                    content: `Tool ${result.toolName} call finished`,
-                    meta: result, // Store full result if needed
-                  },
-                ]);
+                setDisplayBlocks((prev) =>
+                  prev.map((block) => {
+                    if (
+                      block.type === "ai-tool-call" &&
+                      block.status === "started" &&
+                      block.meta?.toolCallId === result.toolCallId
+                    ) {
+                      return {
+                        ...block,
+                        status: "finished",
+                        content: `Tool ${result.toolName} call finished`,
+                        meta: result,
+                      };
+                    }
+                    return block;
+                  }),
+                );
               });
             }
             break;
@@ -262,40 +270,22 @@ export const DataTableFilterAI = ({
       case "ai-text":
         return <div className={`ai-text ${baseClasses}`}>{block.content}</div>;
       case "ai-tool-call":
+        const isFinished = block.status === "finished";
+        const metaContent = isFinished ? block.meta?.result : block.meta;
         return (
           <div
-            className={`ai-tool-result ${baseClasses} text-muted-foreground text-xs py-0 mb-1`}
+            className={`ai-tool-call-result ${baseClasses} text-muted-foreground text-xs py-0 ${isFinished ? "" : "mb-1"}`}
           >
             <Collapsible>
               <CollapsibleTrigger>
-                <div className="cursor-pointer flex items-center gap-2">
+                <div className="cursor-pointer flex items-center gap-1">
                   <EyeIcon className="size-3 flex-shrink-0" />
                   <p>{block.content as string}</p>
                 </div>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs max-h-[200px] overflow-auto">
-                  {JSON.stringify(block.meta, null, 2)}
-                </pre>
-              </CollapsibleContent>
-            </Collapsible>
-          </div>
-        );
-      case "ai-tool-result":
-        return (
-          <div
-            className={`ai-tool-result ${baseClasses} text-muted-foreground text-xs py-0`}
-          >
-            <Collapsible>
-              <CollapsibleTrigger>
-                <div className="cursor-pointer flex items-center gap-2">
-                  <EyeIcon className="size-3 flex-shrink-0" />
-                  <p>{block.content as string}</p>
-                </div>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs max-h-[200px] overflow-auto">
-                  {JSON.stringify(block.meta.result, null, 2)}
+                  {JSON.stringify(metaContent, null, 2)}
                 </pre>
               </CollapsibleContent>
             </Collapsible>
