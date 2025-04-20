@@ -161,7 +161,7 @@ export function ConnectionFormDialog({
         });
       }
     } catch (error: any) {
-      toast.error("Clipboard/Inference Error", {
+      toast.error("Clipboard Inference Error", {
         description:
           typeof error === "string"
             ? error
