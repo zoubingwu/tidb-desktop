@@ -235,6 +235,17 @@ const MainDataView = ({
       // Render other values as strings
       return String(value);
     };
+
+    if (sqlFromAI && sqlFromAIResult?.columns?.length) {
+      return sqlFromAIResult.columns.map((colName) => {
+        return {
+          accessorKey: colName,
+          header: colName,
+          cell: renderCell,
+        };
+      });
+    }
+
     if (tableData?.columns) {
       return [
         ...(tableData.columns.map((col): ColumnDef<TableRowData> => {
@@ -255,19 +266,12 @@ const MainDataView = ({
       ];
     }
 
-    if (sqlFromAIResult?.rows?.length) {
-      const row = sqlFromAIResult.rows.at(0);
-      return Object.entries(row).map(([key]) => {
-        return {
-          accessorKey: key,
-          header: key,
-          cell: renderCell,
-        };
-      });
-    }
-
     return [];
-  }, [tableData?.columns, sqlFromAIResult]);
+  }, [tableData?.columns, sqlFromAIResult, sqlFromAI]);
+
+  console.log("tableData", tableData);
+  console.log("sqlFromAIResult", sqlFromAIResult);
+  console.log("columns", columns);
 
   const totalRowCount = sqlFromAIResult ? null : tableData?.totalRows;
 
@@ -311,13 +315,12 @@ const MainDataView = ({
 
   const handleSelectTable = useMemoizedFn(
     (dbName: string, tableName: string) => {
+      setSqlFromAI("");
       setTableDataPrameters((draft) => {
-        if (draft.dbName !== dbName || draft.tableName !== tableName) {
-          draft.dbName = dbName;
-          draft.tableName = tableName;
-          draft.serverFilters = [];
-          draft.pageIndex = 0;
-        }
+        draft.dbName = dbName;
+        draft.tableName = tableName;
+        draft.serverFilters = [];
+        draft.pageIndex = 0;
       });
     },
   );
@@ -434,7 +437,7 @@ const MainDataView = ({
                 </Tooltip>
 
                 <Tooltip>
-                  <TooltipTrigger>
+                  <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon"
