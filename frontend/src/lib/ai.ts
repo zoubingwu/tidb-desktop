@@ -1,13 +1,17 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import {
   type ToolCallPart,
   type ToolResultPart,
   generateObject,
+  generateText,
   streamText,
   tool,
 } from "ai";
 import {
   ExecuteSQL,
+  GetAIProviderSettings,
   GetTableSchema,
   ListDatabases,
   ListTables,
@@ -17,17 +21,63 @@ import { z } from "zod";
 
 type TableSchema = services.TableSchema;
 
-const openrouter = createOpenRouter({
-  apiKey: import.meta.env.VITE_OPENROUTER_API_KEY,
-});
+const createModel = async (options?: TestProviderConnectionOptions) => {
+  const aiProviderSettings = await GetAIProviderSettings();
+  const provider = options?.provider || aiProviderSettings.provider;
 
-// Use a model known to work well with tools and reasoning
-// Consider gpt-4o or claude-3.5-sonnet if gemini-pro struggles
-const defaultModel = openrouter.chat("anthropic/claude-3.5-sonnet");
+  if (provider === "openai") {
+    const openai = createOpenAI({
+      apiKey: options?.apiKey || aiProviderSettings.openai?.apiKey,
+      baseURL: options?.baseURL || aiProviderSettings.openai?.baseURL,
+    });
+    return openai.chat("gpt-4o");
+  }
+
+  if (provider === "anthropic") {
+    const anthropic = createAnthropic({
+      apiKey: options?.apiKey || aiProviderSettings.anthropic?.apiKey,
+      baseURL: options?.baseURL || aiProviderSettings.anthropic?.baseURL,
+    });
+    return anthropic.languageModel("claude-3-5-sonnet-latest");
+  }
+
+  if (provider === "openrouter") {
+    const openrouter = createOpenRouter({
+      apiKey: options?.apiKey || aiProviderSettings.openrouter?.apiKey,
+    });
+    return openrouter.chat("anthropic/claude-3.5-sonnet");
+  }
+
+  throw new Error("No AI provider selected");
+};
+
+type TestProviderConnectionOptions = {
+  provider?: services.AIProviderSettings["provider"];
+  apiKey?: string;
+  baseURL?: string;
+};
+
+export const testProviderConnection = async (
+  options?: TestProviderConnectionOptions,
+) => {
+  const model = await createModel(options);
+  try {
+    const { text } = await generateText({
+      model,
+      prompt: "Hello!",
+    });
+
+    return { success: true, message: text };
+  } catch (error: any) {
+    console.log("Error testing provider connection:", error);
+    return { success: false, error: error.message };
+  }
+};
 
 export const inferConnectionDetails = async (textFromClipboard: string) => {
+  const model = await createModel();
   const { object } = await generateObject({
-    model: defaultModel,
+    model,
     prompt: `
     Analyze the following text and extract database connection details. Respond ONLY with a JSON object containing the keys "host", "port", "user", "password", "dbName", and "useTLS" (boolean, true if TLS/SSL is mentioned or implied or it is tidbcloud.com, otherwise false). If a value is not found, use an empty string "" for string fields or false for the boolean.
 
@@ -226,6 +276,8 @@ export async function* generateSqlAgent(
   currentDbName?: string | null,
   currentTableName?: string | null,
 ): AsyncGenerator<AgentStreamEvent, void, unknown> {
+  const model = await createModel();
+
   console.log(
     `Starting generateSqlAgent streamer for prompt: "${userPrompt}" (DB: ${currentDbName}, Table: ${currentTableName})`,
   );
@@ -275,7 +327,7 @@ Agent Steps:
   try {
     // --- Stream the Agent's Response ---
     const { fullStream } = streamText({
-      model: defaultModel,
+      model,
       system: systemPrompt,
       prompt: userPrompt,
       tools: agentTools,
