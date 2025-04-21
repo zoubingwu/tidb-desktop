@@ -24,8 +24,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TooltipTrigger } from "@/components/ui/tooltip";
+import { testProviderConnection } from "@/lib/ai";
 import { capitalize } from "@/lib/utils";
-import { memo, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Loader } from "lucide-react";
+import { memo, useState } from "react";
+import { toast } from "sonner";
+import { useImmer } from "use-immer";
 import {
   GetAIProviderSettings,
   SaveAIProviderSettings,
@@ -60,52 +65,33 @@ interface SettingsModalProps {
 }
 
 function SettingsModal({ children }: SettingsModalProps) {
-  // Theme state
   const { baseTheme, mode, setBaseTheme, setMode } = useTheme();
+  const [aiSettings, setAiSettings] = useImmer<LocalAIProviderSettings>({
+    provider: "openai",
+    openai: { apiKey: "", baseURL: "" },
+    anthropic: { apiKey: "", baseURL: "" },
+    openrouter: { apiKey: "" },
+  });
 
-  // AI Settings State - Use local types
-  const [aiSettings, setAiSettings] = useState<LocalAIProviderSettings | null>(
-    null,
-  );
-  const [selectedProvider, setSelectedProvider] =
-    useState<AIProvider>("openai");
-  const [isLoadingAISettings, setIsLoadingAISettings] = useState(true);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
 
-  // Fetch AI settings on mount
-  useEffect(() => {
-    async function loadAISettings() {
-      try {
-        setIsLoadingAISettings(true);
+  const { isLoading: isLoadingAISettings, refetch: refetchAISettings } =
+    useQuery({
+      queryKey: ["aiSettings"],
+      queryFn: async () => {
         const settingsFromBackend: services.AIProviderSettings =
           await GetAIProviderSettings();
-
-        // Map backend data to local state structure
-        const localSettings: LocalAIProviderSettings = {
-          provider: (settingsFromBackend.provider as AIProvider) || "openai",
+        setAiSettings({
+          provider: settingsFromBackend.provider as AIProvider,
           openai: { ...settingsFromBackend.openai },
           anthropic: { ...settingsFromBackend.anthropic },
           openrouter: { ...settingsFromBackend.openrouter },
-        };
-
-        setAiSettings(localSettings);
-        setSelectedProvider(localSettings.provider ?? "openai");
-      } catch (error) {
-        console.error("Failed to load AI settings:", error);
-        // Initialize with empty local settings on error
-        setAiSettings({
-          provider: "openai",
-          openai: { apiKey: "", baseURL: "" },
-          anthropic: { apiKey: "", baseURL: "" },
-          openrouter: { apiKey: "" },
         });
-      } finally {
-        setIsLoadingAISettings(false);
-      }
-    }
-    loadAISettings();
-  }, []);
 
-  // Handlers for Theme
+        return settingsFromBackend;
+      },
+    });
+
   const handleBaseThemeChange = (newBaseTheme: string) => {
     setBaseTheme(newBaseTheme);
   };
@@ -114,54 +100,54 @@ function SettingsModal({ children }: SettingsModalProps) {
     setMode(newMode);
   };
 
-  // Handler for individual AI field changes (API Key, Base URL)
-  // Only updates local state, does not save immediately.
   const handleAISettingChange = <K extends keyof LocalAIProviderSettings>(
     provider: K,
     field: keyof NonNullable<LocalAIProviderSettings[K]>,
     value: string,
   ) => {
-    setAiSettings((prevSettings) => {
-      if (!prevSettings) return null;
-
-      const updatedSettings: LocalAIProviderSettings = {
-        provider: prevSettings.provider,
-        ...prevSettings,
-        [provider]: {
-          ...((prevSettings[provider] as any) ?? {}),
-          [field]: value,
-        },
-      };
-
-      return updatedSettings;
+    setAiSettings((draft) => {
+      // @ts-ignore
+      draft[provider][field] = value;
     });
   };
 
-  // Handler for changing the selected AI provider
   const handleProviderSelectionChange = (newProvider: AIProvider) => {
-    setSelectedProvider(newProvider);
-
-    setAiSettings((prevSettings) => {
-      if (!prevSettings) {
-        // Should ideally not happen if initialized correctly
-        return { provider: newProvider };
-      }
-
-      const updatedSettings: LocalAIProviderSettings = {
-        ...prevSettings,
-        provider: newProvider,
-      };
-
-      // Now save the entire updated settings object to the backend
-      SaveAIProviderSettings(
-        updatedSettings as services.AIProviderSettings,
-      ).catch((err) => {
-        console.error("Failed to save AI settings on provider change:", err);
-        // TODO: Add user feedback (e.g., toast notification)
-      });
-
-      return updatedSettings;
+    setAiSettings((draft) => {
+      draft.provider = newProvider;
     });
+  };
+
+  const handleTestConnection = async () => {
+    setIsTestingConnection(true);
+    const result = await testProviderConnection({
+      provider: aiSettings.provider,
+      // @ts-ignore
+      apiKey: aiSettings[aiSettings.provider]?.apiKey,
+      // @ts-ignore
+      baseURL: aiSettings[aiSettings.provider]?.baseURL,
+    });
+    setIsTestingConnection(false);
+    if (result.success) {
+      toast.success("Connection successful", { description: result.message });
+    } else {
+      toast.error("Connection failed", { description: result.error });
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    const updatedSettings = {
+      ...aiSettings,
+      provider: aiSettings.provider,
+    };
+
+    try {
+      await SaveAIProviderSettings(
+        updatedSettings as services.AIProviderSettings,
+      );
+      toast.success("Settings saved");
+    } catch (error: any) {
+      toast.error("Failed to save settings", { description: error.message });
+    }
   };
 
   const renderAIProviderFields = () => {
@@ -169,7 +155,7 @@ function SettingsModal({ children }: SettingsModalProps) {
       return <p>Loading AI settings...</p>; // Or a spinner
     }
 
-    switch (selectedProvider) {
+    switch (aiSettings.provider) {
       case "openai":
         return (
           <>
@@ -262,7 +248,13 @@ function SettingsModal({ children }: SettingsModalProps) {
   };
 
   return (
-    <Dialog>
+    <Dialog
+      onOpenChange={(open) => {
+        if (open) {
+          refetchAISettings();
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <TooltipTrigger asChild>{children}</TooltipTrigger>
       </DialogTrigger>
@@ -322,7 +314,7 @@ function SettingsModal({ children }: SettingsModalProps) {
             Provider
           </Label>
           <RadioGroup
-            value={selectedProvider}
+            value={aiSettings.provider}
             onValueChange={(value) =>
               handleProviderSelectionChange(value as AIProvider)
             }
@@ -341,9 +333,32 @@ function SettingsModal({ children }: SettingsModalProps) {
         {renderAIProviderFields()}
 
         <DialogFooter className="mt-4 pt-4">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleTestConnection}
+            disabled={
+              isTestingConnection ||
+              !aiSettings.provider ||
+              !aiSettings[aiSettings.provider]?.apiKey
+            }
+          >
+            {isTestingConnection ? (
+              <>
+                <Loader className="w-4 h-4 animate-spin" />
+                Testing...
+              </>
+            ) : (
+              "Test Connection"
+            )}
+          </Button>
           <DialogClose asChild>
-            <Button type="button" variant="secondary">
-              Close
+            <Button
+              type="button"
+              variant="default"
+              onClick={handleSaveSettings}
+            >
+              Save
             </Button>
           </DialogClose>
         </DialogFooter>
