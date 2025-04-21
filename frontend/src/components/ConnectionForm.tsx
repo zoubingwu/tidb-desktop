@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { inferConnectionDetails } from "@/lib/ai";
 import { Loader2 } from "lucide-react";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, FormEvent } from "react";
 import { toast } from "sonner";
 import {
   DeleteSavedConnection,
@@ -126,7 +126,11 @@ export function ConnectionFormDialog({
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (event?: FormEvent<HTMLFormElement>) => {
+    // Prevent default form submission if called from onSubmit
+    if (event) {
+      event.preventDefault();
+    }
     const name = connectionName.trim();
     if (!name) {
       toast.error("Missing Connection Name", {
@@ -219,149 +223,156 @@ export function ConnectionFormDialog({
             later use.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          {/* Connection Name Input */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="connectionName" className="text-right">
-              Name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="connectionName"
-              name="connectionName"
-              value={connectionName}
-              onChange={handleNameChange}
-              className="col-span-3"
-              placeholder="e.g., My TiDB Cloud Dev, Local Test"
-              autoComplete="off"
-              autoCorrect="off"
-            />
-          </div>
-          {/* Host */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="host" className="text-right">
-              Host
-            </Label>
-            <Input
-              id="host"
-              name="host"
-              value={formState.host}
-              onChange={handleChange}
-              className="col-span-3"
-              placeholder="e.g., gateway01.us-east-1.prod.aws.tidbcloud.com"
-            />
-          </div>
-          {/* Port */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="port" className="text-right">
-              Port
-            </Label>
-            <Input
-              id="port"
-              name="port"
-              type="number"
-              value={formState.port}
-              onChange={handleChange}
-              className="col-span-3"
-              placeholder="e.g., 4000"
-            />
-          </div>
-          {/* User */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="user" className="text-right">
-              User
-            </Label>
-            <Input
-              id="user"
-              name="user"
-              value={formState.user}
-              onChange={handleChange}
-              className="col-span-3"
-              placeholder="e.g., root or your_db_user"
-            />
-          </div>
-          {/* Password */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="password" className="text-right">
-              Password
-            </Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              value={formState.password}
-              onChange={handleChange}
-              className="col-span-3"
-            />
-          </div>
-          {/* Database Name */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="dbName" className="text-right">
-              Database
-            </Label>
-            <Input
-              id="dbName"
-              name="dbName"
-              value={formState.dbName}
-              onChange={handleChange}
-              className="col-span-3"
-              placeholder="Optional, e.g., test"
-            />
-          </div>
-          {/* Use TLS Checkbox - Note: Go backend auto-detects for .tidbcloud.com */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="useTLS" className="text-right">
-              Use TLS
-            </Label>
-            <div className="col-span-3 flex items-center space-x-2">
-              <Checkbox
-                id="useTLS"
-                name="useTLS"
-                checked={formState.useTLS}
-                onCheckedChange={(checked) =>
-                  setFormState((prev) => ({ ...prev, useTLS: !!checked }))
-                }
+        <form onSubmit={handleSave}>
+          <div className="grid gap-4 py-4">
+            {/* Connection Name Input */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="connectionName" className="text-right">
+                Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="connectionName"
+                name="connectionName"
+                value={connectionName}
+                onChange={handleNameChange}
+                className="col-span-3"
+                placeholder="e.g., My TiDB Cloud Dev, Local Test"
+                autoComplete="off"
+                autoCorrect="off"
               />
-              <label
-                htmlFor="useTLS"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-muted-foreground"
-              >
-                Force TLS, required for TiDB Cloud
-              </label>
+            </div>
+            {/* Host */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="host" className="text-right">
+                Host
+              </Label>
+              <Input
+                id="host"
+                name="host"
+                value={formState.host}
+                onChange={handleChange}
+                className="col-span-3"
+                placeholder="e.g., gateway01.us-east-1.prod.aws.tidbcloud.com"
+              />
+            </div>
+            {/* Port */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="port" className="text-right">
+                Port
+              </Label>
+              <Input
+                id="port"
+                name="port"
+                type="number"
+                value={formState.port}
+                onChange={handleChange}
+                className="col-span-3"
+                placeholder="e.g., 4000"
+              />
+            </div>
+            {/* User */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="user" className="text-right">
+                User
+              </Label>
+              <Input
+                id="user"
+                name="user"
+                value={formState.user}
+                onChange={handleChange}
+                className="col-span-3"
+                placeholder="e.g., root or your_db_user"
+              />
+            </div>
+            {/* Password */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="password" className="text-right">
+                Password
+              </Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                value={formState.password}
+                onChange={handleChange}
+                className="col-span-3"
+              />
+            </div>
+            {/* Database Name */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="dbName" className="text-right">
+                Database
+              </Label>
+              <Input
+                id="dbName"
+                name="dbName"
+                value={formState.dbName}
+                onChange={handleChange}
+                className="col-span-3"
+                placeholder="Optional, e.g., test"
+              />
+            </div>
+            {/* Use TLS Checkbox - Note: Go backend auto-detects for .tidbcloud.com */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="useTLS" className="text-right">
+                Use TLS
+              </Label>
+              <div className="col-span-3 flex items-center space-x-2">
+                <Checkbox
+                  id="useTLS"
+                  name="useTLS"
+                  checked={formState.useTLS}
+                  onCheckedChange={(checked) =>
+                    setFormState((prev) => ({ ...prev, useTLS: !!checked }))
+                  }
+                />
+                <label
+                  htmlFor="useTLS"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-muted-foreground"
+                >
+                  Force TLS, required for TiDB Cloud
+                </label>
+              </div>
             </div>
           </div>
-        </div>
-        <DialogFooter className="gap-2 sm:justify-between">
-          <Button
-            variant="outline"
-            onClick={handleReadFromClipboard}
-            disabled={isTesting || isSaving || isInferring}
-          >
-            {isInferring && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isInferring ? "Inferring..." : "Read from Clipboard"}
-          </Button>
-          <div className="flex gap-2">
-            <DialogClose asChild>
-              <Button variant="ghost">Cancel</Button>
-            </DialogClose>
+
+          <DialogFooter className="gap-2 sm:justify-between">
             <Button
-              variant="secondary"
-              onClick={handleTestConnection}
+              type="button"
+              variant="outline"
+              onClick={handleReadFromClipboard}
               disabled={isTesting || isSaving || isInferring}
             >
-              {isTesting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isTesting ? "Testing..." : "Test"}
+              {isInferring && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isInferring ? "Inferring..." : "Read from Clipboard"}
             </Button>
-            <Button
-              onClick={handleSave}
-              disabled={
-                isTesting || isSaving || isInferring || !connectionName.trim()
-              }
-            >
-              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isSaving ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        </DialogFooter>
+            <div className="flex gap-2">
+              <DialogClose asChild>
+                <Button type="button" variant="ghost">
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleTestConnection}
+                disabled={isTesting || isSaving || isInferring}
+              >
+                {isTesting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isTesting ? "Testing..." : "Test"}
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  isTesting || isSaving || isInferring || !connectionName.trim()
+                }
+              >
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isSaving ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
