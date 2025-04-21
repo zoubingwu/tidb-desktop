@@ -181,6 +181,13 @@ export function ConnectionFormDialog({
     setIsInferring(true);
     try {
       const textFromClipboard = await ClipboardGetText();
+      if (!textFromClipboard) {
+        toast.info("Clipboard Empty", {
+          description: "There was no text content found on the clipboard.",
+        });
+        return;
+      }
+
       const inferredDetails = await inferConnectionDetails(textFromClipboard);
       if (inferredDetails) {
         setFormState((prev) => {
