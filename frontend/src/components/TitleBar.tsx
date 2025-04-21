@@ -1,8 +1,8 @@
 import React, { memo } from "react";
 import {
+  WindowIsMaximised,
   WindowMaximise,
   WindowUnmaximise,
-  WindowIsMaximised,
 } from "wailsjs/runtime";
 
 function TitleBar({ title }: { title: string }) {

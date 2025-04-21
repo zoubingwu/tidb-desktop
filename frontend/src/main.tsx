@@ -1,11 +1,11 @@
 import "./style.css";
-import React from "react";
-import { createRoot } from "react-dom/client";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
-import ErrorBoundary from "@/components/ErrorBoundary";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
+import React from "react";
+import { createRoot } from "react-dom/client";
 import App from "./App";
 import { queryClient } from "./query-client";
 

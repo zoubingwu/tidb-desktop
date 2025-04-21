@@ -1,25 +1,25 @@
-import React, { useState, useRef, useEffect, useId } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { generateSqlAgent, SqlAgentResponse } from "@/lib/ai";
+import { SqlAgentResponse, generateSqlAgent } from "@/lib/ai";
 import {
-  SendHorizonal,
   CircleAlert,
-  SparkleIcon,
-  Loader2,
   EyeIcon,
+  Loader2,
+  SendHorizonal,
+  SparkleIcon,
 } from "lucide-react";
+import React, { useState, useRef, useEffect, useId } from "react";
 import { format } from "sql-formatter";
 import { TooltipTrigger } from "./ui/tooltip";
 

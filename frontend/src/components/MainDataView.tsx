@@ -1,45 +1,45 @@
-import { useMemoizedFn } from "ahooks";
-import { useMemo, useEffect, memo, useState } from "react";
-import { useImmer } from "use-immer";
-import { SettingsIcon, UnplugIcon } from "lucide-react";
-import { toast } from "sonner";
-import {
-  ColumnDef,
-  getCoreRowModel,
-  useReactTable,
-  getPaginationRowModel,
-  PaginationState,
-  Updater,
-  Table as ReactTable,
-  CellContext,
-} from "@tanstack/react-table";
-import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
+import { DataTableFilterAI } from "@/components/DataTableFilterAI";
 import { DataTablePagination } from "@/components/DataTablePagination";
+import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
+import { Button } from "@/components/ui/button";
 import {
   DataTableFilter,
   ServerSideFilter,
 } from "@/components/ui/data-table-filter";
-import { filterFn } from "@/lib/filters";
-import { ColumnDataTypeIcons, mapDbColumnTypeToFilterType } from "@/lib/utils";
-import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
-import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { SqlAgentResponse } from "@/lib/ai";
+import { filterFn } from "@/lib/filters";
+import { ColumnDataTypeIcons, mapDbColumnTypeToFilterType } from "@/lib/utils";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import {
-  ListTables,
-  ListDatabases,
+  CellContext,
+  ColumnDef,
+  PaginationState,
+  Table as ReactTable,
+  Updater,
+  getCoreRowModel,
+  getPaginationRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { useMemoizedFn } from "ahooks";
+import { SettingsIcon, UnplugIcon } from "lucide-react";
+import { memo, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { useImmer } from "use-immer";
+import {
   ExecuteSQL,
   GetTableData,
+  ListDatabases,
+  ListTables,
 } from "wailsjs/go/main/App";
-import TablePlaceholder from "./TablePlaceHolder";
-import SettingsModal from "./SettingModal";
 import DataTable from "./DataTable";
-import { DataTableFilterAI } from "@/components/DataTableFilterAI";
-import { SqlAgentResponse } from "@/lib/ai";
+import SettingsModal from "./SettingModal";
+import TablePlaceholder from "./TablePlaceHolder";
 
 // Use `any` for row data initially, can be refined if needed
 type TableRowData = Record<string, any>;

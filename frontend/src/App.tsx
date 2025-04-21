@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
-import { services } from "wailsjs/go/models";
-import { EventsOn } from "wailsjs/runtime";
-import { Disconnect } from "wailsjs/go/main/App";
-import WelcomeScreen from "@/components/WelcomeScreen";
 import MainDataView from "@/components/MainDataView";
 import TitleBar from "@/components/TitleBar";
+import WelcomeScreen from "@/components/WelcomeScreen";
+import { useCallback, useEffect, useState } from "react";
+import { Disconnect } from "wailsjs/go/main/App";
+import { services } from "wailsjs/go/models";
+import { EventsOn } from "wailsjs/runtime";
 
 type ViewState = "welcome" | "main";
 

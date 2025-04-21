@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 
 const ROW_HEIGHT_PX = 36;
 

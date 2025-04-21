@@ -1,11 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
 import {
+  type ReactNode,
   createContext,
   useContext,
-  useState,
   useEffect,
-  type ReactNode,
+  useState,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { GetThemeSettings, SaveThemeSettings } from "wailsjs/go/main/App";
 
 // Define the available theme names. These should match CSS classes.

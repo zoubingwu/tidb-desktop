@@ -1,13 +1,13 @@
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { type ClassValue, clsx } from "clsx";
 import {
-  Hash, // For 'number'
   CalendarDays, // For 'date'
-  Text, // For 'text'
+  Hash, // For 'number'
   List, // For 'option' (assuming single choice)
   ListChecks, // For 'multiOption' (assuming multiple choices)
   LucideIcon, // Base type for icons
+  Text, // For 'text'
 } from "lucide-react";
+import { twMerge } from "tailwind-merge";
 import { ColumnDataType } from "./filters";
 
 export function cn(...inputs: ClassValue[]) {

@@ -1,14 +1,18 @@
-import { memo } from "react";
+import {
+  type ThemeMode,
+  availableThemes,
+  useTheme,
+} from "@/components/ThemeProvider";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -18,13 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  useTheme,
-  availableThemes,
-  type ThemeMode,
-} from "@/components/ThemeProvider";
-import { capitalize } from "@/lib/utils";
 import { TooltipTrigger } from "@/components/ui/tooltip";
+import { capitalize } from "@/lib/utils";
+import { memo } from "react";
 
 interface SettingsModalProps {
   children: React.ReactNode; // To wrap the trigger button
