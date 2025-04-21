@@ -64,7 +64,7 @@ const MainDataView = ({
   onUpdateTitle,
 }: {
   onClose: () => void;
-  onUpdateTitle: (title: string) => void;
+  onUpdateTitle: (title: string, loading?: boolean) => void;
 }) => {
   const [databaseTree, setDatabaseTree] = useImmer<DatabaseTreeData>([]);
   const [tableDataPrameters, setTableDataPrameters] = useImmer<{
@@ -174,7 +174,7 @@ const MainDataView = ({
         : "SQL Query Result";
 
       try {
-        onUpdateTitle(`Fetching data from ${titleTarget}...`);
+        onUpdateTitle(`Fetching data from ${titleTarget}...`, true);
         const res = await GetTableData(
           dbName,
           tableName,
@@ -201,7 +201,7 @@ const MainDataView = ({
     queryKey: ["sqlFromAI", sqlFromAI],
     queryFn: async () => {
       try {
-        onUpdateTitle("Executing SQL from AI...");
+        onUpdateTitle("Executing SQL from AI...", true);
         const res = await ExecuteSQL(sqlFromAI);
         onUpdateTitle("SQL from AI executed");
         return res;
@@ -409,7 +409,7 @@ const MainDataView = ({
               <DataTablePagination
                 table={table}
                 totalRowCount={totalRowCount}
-                disabled={tableViewState !== "data"}
+                disabled={tableViewState !== "data" || !!sqlFromAI}
               />
 
               <div className="flex gap-2">

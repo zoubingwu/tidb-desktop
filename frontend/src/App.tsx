@@ -1,7 +1,8 @@
 import MainDataView from "@/components/MainDataView";
 import TitleBar from "@/components/TitleBar";
 import WelcomeScreen from "@/components/WelcomeScreen";
-import { useCallback, useEffect, useState } from "react";
+import { useMemoizedFn } from "ahooks";
+import { useEffect, useState } from "react";
 import { Disconnect } from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
 import { EventsOn } from "wailsjs/runtime";
@@ -13,11 +14,14 @@ function App() {
   const [connectionDetails, setConnectionDetails] =
     useState<services.ConnectionDetails | null>(null);
   const [titleSuffix, setTitleSuffix] = useState<string>("");
+  const [titleLoading, setTitleLoading] = useState<boolean>(false);
 
-  const navigateToMain = (details: services.ConnectionDetails) => {
-    setConnectionDetails(details);
-    setCurrentView("main");
-  };
+  const navigateToMain = useMemoizedFn(
+    (details: services.ConnectionDetails) => {
+      setConnectionDetails(details);
+      setCurrentView("main");
+    },
+  );
 
   useEffect(() => {
     const cleanupEstablished = EventsOn(
@@ -38,16 +42,23 @@ function App() {
     };
   }, []);
 
-  const handleDisconnect = () => {
+  const handleDisconnect = useMemoizedFn(() => {
     console.log("App.tsx: Handling disconnect state update.");
     setConnectionDetails(null);
     setCurrentView("welcome");
-  };
+  });
 
-  const triggerDisconnect = useCallback(() => {
+  const triggerDisconnect = useMemoizedFn(() => {
     console.log("App.tsx: Triggering disconnect via UI.");
     Disconnect();
-  }, []);
+  });
+
+  const handleUpdateTitle = useMemoizedFn(
+    (title: string, loading?: boolean) => {
+      setTitleSuffix(title);
+      setTitleLoading(loading ?? false);
+    },
+  );
 
   const renderView = () => {
     switch (currentView) {
@@ -57,7 +68,7 @@ function App() {
         return (
           <MainDataView
             onClose={triggerDisconnect}
-            onUpdateTitle={setTitleSuffix}
+            onUpdateTitle={handleUpdateTitle}
           />
         );
       default:
@@ -72,7 +83,10 @@ function App() {
 
   return (
     <div id="App" className="h-screen w-screen flex flex-col">
-      <TitleBar title={titleSuffix ? `${title} - ${titleSuffix}` : title} />
+      <TitleBar
+        title={titleSuffix ? `${title} - ${titleSuffix}` : title}
+        loading={titleLoading}
+      />
       <div className="flex-grow overflow-auto">{renderView()}</div>
     </div>
   );
