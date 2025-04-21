@@ -1,18 +1,19 @@
-import { useState, useEffect, useCallback, useMemo, memo } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
+import { useMount } from "ahooks";
+import { formatDistanceToNow } from "date-fns";
 import { Loader2Icon, PlusCircleIcon, SettingsIcon } from "lucide-react";
+import { memo, useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
-  ListSavedConnections,
   ConnectUsingSaved,
   DeleteSavedConnection,
+  ListSavedConnections,
 } from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
-import { formatDistanceToNow } from "date-fns";
-import SettingsModal from "./SettingModal";
 import { ConnectionCard } from "./ConnectionCard";
 import { ConnectionFormDialog } from "./ConnectionForm";
+import SettingsModal from "./SettingModal";
 
 type SavedConnectionsMap = Record<string, services.ConnectionDetails>;
 
@@ -24,13 +25,17 @@ const WelcomeScreen = () => {
   const [isLoadingConnections, setIsLoadingConnections] = useState(true);
   const [connectingName, setConnectingName] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingConnection, setEditingConnection] = useState<{
+    name: string;
+    connection: services.ConnectionDetails;
+  } | null>(null);
 
   const fetchConnections = useCallback(async () => {
     try {
       const connections = await ListSavedConnections();
       setSavedConnections(connections || {});
     } catch (error: any) {
-      console.error("Error fetching saved connections:", error);
       toast.error("Failed to load saved connections", {
         description: error?.message,
       });
@@ -40,9 +45,9 @@ const WelcomeScreen = () => {
     }
   }, [isLoadingConnections]);
 
-  useEffect(() => {
+  useMount(() => {
     fetchConnections();
-  }, [fetchConnections]);
+  });
 
   const handleConnect = async (name: string) => {
     setConnectingName(name);
@@ -69,11 +74,18 @@ const WelcomeScreen = () => {
     }
   };
 
-  const handleConnectionSaved = () => {
-    fetchConnections();
+  const handleAddNewConnection = () => {
+    setIsEditing(false);
+    setEditingConnection(null);
+    setIsFormOpen(true);
   };
 
-  // Memoize sorted connections
+  const handleEdit = (name: string, details: services.ConnectionDetails) => {
+    setIsEditing(true);
+    setEditingConnection({ name, connection: details });
+    setIsFormOpen(true);
+  };
+
   const sortedConnections = useMemo(() => {
     return Object.entries(savedConnections).sort(([, a], [, b]) => {
       const timeA = a.lastUsed ? new Date(a.lastUsed).getTime() : 0;
@@ -95,7 +107,7 @@ const WelcomeScreen = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button onClick={() => setIsFormOpen(true)}>
+          <Button onClick={handleAddNewConnection}>
             <PlusCircleIcon className="mr-2 h-4 w-4" /> Add New Connection
           </Button>
 
@@ -125,6 +137,7 @@ const WelcomeScreen = () => {
                 details={details}
                 onConnect={handleConnect}
                 onDelete={handleDelete}
+                onEdit={handleEdit}
                 isConnecting={connectingName === name}
                 lastUsed={
                   details.lastUsed
@@ -142,7 +155,7 @@ const WelcomeScreen = () => {
             <p className="text-muted-foreground mt-1 mb-4">
               Ready to explore? Add your first connection now.
             </p>
-            <Button onClick={() => setIsFormOpen(true)} variant="outline">
+            <Button onClick={handleAddNewConnection} variant="outline">
               <PlusCircleIcon className="mr-2 h-4 w-4" />
               Add New Connection
             </Button>
@@ -153,7 +166,10 @@ const WelcomeScreen = () => {
       <ConnectionFormDialog
         isOpen={isFormOpen}
         onOpenChange={setIsFormOpen}
-        onConnectionSaved={handleConnectionSaved}
+        onConnectionSaved={fetchConnections}
+        isEditing={isEditing}
+        defaultValues={editingConnection}
+        savedConnections={savedConnections}
       />
     </div>
   );

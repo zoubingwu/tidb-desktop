@@ -1,13 +1,3 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,16 +9,32 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, Database, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Clock, Database, Loader2, MoreHorizontal } from "lucide-react";
+import { useState } from "react";
 import { services } from "wailsjs/go/models";
 
 type ConnectionCardProps = {
   name: string;
   details: services.ConnectionDetails;
-  onConnect: (name: string) => Promise<void>; // Pass connect logic from parent
-  onDelete: (name: string) => Promise<void>; // Pass delete logic from parent
-  // onEdit: (name: string, details: services.ConnectionDetails) => void; // Placeholder for edit
-  isConnecting: boolean; // Flag from parent indicating *this* card is connecting
+  onConnect: (name: string) => Promise<void>;
+  onDelete: (name: string) => Promise<void>;
+  onEdit: (name: string, details: services.ConnectionDetails) => void;
+  isConnecting: boolean;
   lastUsed: string;
 };
 
@@ -39,14 +45,18 @@ export const ConnectionCard = ({
   onDelete,
   isConnecting,
   lastUsed,
+  onEdit,
 }: ConnectionCardProps) => {
-  const [isDeleting, setIsDeleting] = useState(false); // Local delete loading state
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteConfirm = async () => {
     setIsDeleting(true);
-    await onDelete(name); // Call parent delete handler
-    // Parent handler shows toast and triggers refetch
-    setIsDeleting(false); // Reset local state (dialog closes automatically)
+    await onDelete(name);
+    setIsDeleting(false);
+  };
+
+  const handleOpenEditForm = () => {
+    onEdit(name, details);
   };
 
   return (
@@ -75,31 +85,53 @@ export const ConnectionCard = ({
       <CardFooter className="flex items-center justify-between gap-2">
         {/* Connect Button */}
         <Button
-          className="flex-grow"
           onClick={() => onConnect(name)}
           disabled={isConnecting || isDeleting}
+          className="flex-grow"
         >
-          {isConnecting && <Loader2 className="h-4 w-4 animate-spin" />}
-          Connect
+          {isConnecting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Connecting...
+            </>
+          ) : (
+            <>Connect</>
+          )}
         </Button>
 
-        {/* Delete Button with Confirmation */}
+        {/* Replace Delete Button with Dropdown Menu */}
         <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-destructive hover:text-destructive border-destructive/50 hover:border-destructive/80 h-9 w-9"
-              disabled={isConnecting || isDeleting}
-            >
-              {isDeleting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4" />
-              )}
-              <span className="sr-only">Delete {name}</span>
-            </Button>
-          </AlertDialogTrigger>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                disabled={isConnecting || isDeleting}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">More options for {name}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem
+                onClick={handleOpenEditForm}
+                disabled={isConnecting || isDeleting}
+              >
+                Edit
+              </DropdownMenuItem>
+
+              <AlertDialogTrigger asChild>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                  disabled={isConnecting || isDeleting}
+                >
+                  Delete
+                </DropdownMenuItem>
+              </AlertDialogTrigger>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Are you sure?</AlertDialogTitle>

@@ -1,23 +1,27 @@
-import React, { useState, useEffect } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { services } from "wailsjs/go/models";
-import { TestConnection, SaveConnection } from "wailsjs/go/main/App";
-import { Loader2 } from "lucide-react";
-import { ClipboardGetText } from "wailsjs/runtime/runtime";
 import { inferConnectionDetails } from "@/lib/ai";
+import { Loader2 } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { toast } from "sonner";
+import {
+  DeleteSavedConnection,
+  SaveConnection,
+  TestConnection,
+} from "wailsjs/go/main/App";
+import { services } from "wailsjs/go/models";
+import { ClipboardGetText } from "wailsjs/runtime/runtime";
 
 // Type definition for the connection details state
 type ConnectionFormState = Pick<
@@ -38,11 +42,16 @@ const initialFormState: ConnectionFormState = {
 type ConnectionFormDialogProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onConnectionSaved: () => void; // Callback after saving
-  defaultValues?: {
+  onConnectionSaved: (
+    name: string,
+    connection: services.ConnectionDetails,
+  ) => void;
+  defaultValues: {
     name: string;
     connection: ConnectionFormState;
-  };
+  } | null;
+  isEditing?: boolean;
+  savedConnections: Record<string, services.ConnectionDetails>;
 };
 
 export function ConnectionFormDialog({
@@ -50,6 +59,8 @@ export function ConnectionFormDialog({
   onOpenChange,
   onConnectionSaved,
   defaultValues,
+  isEditing,
+  savedConnections,
 }: ConnectionFormDialogProps) {
   const [formState, setFormState] = useState<ConnectionFormState>(
     defaultValues?.connection || initialFormState,
@@ -115,24 +126,42 @@ export function ConnectionFormDialog({
     }
   };
 
-  // Updated save function (doesn't connect anymore)
   const handleSave = async () => {
-    if (!connectionName.trim()) {
+    const name = connectionName.trim();
+    if (!name) {
       toast.error("Missing Connection Name", {
         description: "Please provide a name to save this connection.",
       });
       return;
     }
+
     setIsSaving(true);
     try {
-      await SaveConnection(connectionName, formState);
+      const isNameTaken =
+        (!isEditing && name in savedConnections) ||
+        (isEditing &&
+          defaultValues?.name &&
+          defaultValues?.name !== name &&
+          name in savedConnections);
+
+      if (isNameTaken) {
+        toast.error("Connection Name Already Exists", {
+          description: "Please choose a different name.",
+        });
+        return;
+      }
+
+      if (isEditing && defaultValues?.name) {
+        await DeleteSavedConnection(defaultValues.name);
+      }
+      await SaveConnection(name, formState);
+
       toast.success("Connection Saved", {
-        description: `Connection '${connectionName}' saved successfully.`,
+        description: `Connection '${name}' saved successfully.`,
       });
-      onConnectionSaved(); // Notify parent to refetch
-      onOpenChange(false); // Close dialog on successful save
+      onConnectionSaved(name, formState);
+      onOpenChange(false);
     } catch (error: any) {
-      console.error("Save Error:", error);
       toast.error("Save Error", {
         description:
           typeof error === "string"
@@ -182,7 +211,9 @@ export function ConnectionFormDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[525px]">
         <DialogHeader>
-          <DialogTitle>Database Connection</DialogTitle>
+          <DialogTitle>
+            {isEditing ? "Edit Database Connection" : "Add Database Connection"}
+          </DialogTitle>
           <DialogDescription>
             Enter details to connect. Provide a name to save the connection for
             later use.
@@ -201,6 +232,8 @@ export function ConnectionFormDialog({
               onChange={handleNameChange}
               className="col-span-3"
               placeholder="e.g., My TiDB Cloud Dev, Local Test"
+              autoComplete="off"
+              autoCorrect="off"
             />
           </div>
           {/* Host */}
