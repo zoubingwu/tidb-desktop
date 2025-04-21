@@ -217,3 +217,22 @@ func (a *App) SaveThemeSettings(settings services.ThemeSettings) error {
 	fmt.Printf("Saving theme settings: %+v\n", settings) // Log the received settings
 	return a.configService.SaveThemeSettings(settings)
 }
+
+// --- AI Provider Settings ---
+
+// GetAIProviderSettings retrieves the currently saved AI provider settings.
+func (a *App) GetAIProviderSettings() (*services.AIProviderSettings, error) {
+	if a.configService == nil {
+		return nil, fmt.Errorf("config service not initialized")
+	}
+	return a.configService.GetAIProviderSettings()
+}
+
+// SaveAIProviderSettings saves the provided AI provider settings to the config file.
+func (a *App) SaveAIProviderSettings(settings services.AIProviderSettings) error {
+	if a.configService == nil {
+		return fmt.Errorf("config service not initialized")
+	}
+	fmt.Printf("Saving AI provider settings...\n") // Don't log keys/sensitive info
+	return a.configService.SaveAIProviderSettings(settings)
+}
