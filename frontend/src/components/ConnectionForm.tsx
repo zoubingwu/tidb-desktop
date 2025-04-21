@@ -39,31 +39,37 @@ type ConnectionFormDialogProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onConnectionSaved: () => void; // Callback after saving
+  defaultValues?: {
+    name: string;
+    connection: ConnectionFormState;
+  };
 };
 
 export function ConnectionFormDialog({
   isOpen,
   onOpenChange,
   onConnectionSaved,
+  defaultValues,
 }: ConnectionFormDialogProps) {
-  // Remove local isOpen state, use prop instead
-  const [formState, setFormState] =
-    useState<ConnectionFormState>(initialFormState);
-  const [connectionName, setConnectionName] = useState<string>("");
+  const [formState, setFormState] = useState<ConnectionFormState>(
+    defaultValues?.connection || initialFormState,
+  );
+  const [connectionName, setConnectionName] = useState<string>(
+    defaultValues?.name || "",
+  );
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isInferring, setIsInferring] = useState(false);
 
-  // Reset form when dialog opens (using prop)
   useEffect(() => {
     if (isOpen) {
-      setFormState(initialFormState);
-      setConnectionName("");
+      setFormState(defaultValues?.connection || initialFormState);
+      setConnectionName(defaultValues?.name || "");
       setIsTesting(false);
       setIsSaving(false);
       setIsInferring(false);
     }
-  }, [isOpen]);
+  }, [isOpen, defaultValues]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
