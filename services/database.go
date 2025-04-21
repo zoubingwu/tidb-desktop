@@ -25,6 +25,7 @@ type ConnectionDetails struct {
 
 // SQLResult defines a standard structure for SQL execution results.
 type SQLResult struct {
+	Columns      []string         `json:"columns,omitempty"`      // Ordered list of column names for SELECT
 	Rows         []map[string]any `json:"rows,omitempty"`         // Used for SELECT queries
 	RowsAffected *int64           `json:"rowsAffected,omitempty"` // Used for INSERT/UPDATE/DELETE
 	LastInsertId *int64           `json:"lastInsertId,omitempty"` // Used for INSERT
@@ -152,8 +153,8 @@ func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDeta
 			return nil, fmt.Errorf("error iterating rows: %w", err)
 		}
 
-		// Success, return rows
-		return &SQLResult{Rows: results}, nil
+		// Success, return rows and columns
+		return &SQLResult{Columns: columns, Rows: results}, nil
 	}
 
 	// If db.Query failed, try db.Exec (INSERT, UPDATE, DELETE, etc.)
