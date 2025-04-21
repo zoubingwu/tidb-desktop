@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { inferConnectionDetails } from "@/lib/ai";
-import { Loader2 } from "lucide-react";
+import { Loader } from "lucide-react";
 import React, { useState, useEffect, FormEvent } from "react";
 import { toast } from "sonner";
 import {
@@ -343,7 +343,7 @@ export function ConnectionFormDialog({
               onClick={handleReadFromClipboard}
               disabled={isTesting || isSaving || isInferring}
             >
-              {isInferring && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isInferring && <Loader className="h-4 w-4 animate-spin" />}
               {isInferring ? "Inferring..." : "Read from Clipboard"}
             </Button>
             <div className="flex gap-2">
@@ -356,9 +356,11 @@ export function ConnectionFormDialog({
                 type="button"
                 variant="secondary"
                 onClick={handleTestConnection}
-                disabled={isTesting || isSaving || isInferring}
+                disabled={
+                  isTesting || isSaving || isInferring || !formState.host
+                }
               >
-                {isTesting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isTesting && <Loader className="h-4 w-4 animate-spin" />}
                 {isTesting ? "Testing..." : "Test"}
               </Button>
               <Button
@@ -367,7 +369,7 @@ export function ConnectionFormDialog({
                   isTesting || isSaving || isInferring || !connectionName.trim()
                 }
               >
-                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isSaving && <Loader className="h-4 w-4 animate-spin" />}
                 {isSaving ? "Saving..." : "Save"}
               </Button>
             </div>

@@ -15,7 +15,7 @@ import { SqlAgentResponse, generateSqlAgent } from "@/lib/ai";
 import {
   CircleAlert,
   EyeIcon,
-  Loader2,
+  Loader,
   SendHorizonal,
   SparkleIcon,
 } from "lucide-react";
@@ -262,9 +262,9 @@ export const DataTableFilterAI = ({
       case "ai-thinking":
         return (
           <div
-            className={`ai-thinking ${baseClasses}  text-muted-foreground italic flex items-center gap-1 text-xs`}
+            className={`ai-thinking ${baseClasses}  text-muted-foreground italic flex gap-1 text-xs`}
           >
-            <Loader2 className="size-3 animate-spin flex-shrink-0" />
+            <Loader className="size-3 animate-spin flex-shrink-0" />
             <span>{block.content}</span>
           </div>
         );

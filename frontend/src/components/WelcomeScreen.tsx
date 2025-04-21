@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useMount } from "ahooks";
 import { formatDistanceToNow } from "date-fns";
-import { Loader2Icon, PlusCircleIcon, SettingsIcon } from "lucide-react";
+import { Loader, PlusCircleIcon, SettingsIcon } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -125,7 +125,7 @@ const WelcomeScreen = () => {
       <section>
         {isLoadingConnections ? (
           <div className="flex items-center justify-center p-10 text-muted-foreground">
-            <Loader2Icon className="h-8 w-8 animate-spin mr-3" />
+            <Loader className="h-8 w-8 animate-spin mr-3" />
             <span>Loading connections...</span>
           </div>
         ) : hasConnections ? (

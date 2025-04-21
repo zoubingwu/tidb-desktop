@@ -24,7 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Clock, Database, Loader2, MoreHorizontal } from "lucide-react";
+import { Clock, Database, Loader, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { services } from "wailsjs/go/models";
 
@@ -91,7 +91,7 @@ export const ConnectionCard = ({
         >
           {isConnecting ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader className="h-4 w-4 animate-spin" />
               Connecting...
             </>
           ) : (
@@ -146,9 +146,7 @@ export const ConnectionCard = ({
                 disabled={isDeleting}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                {isDeleting && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
+                {isDeleting && <Loader className="h-4 w-4 animate-spin" />}
                 Delete
               </AlertDialogAction>
             </AlertDialogFooter>
