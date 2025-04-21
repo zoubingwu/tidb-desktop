@@ -39,9 +39,10 @@ type OpenRouterSettings struct {
 
 // AIProviderSettings holds API keys and settings for different AI providers
 type AIProviderSettings struct {
-	OpenAI    *OpenAISettings    `json:"openai,omitempty"`
-	Anthropic *AnthropicSettings `json:"anthropic,omitempty"`
-	OpenRouter *OpenRouterSettings `json:"openrouter,omitempty"`
+	CurrentProvider string             `json:"provider,omitempty"` // 'openai', 'anthropic', 'openrouter'
+	OpenAI          *OpenAISettings    `json:"openai,omitempty"`
+	Anthropic       *AnthropicSettings `json:"anthropic,omitempty"`
+	OpenRouter      *OpenRouterSettings `json:"openrouter,omitempty"`
 }
 
 // ConfigData defines the structure of the entire configuration file.
@@ -76,9 +77,10 @@ func NewConfigService() (*ConfigService, error) {
 			Connections:   make(map[string]ConnectionDetails),
 			ThemeSettings: &ThemeSettings{Mode: "system", BaseTheme: "claude"}, // Default theme settings
 			AIProviderSettings: &AIProviderSettings{ // Initialize AI settings struct
-				OpenAI:    &OpenAISettings{},
-				Anthropic: &AnthropicSettings{},
-				OpenRouter: &OpenRouterSettings{},
+				CurrentProvider: "openai", // Default provider
+				OpenAI:          &OpenAISettings{},
+				Anthropic:       &AnthropicSettings{},
+				OpenRouter:      &OpenRouterSettings{},
 			},
 		},
 	}
@@ -92,9 +94,10 @@ func NewConfigService() (*ConfigService, error) {
 				Connections:   make(map[string]ConnectionDetails),
 				ThemeSettings: &ThemeSettings{Mode: "system", BaseTheme: "claude"},
 				AIProviderSettings: &AIProviderSettings{
-					OpenAI:    &OpenAISettings{},
-					Anthropic: &AnthropicSettings{},
-					OpenRouter: &OpenRouterSettings{},
+					CurrentProvider: "openai", // Default provider
+					OpenAI:          &OpenAISettings{},
+					Anthropic:       &AnthropicSettings{},
+					OpenRouter:      &OpenRouterSettings{},
 				},
 			}
 		}
@@ -108,11 +111,15 @@ func NewConfigService() (*ConfigService, error) {
 		// Ensure AIProviderSettings and its nested structs are initialized if they are missing
 		if service.config.AIProviderSettings == nil {
 			service.config.AIProviderSettings = &AIProviderSettings{
-				OpenAI:    &OpenAISettings{},
-				Anthropic: &AnthropicSettings{},
-				OpenRouter: &OpenRouterSettings{},
+				CurrentProvider: "openai", // Default provider
+				OpenAI:          &OpenAISettings{},
+				Anthropic:       &AnthropicSettings{},
+				OpenRouter:      &OpenRouterSettings{},
 			}
 		} else {
+			if service.config.AIProviderSettings.CurrentProvider == "" { // Ensure default if loaded empty
+				service.config.AIProviderSettings.CurrentProvider = "openai"
+			}
 			if service.config.AIProviderSettings.OpenAI == nil {
 				service.config.AIProviderSettings.OpenAI = &OpenAISettings{}
 			}
@@ -136,12 +143,15 @@ func NewConfigService() (*ConfigService, error) {
 		// Ensure AIProviderSettings is initialized if it was missing
 		if service.config.AIProviderSettings == nil {
 			service.config.AIProviderSettings = &AIProviderSettings{
-				OpenAI:    &OpenAISettings{},
-				Anthropic: &AnthropicSettings{},
-				OpenRouter: &OpenRouterSettings{},
+				CurrentProvider: "openai", // Default provider
+				OpenAI:          &OpenAISettings{},
+				Anthropic:       &AnthropicSettings{},
+				OpenRouter:      &OpenRouterSettings{},
 			}
 		} else {
-			// Ensure nested structs are non-nil
+			if service.config.AIProviderSettings.CurrentProvider == "" { // Ensure default if loaded empty
+				service.config.AIProviderSettings.CurrentProvider = "openai"
+			}
 			if service.config.AIProviderSettings.OpenAI == nil {
 				service.config.AIProviderSettings.OpenAI = &OpenAISettings{}
 			}
@@ -168,9 +178,10 @@ func (s *ConfigService) loadConfig() error {
 		// Defaults are already set in NewConfigService, ensure AI defaults are there too
 		if s.config.AIProviderSettings == nil {
 			s.config.AIProviderSettings = &AIProviderSettings{
-				OpenAI:    &OpenAISettings{},
-				Anthropic: &AnthropicSettings{},
-				OpenRouter: &OpenRouterSettings{},
+				CurrentProvider: "openai", // Default provider
+				OpenAI:          &OpenAISettings{},
+				Anthropic:       &AnthropicSettings{},
+				OpenRouter:      &OpenRouterSettings{},
 			}
 		}
 		return nil
@@ -187,9 +198,10 @@ func (s *ConfigService) loadConfig() error {
 		// Defaults are already set in NewConfigService, ensure AI defaults are there too
 		if s.config.AIProviderSettings == nil {
 			s.config.AIProviderSettings = &AIProviderSettings{
-				OpenAI:    &OpenAISettings{},
-				Anthropic: &AnthropicSettings{},
-				OpenRouter: &OpenRouterSettings{},
+				CurrentProvider: "openai", // Default provider
+				OpenAI:          &OpenAISettings{},
+				Anthropic:       &AnthropicSettings{},
+				OpenRouter:      &OpenRouterSettings{},
 			}
 		}
 		return nil
@@ -216,11 +228,15 @@ func (s *ConfigService) loadConfig() error {
 	// Ensure AIProviderSettings and nested structs are non-nil
 	if s.config.AIProviderSettings == nil {
 		s.config.AIProviderSettings = &AIProviderSettings{
-			OpenAI:    &OpenAISettings{},
-			Anthropic: &AnthropicSettings{},
-			OpenRouter: &OpenRouterSettings{},
+			CurrentProvider: "openai", // Default provider
+			OpenAI:          &OpenAISettings{},
+			Anthropic:       &AnthropicSettings{},
+			OpenRouter:      &OpenRouterSettings{},
 		}
 	} else {
+		if s.config.AIProviderSettings.CurrentProvider == "" { // Ensure default if loaded empty
+			s.config.AIProviderSettings.CurrentProvider = "openai"
+		}
 		if s.config.AIProviderSettings.OpenAI == nil {
 			s.config.AIProviderSettings.OpenAI = &OpenAISettings{}
 		}
@@ -383,13 +399,17 @@ func (s *ConfigService) GetAIProviderSettings() (*AIProviderSettings, error) {
 	if s.config.AIProviderSettings == nil {
 		// Should not happen due to initialization, but return default if it does
 		return &AIProviderSettings{
-			OpenAI:    &OpenAISettings{},
-			Anthropic: &AnthropicSettings{},
-			OpenRouter: &OpenRouterSettings{},
+			CurrentProvider: "openai", // Default provider
+			OpenAI:          &OpenAISettings{},
+			Anthropic:       &AnthropicSettings{},
+			OpenRouter:      &OpenRouterSettings{},
 		}, nil
 	}
 	// Return a copy to prevent modification of internal state
 	settingsCopy := *s.config.AIProviderSettings
+	if settingsCopy.CurrentProvider == "" {
+		settingsCopy.CurrentProvider = "openai" // Ensure CurrentProvider has a default if empty
+	}
 	if settingsCopy.OpenAI == nil { settingsCopy.OpenAI = &OpenAISettings{} } // Ensure nested are non-nil
 	if settingsCopy.Anthropic == nil { settingsCopy.Anthropic = &AnthropicSettings{} }
 	if settingsCopy.OpenRouter == nil { settingsCopy.OpenRouter = &OpenRouterSettings{} }
@@ -402,10 +422,22 @@ func (s *ConfigService) SaveAIProviderSettings(settings AIProviderSettings) erro
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Basic validation for CurrentProvider
+	isValidProvider := false
+	validProviders := []string{"openai", "anthropic", "openrouter"} // Keep this in sync with frontend
+	for _, p := range validProviders {
+		if settings.CurrentProvider == p {
+			isValidProvider = true
+			break
+		}
+	}
+	if !isValidProvider {
+		fmt.Printf("Warning: Invalid CurrentProvider '%s' received in SaveAIProviderSettings. Defaulting to 'openai'.\n", settings.CurrentProvider)
+		settings.CurrentProvider = "openai" // Default if invalid
+	}
+
 	// Ensure nested pointers are handled correctly before saving
 	if settings.OpenAI == nil { settings.OpenAI = &OpenAISettings{} }
-	if settings.Anthropic == nil { settings.Anthropic = &AnthropicSettings{} }
-	if settings.OpenRouter == nil { settings.OpenRouter = &OpenRouterSettings{} }
 
 	s.config.AIProviderSettings = &settings // Update the internal config
 	return s.saveConfig() // Save the entire config file
