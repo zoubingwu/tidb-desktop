@@ -62,8 +62,8 @@ jobs:
           title: "chore: update versions for release"
           createGithubReleases: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # NPM_TOKEN: ${{ secrets.NPM_TOKEN }} # Uncomment if publishing to npm
+          # Use PAT instead of GITHUB_TOKEN to allow the merge commit to trigger workflows
+          GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
 
       - name: Build Wails app for macOS
         # Only build if a release was actually published in the previous step
