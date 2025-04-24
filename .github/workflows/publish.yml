@@ -1,39 +1,29 @@
 name: Release
 
 on:
+  # Trigger when a tag starting with 'v' is pushed
   push:
-    branches:
-      - master
-
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+    tags:
+      - 'v*'
+  # Allow manual trigger from Actions tab
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v0.1.0)'
+        required: true
 
 jobs:
   release:
-    name: Release
+    name: Release macOS
     runs-on: macos-latest
     permissions:
-      contents: write # to create release (changeset-action)
-      pull-requests: write # to create pull request (changeset-action)
-      # id-token: write # Uncomment if you need provenance generation
+      contents: write # Needed for actions/create-release
 
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
-        # Fetch all history so changesets action can find changes
         with:
-          fetch-depth: 0
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.8.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: "pnpm"
-          cache-dependency-path: frontend/pnpm-lock.yaml
+          fetch-depth: 0 # Fetch all history for commit hash
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -41,62 +31,59 @@ jobs:
           go-version: '1.24'
           cache-dependency-path: go.sum
 
-      - name: Install frontend dependencies
-        run: pnpm install
-        working-directory: ./frontend
-
       - name: Install Go dependencies
         run: go mod tidy
 
-      - name: Create Release Pull Request or Publish Release
-        id: changesets
-        uses: changesets/action@v1
-        with:
-          # Tell the action to run from the frontend directory
-          cwd: ./frontend
-          # We run build manually after this step if a release is created
-          # 'publish' script is needed for changeset action to work correctly in publish mode
-          # Create a dummy script or point to an empty one if you don't publish to npm
-          publish: pnpm --filter=frontend release:placeholder # Assumes a script "release:placeholder": "echo 'Publishing handled by GitHub Actions'" in frontend/package.json
-          commit: "chore: update versions for release"
-          # Removing title forces the action to commit directly instead of creating a PR
-          # title: "chore: update versions for release"
-          createGithubReleases: true
+      # Determine version and commit hash
+      - name: Get Version and Commit
+        id: vars
+        run: |
+          # Use tag from workflow_dispatch input if present, otherwise use github.ref_name (pushed tag)
+          TAG=${{ github.event.inputs.tag || github.ref_name }}
+          # Strip 'v' prefix if it exists for clean version number (optional, adjust based on your main.go expectation)
+          VERSION=${TAG#v}
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "commit_hash=${COMMIT_HASH}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
         env:
-          # Use the default GITHUB_TOKEN for single-trigger workflow
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # NPM_TOKEN: ${{ secrets.NPM_TOKEN }} # Uncomment if publishing to npm
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          release_name: Release ${{ steps.vars.outputs.tag }}
+          body: |
+            Release notes for ${{ steps.vars.outputs.tag }}
+            Commit: ${{ steps.vars.outputs.commit_hash }}
+          draft: false
+          prerelease: false # Set to true if it's a pre-release
 
       - name: Build Wails app for macOS
-        # Only build if a release was actually published in the previous step
-        if: steps.changesets.outputs.published == 'true'
         run: |
-          COMMIT_HASH=$(git rev-parse --short HEAD)
-          echo "Building version ${{ steps.changesets.outputs.publishedVersion }} (${COMMIT_HASH})"
+          echo "Building version ${{ steps.vars.outputs.version }} (${{ steps.vars.outputs.commit_hash }})"
+          # Note: Using steps.vars.outputs.version here (without 'v')
           wails build -platform=darwin/universal \
-                      -ldflags="-s -w -X main.version=${{ steps.changesets.outputs.publishedVersion }} -X main.commitHash=${COMMIT_HASH}" \
-                      -trimpath # Add -upx -upxflags="--best" if UPX is installed and desired
+                      -ldflags="-s -w -X main.version=${{ steps.vars.outputs.version }} -X main.commitHash=${{ steps.vars.outputs.commit_hash }}" \
+                      -trimpath
         env:
-          CGO_ENABLED: 1 # Might be required for cross-compilation or specific dependencies
+          CGO_ENABLED: 1
 
       - name: Zip macOS Artifact
-        # Only zip if a release was published
-        if: steps.changesets.outputs.published == 'true'
         run: |
           cd "build/bin"
           zip -r "TiDB Desktop.app.zip" "TiDB Desktop.app"
         shell: bash
 
       - name: Upload macOS Artifact to Release
-        # Only upload if a release was published
-        if: steps.changesets.outputs.published == 'true'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # This URL is available only if 'createGithubReleases' is true
-          upload_url: ${{ steps.changesets.outputs.publishUploadUrl }}
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # URL from the create_release step
           asset_path: ./build/bin/TiDB Desktop.app.zip
-          # Use the version number from the changesets action output for the asset name
-          asset_name: TiDB-Desktop-${{ steps.changesets.outputs.publishedVersion }}-macos-universal.app.zip
+          asset_name: TiDB-Desktop-${{ steps.vars.outputs.tag }}-macos-universal.app.zip # Use tag in asset name
           asset_content_type: application/zip
