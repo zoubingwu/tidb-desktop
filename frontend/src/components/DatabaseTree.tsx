@@ -30,7 +30,7 @@ export const DatabaseTree = memo(
     selectedTable,
   }: DatabaseTreeProps) => {
     return (
-      <ScrollArea className="w-[240px] flex-shrink-0 h-full bg-muted/50">
+      <ScrollArea className="h-full bg-muted/50">
         {isLoadingDatabases ? (
           <div className="p-4 text-center text-muted-foreground">
             Loading Databases...

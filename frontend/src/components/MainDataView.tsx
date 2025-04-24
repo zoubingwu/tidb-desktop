@@ -1,4 +1,5 @@
-import { DataTableFilterAI } from "@/components/DataTableFilterAI";
+import "allotment/dist/style.css"; // for 3 column split view
+import { AIPanel } from "@/components/AIPanel";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,8 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { useMemoizedFn } from "ahooks";
-import { SettingsIcon, UnplugIcon } from "lucide-react";
+import { Allotment as ReactSplitView } from "allotment";
+import { SettingsIcon, SparkleIcon, UnplugIcon } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useImmer } from "use-immer";
@@ -57,6 +59,8 @@ const defaultTableDataParameters = {
 };
 const TITLE_BAR_HEIGHT = 28;
 const FOOTER_HEIGHT = 40;
+const DEFAULT_DB_TREE_WIDTH = 240;
+const DEFAULT_AI_PANEL_WIDTH = 300;
 const TABLE_HEIGHT = window.innerHeight - TITLE_BAR_HEIGHT - FOOTER_HEIGHT;
 
 const MainDataView = ({
@@ -85,6 +89,7 @@ const MainDataView = ({
   });
 
   const [sqlFromAI, setSqlFromAI] = useState<string>("");
+  const [showAIPanel, setShowAIPanel] = useState(false);
 
   const updateDatabaseTree = (
     dbName: string,
@@ -371,24 +376,49 @@ const MainDataView = ({
   });
 
   return (
-    <div className="h-full flex">
-      <DatabaseTree
-        databaseTree={databaseTree}
-        isLoadingDatabases={isLoadingDatabases}
-        databasesError={databasesError}
-        onSelectDatabase={handleSelectDatabase}
-        onSelectTable={handleSelectTable}
-        selectedTable={{ db: currentDb, table: currentTable }}
-      />
+    <ReactSplitView
+      defaultSizes={[
+        DEFAULT_DB_TREE_WIDTH,
+        window.innerWidth - DEFAULT_DB_TREE_WIDTH,
+      ]}
+      separator={false}
+    >
+      <ReactSplitView.Pane>
+        <DatabaseTree
+          databaseTree={databaseTree}
+          isLoadingDatabases={isLoadingDatabases}
+          databasesError={databasesError}
+          onSelectDatabase={handleSelectDatabase}
+          onSelectTable={handleSelectTable}
+          selectedTable={{ db: currentDb, table: currentTable }}
+        />
+      </ReactSplitView.Pane>
 
-      <div className="flex-grow flex flex-col overflow-hidden">
-        <div className="flex-grow overflow-auto relative">
-          {tableViewState === "data" ? (
-            <DataTable<TableRowData> table={table} height={TABLE_HEIGHT} />
-          ) : (
-            <TablePlaceholder animate={tableViewState === "loading"} />
-          )}
-        </div>
+      <ReactSplitView.Pane className="flex flex-col overflow-hidden">
+        <ReactSplitView
+          defaultSizes={[
+            window.innerWidth - DEFAULT_DB_TREE_WIDTH - DEFAULT_AI_PANEL_WIDTH,
+            DEFAULT_AI_PANEL_WIDTH,
+          ]}
+          separator={false}
+        >
+          <ReactSplitView.Pane>
+            {tableViewState === "data" ? (
+              <DataTable<TableRowData> table={table} height={TABLE_HEIGHT} />
+            ) : (
+              <TablePlaceholder animate={tableViewState === "loading"} />
+            )}
+          </ReactSplitView.Pane>
+
+          <ReactSplitView.Pane visible={showAIPanel}>
+            <AIPanel
+              currentDb={currentDb}
+              currentTable={currentTable}
+              onApplyQueryFromAI={handleApplyAIGeneratedQuery}
+              opened={showAIPanel}
+            />
+          </ReactSplitView.Pane>
+        </ReactSplitView>
 
         <div className="flex items-center justify-between px-2 py-2 bg-background gap-2">
           <div className="flex gap-2">
@@ -414,11 +444,16 @@ const MainDataView = ({
 
               <div className="flex gap-2">
                 <Tooltip>
-                  <DataTableFilterAI
-                    currentDb={currentDb}
-                    currentTable={currentTable}
-                    onApplyQueryFromAI={handleApplyAIGeneratedQuery}
-                  />
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowAIPanel(!showAIPanel)}
+                    >
+                      <SparkleIcon className="h-4 w-4" />
+                      <span className="sr-only">Ask AI</span>
+                    </Button>
+                  </TooltipTrigger>
                   <TooltipContent>
                     <p>Ask AI</p>
                   </TooltipContent>
@@ -456,8 +491,8 @@ const MainDataView = ({
             </div>
           </TooltipProvider>
         </div>
-      </div>
-    </div>
+      </ReactSplitView.Pane>
+    </ReactSplitView>
   );
 };
 
