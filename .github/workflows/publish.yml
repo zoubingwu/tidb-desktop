@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  release:
+    name: Release
+    runs-on: macos-latest
+    permissions:
+      contents: write # to create release (changeset-action)
+      pull-requests: write # to create pull request (changeset-action)
+      # id-token: write # Uncomment if you need provenance generation
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        # Fetch all history so changesets action can find changes
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: go.sum
+
+      - name: Install frontend dependencies
+        run: pnpm install
+        working-directory: ./frontend
+
+      - name: Install Go dependencies
+        run: go mod tidy
+
+      - name: Create Release Pull Request or Publish Release
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          # We run build manually after this step if a release is created
+          # 'publish' script is needed for changeset action to work correctly in publish mode
+          # Create a dummy script or point to an empty one if you don't publish to npm
+          publish: pnpm --filter=frontend release:placeholder # Assumes a script "release:placeholder": "echo 'Publishing handled by GitHub Actions'" in frontend/package.json
+          commit: "chore: update versions for release"
+          title: "chore: update versions for release"
+          createGithubReleases: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # NPM_TOKEN: ${{ secrets.NPM_TOKEN }} # Uncomment if publishing to npm
+
+      - name: Build Wails app for macOS
+        # Only build if a release was actually published in the previous step
+        if: steps.changesets.outputs.published == 'true'
+        run: |
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          echo "Building version ${{ steps.changesets.outputs.publishedVersion }} (${COMMIT_HASH})"
+          wails build -platform=darwin/universal \
+                      -ldflags="-s -w -X main.version=${{ steps.changesets.outputs.publishedVersion }} -X main.commitHash=${COMMIT_HASH}" \
+                      -trimpath # Add -upx -upxflags="--best" if UPX is installed and desired
+        env:
+          CGO_ENABLED: 1 # Might be required for cross-compilation or specific dependencies
+
+      - name: Zip macOS Artifact
+        # Only zip if a release was published
+        if: steps.changesets.outputs.published == 'true'
+        run: |
+          cd "build/bin"
+          zip -r "TiDB Desktop.app.zip" "TiDB Desktop.app"
+        shell: bash
+
+      - name: Upload macOS Artifact to Release
+        # Only upload if a release was published
+        if: steps.changesets.outputs.published == 'true'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # This URL is available only if 'createGithubReleases' is true
+          upload_url: ${{ steps.changesets.outputs.publishUploadUrl }}
+          asset_path: ./build/bin/TiDB Desktop.app.zip
+          # Use the version number from the changesets action output for the asset name
+          asset_name: TiDB-Desktop-${{ steps.changesets.outputs.publishedVersion }}-macos-universal.app.zip
+          asset_content_type: application/zip
