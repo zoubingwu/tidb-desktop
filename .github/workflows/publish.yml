@@ -59,11 +59,13 @@ jobs:
           # Create a dummy script or point to an empty one if you don't publish to npm
           publish: pnpm --filter=frontend release:placeholder # Assumes a script "release:placeholder": "echo 'Publishing handled by GitHub Actions'" in frontend/package.json
           commit: "chore: update versions for release"
-          title: "chore: update versions for release"
+          # Removing title forces the action to commit directly instead of creating a PR
+          # title: "chore: update versions for release"
           createGithubReleases: true
         env:
-          # Use PAT instead of GITHUB_TOKEN to allow the merge commit to trigger workflows
-          GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+          # Use the default GITHUB_TOKEN for single-trigger workflow
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # NPM_TOKEN: ${{ secrets.NPM_TOKEN }} # Uncomment if publishing to npm
 
       - name: Build Wails app for macOS
         # Only build if a release was actually published in the previous step
