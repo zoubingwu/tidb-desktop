@@ -46,6 +46,8 @@
     "react": "19.1.0",
     "react-day-picker": "8.10.1",
     "react-dom": "19.1.0",
+    "react-markdown": "10.1.0",
+    "react-textarea-autosize": "8.5.9",
     "sonner": "2.0.3",
     "sql-formatter": "15.6.0",
     "tailwind-merge": "3.2.0",
