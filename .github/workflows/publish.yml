@@ -52,19 +52,20 @@ jobs:
           echo "commit_hash=${COMMIT_HASH}" >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.vars.outputs.tag }}
-          release_name: Release ${{ steps.vars.outputs.tag }}
-          body: |
-            Release notes for ${{ steps.vars.outputs.tag }}
-            Commit: ${{ steps.vars.outputs.commit_hash }}
-          draft: false
-          prerelease: false # Set to true if it's a pre-release
+      # Release should be created manually or by a previous run when re-running.
+      # - name: Create GitHub Release
+      #   id: create_release
+      #   uses: actions/create-release@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     tag_name: ${{ steps.vars.outputs.tag }}
+      #     release_name: Release ${{ steps.vars.outputs.tag }}
+      #     body: |
+      #       Release notes for ${{ steps.vars.outputs.tag }}
+      #       Commit: ${{ steps.vars.outputs.commit_hash }}
+      #     draft: false
+      #     prerelease: false # Set to true if it's a pre-release
 
       - name: Build Wails app for macOS
         run: |
@@ -87,7 +88,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} # URL from the create_release step
+          # Remove upload_url: Let the action find the release based on the tag
+          # upload_url: ${{ steps.create_release.outputs.upload_url }} # URL from the create_release step
           asset_path: ./build/bin/TiDB Desktop.app.zip
           asset_name: TiDB-Desktop-${{ steps.vars.outputs.tag }}-macos-universal.app.zip # Use tag in asset name
           asset_content_type: application/zip
