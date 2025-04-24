@@ -7,7 +7,6 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "changeset": "changeset",
     "release:placeholder": "echo 'Publishing handled by GitHub Actions'"
   },
   "dependencies": {
@@ -61,7 +60,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
-    "@changesets/cli": "2.29.2",
     "@types/node": "22.14.1",
     "@types/react": "19.1.0",
     "@types/react-dom": "19.1.0",
