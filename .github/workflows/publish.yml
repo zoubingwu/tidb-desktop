@@ -38,6 +38,23 @@ jobs:
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
+      # Setup Node.js and pnpm for frontend build
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.0 # Make sure this matches your project if needed
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22 # Make sure this matches your project if needed
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile # Use --frozen-lockfile for CI
+        working-directory: ./frontend
+
       # Determine version and commit hash
       - name: Get Version and Commit
         id: vars
@@ -51,21 +68,6 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "commit_hash=${COMMIT_HASH}" >> $GITHUB_OUTPUT
         shell: bash
-
-      # Release should be created manually or by a previous run when re-running.
-      # - name: Create GitHub Release
-      #   id: create_release
-      #   uses: actions/create-release@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     tag_name: ${{ steps.vars.outputs.tag }}
-      #     release_name: Release ${{ steps.vars.outputs.tag }}
-      #     body: |
-      #       Release notes for ${{ steps.vars.outputs.tag }}
-      #       Commit: ${{ steps.vars.outputs.commit_hash }}
-      #     draft: false
-      #     prerelease: false # Set to true if it's a pre-release
 
       - name: Build Wails app for macOS
         run: |
