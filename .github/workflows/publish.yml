@@ -52,6 +52,8 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
+          # Tell the action to run from the frontend directory
+          cwd: ./frontend
           # We run build manually after this step if a release is created
           # 'publish' script is needed for changeset action to work correctly in publish mode
           # Create a dummy script or point to an empty one if you don't publish to npm
