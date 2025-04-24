@@ -20,6 +20,7 @@ var icon []byte
 
 var appName = "TiDB Desktop"
 var version = "0.1.0"
+var commitHash = "dev"
 
 func main() {
 	// Create an instance of the app structure
@@ -50,7 +51,7 @@ func main() {
 		Mac: &mac.Options{
 			About: &mac.AboutInfo{
 				Title:   fmt.Sprintf("%s %s", appName, version),
-				Message: "A modern lightweight TiDB desktop client.\n\nCopyright © 2025",
+				Message: fmt.Sprintf("A modern lightweight TiDB desktop client.\n\nCopyright © 2025\nCommit: %s", commitHash),
 				Icon:    icon,
 			},
 			TitleBar: mac.TitleBarHidden(),
