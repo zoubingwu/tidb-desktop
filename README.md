@@ -15,7 +15,7 @@ Make sure you have the following installed:
 - Go v1.24
 - Node.js v22
 - pnpm v10.8.0
-- Wails CLI v2.10
+- Wails CLI v2.10 (`go install github.com/wailsapp/wails/v2/cmd/wails@v2.10`)
 
 ### Development
 
