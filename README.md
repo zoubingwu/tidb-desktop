@@ -1,19 +1,36 @@
-# README
-
 ## About
 
-This is the official Wails React-TS template.
+TiDB Desktop is a modern lightweight TiDB/MySQL client with a built-in AI agent.
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+## Download
 
-## Live Development
+You can download the latest release from the [GitHub Releases page](https://github.com/zoubingwu/tidb-desktop/releases).
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+## Contribution
 
-## Building
+### Prerequisites
 
-To build a redistributable, production mode package, use `wails build`.
+Make sure you have the following installed:
+
+- Go v1.24
+- Node.js v22
+- pnpm v10.8.0
+- Wails CLI v2.10
+
+### Development
+
+To run in live development mode:
+
+```bash
+wails dev
+```
+
+This starts a development server with hot-reloading for frontend changes. You can also access your Go methods from the browser devtools by navigating to `http://localhost:34115`.
+
+### Building
+
+To build a redistributable, production-ready package:
+
+```bash
+wails build
+```
