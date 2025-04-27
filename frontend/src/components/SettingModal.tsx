@@ -335,7 +335,7 @@ function SettingsModal({ children }: SettingsModalProps) {
         <DialogFooter className="mt-4 pt-4">
           <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             onClick={handleTestConnection}
             disabled={
               isTestingConnection ||
