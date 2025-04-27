@@ -8,6 +8,7 @@
 @import "./themes/sunset-horizon.css";
 @import "./themes/solar-dusk.css";
 @import "./themes/twitter.css";
+@import "./styles/github-markdown.css";
 
 @theme inline {
   --color-background: var(--background);
