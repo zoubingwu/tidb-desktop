@@ -68,7 +68,6 @@ export const AIPanel = ({
   useEffect(() => {
     requestAnimationFrame(() => {
       setMaxRows(opened ? 10 : 2);
-      console.log("set maxRows", maxRows);
     });
   }, [opened]);
 
