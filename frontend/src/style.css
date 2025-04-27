@@ -10,6 +10,9 @@
 @import "./themes/twitter.css";
 @import "./styles/github-markdown.css";
 
+/* https://tailwindcss.com/docs/dark-mode#toggling-dark-mode-manually */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -63,8 +66,15 @@
   --shadow-2xl: var(--shadow-2xl);
 }
 
-/* https://tailwindcss.com/docs/dark-mode#toggling-dark-mode-manually */
-@custom-variant dark (&:where(.dark, .dark *));
+@theme {
+  --animate-typewriter: typewriter 1s steps(11) forwards infinite;
+
+  @keyframes typewriter {
+    to {
+      left: 100%;
+    }
+  }
+}
 
 * {
   user-select: none;
