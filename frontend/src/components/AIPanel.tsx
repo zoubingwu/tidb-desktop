@@ -16,7 +16,6 @@ import React, {
 } from "react";
 import Markdown from "react-markdown";
 import TextareaAutosize from "react-textarea-autosize";
-import { format } from "sql-formatter";
 
 // Expanded message type to better represent stream states
 type DisplayBlock = {
@@ -242,13 +241,13 @@ export const AIPanel = ({
                 id: `${uniqueId}-${Date.now()}-final`,
                 type: "ai-final",
                 content: (
-                  <div>
+                  <div className="markdown-body">
                     <Markdown>{finalResult.explanation}</Markdown>
-                    {finalResult.query && (
+                    {/* {finalResult.query && (
                       <pre className="p-2 mt-2 bg-gray-100 dark:bg-gray-800 rounded text-sm overflow-x-auto">
                         {format(finalResult.query, { language: "tidb" })}
                       </pre>
-                    )}
+                    )} */}
                   </div>
                 ),
                 meta: finalResult,
@@ -326,7 +325,9 @@ export const AIPanel = ({
         );
       case "ai-text":
         return (
-          <div className={`ai-text ${baseClasses} my-2 force-select-text`}>
+          <div
+            className={`ai-text ${baseClasses} my-2 force-select-text markdown-body`}
+          >
             <Markdown>{block.content as string}</Markdown>
           </div>
         );
