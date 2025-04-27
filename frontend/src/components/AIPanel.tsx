@@ -325,7 +325,7 @@ export const AIPanel = ({
         </React.Fragment>
       ))}
 
-      <div className="bg-background rounded-lg overflow-hidden text-sm mt-2">
+      <div className="bg-background rounded-md overflow-hidden text-sm mt-2">
         <TextareaAutosize
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
