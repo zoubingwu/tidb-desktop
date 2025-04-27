@@ -330,7 +330,7 @@ export const AIPanel = ({
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="e.g., list users created last month in db.users"
           disabled={isLoading}
-          className="w-full resize-none p-2 outline-0 placeholder:text-muted-foreground"
+          className="w-full resize-none p-2 outline-0 placeholder:text-muted-foreground/50"
           autoComplete="off"
           autoCorrect="off"
           minRows={2}
