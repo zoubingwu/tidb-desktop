@@ -18,6 +18,7 @@ export const availableThemes = [
   "neo-brutalism",
   "quantum-rose",
   "sunset-horizon",
+  "twitter",
 ];
 
 // Map theme names to their primary font families
@@ -27,6 +28,7 @@ const fontsByTheme = {
   "neo-brutalism": ["DM Sans", "Space Mono"],
   "quantum-rose": ["Poppins", "Playfair Display", "Space Mono"],
   "solar-dusk": ["Oxanium", "Merriweather", "Fira Code"],
+  twitter: ["Open Sans"],
 };
 
 export type ThemeMode = "light" | "dark" | "system";

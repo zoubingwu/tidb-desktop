@@ -7,6 +7,7 @@
 @import "./themes/quantum-rose.css";
 @import "./themes/sunset-horizon.css";
 @import "./themes/solar-dusk.css";
+@import "./themes/twitter.css";
 
 @theme inline {
   --color-background: var(--background);
