@@ -4,6 +4,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { LoadingTypewriter } from "@/components/ui/loading-typewriter";
 import { SqlAgentResponse, generateSqlAgent } from "@/lib/ai";
 import { type CoreMessage } from "ai";
 import { CircleAlert, EyeIcon, Loader, SendHorizonal } from "lucide-react";
@@ -398,8 +399,9 @@ export const AIPanel = ({
         <div className="flex justify-between border-t border-muted p-2">
           {isLoading ? (
             <div className="flex items-center gap-1 text-muted-foreground">
-              <Loader className="size-3 animate-spin flex-shrink-0" />
-              <span className="text-xs">Generating...</span>
+              <LoadingTypewriter className="text-xs">
+                Generating
+              </LoadingTypewriter>
             </div>
           ) : (
             <div />
