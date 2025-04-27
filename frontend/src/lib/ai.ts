@@ -2,6 +2,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import {
+  type CoreMessage,
   type ToolCallPart,
   type ToolResultPart,
   generateObject,
@@ -275,6 +276,7 @@ export async function* generateSqlAgent(
   userPrompt: string,
   currentDbName?: string | null,
   currentTableName?: string | null,
+  conversationHistory: CoreMessage[] = [],
 ): AsyncGenerator<AgentStreamEvent, void, unknown> {
   const model = await createModel();
 
@@ -295,7 +297,6 @@ You are an expert AI database assistant. Your goal is to translate the user's na
 **Context:**
 - Current Database: ${currentDbName || "Not specified"}
 - Current Table: ${currentTableName || "Not specified"}
-- User Request: "${userPrompt}"
 
 **Workflow:**
 1.  **Analyze Request:** Understand the user's intent. Identify potential target databases, tables, and columns.
@@ -329,7 +330,13 @@ Agent Steps:
     const { fullStream } = streamText({
       model,
       system: systemPrompt,
-      prompt: userPrompt,
+      messages: [
+        ...conversationHistory,
+        {
+          role: "user",
+          content: userPrompt,
+        },
+      ],
       tools: agentTools,
       toolChoice: "auto",
       maxSteps: 5,

@@ -5,6 +5,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { SqlAgentResponse, generateSqlAgent } from "@/lib/ai";
+import { type CoreMessage } from "ai";
 import { CircleAlert, EyeIcon, Loader, SendHorizonal } from "lucide-react";
 import React, {
   useState,
@@ -51,6 +52,9 @@ export const AIPanel = ({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const uniqueId = useId();
   const [maxRows, setMaxRows] = useState(2);
+  const [conversationHistory, setConversationHistory] = useState<CoreMessage[]>(
+    [],
+  );
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -81,6 +85,16 @@ export const AIPanel = ({
       type: "user",
       content: userPrompt,
     };
+
+    // Add user message to history
+    setConversationHistory((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: userPrompt,
+      },
+    ]);
+
     setDisplayBlocks((prev) => [...prev, userBlock]);
     setInputValue("");
     setIsLoading(true);
@@ -88,12 +102,14 @@ export const AIPanel = ({
     let currentThinkingBlockId: string | null = null;
     let currentTextBlockId: string | null = null;
     let accumulatedText = "";
+    let assistantResponse = ""; // Track full assistant response
 
     try {
       const agentStream = generateSqlAgent(
         userPrompt,
         currentDb ?? undefined,
         currentTable ?? undefined,
+        conversationHistory, // Pass history to generateSqlAgent
       );
 
       for await (const event of agentStream) {
@@ -142,6 +158,22 @@ export const AIPanel = ({
 
             if (toolCalls?.length) {
               toolCalls.forEach((call) => {
+                // Add tool call as assistant message
+                setConversationHistory((prev) => [
+                  ...prev,
+                  {
+                    role: "assistant",
+                    content: [
+                      {
+                        type: "tool-call",
+                        toolCallId: call.toolCallId,
+                        toolName: call.toolName,
+                        args: call.args,
+                      },
+                    ],
+                  },
+                ]);
+
                 setDisplayBlocks((prev) => [
                   ...prev,
                   {
@@ -157,6 +189,22 @@ export const AIPanel = ({
 
             if (toolResults?.length) {
               toolResults.forEach((result) => {
+                // Add tool result as tool message
+                setConversationHistory((prev) => [
+                  ...prev,
+                  {
+                    role: "tool",
+                    content: [
+                      {
+                        type: "tool-result",
+                        toolCallId: result.toolCallId,
+                        toolName: result.toolName,
+                        result: result.result,
+                      },
+                    ],
+                  },
+                ]);
+
                 setDisplayBlocks((prev) =>
                   prev.map((block) => {
                     if (
@@ -180,6 +228,14 @@ export const AIPanel = ({
 
           case "final":
             const finalResult = event.data;
+            assistantResponse = `${finalResult.explanation}\n\nQuery: ${finalResult.query}`;
+            setConversationHistory((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: assistantResponse,
+              },
+            ]);
             setDisplayBlocks((prev) => [
               ...prev,
               {
@@ -305,7 +361,7 @@ export const AIPanel = ({
       case "error":
         return (
           <div
-            className={`error ${baseClasses} bg-destructive/10 text-destructive flex items-start gap-2`}
+            className={`error ${baseClasses} bg-destructive/10 text-destructive flex items-start gap-2 p-2`}
           >
             <CircleAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span>{block.content as string}</span>
