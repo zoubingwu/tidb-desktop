@@ -28,7 +28,7 @@ function DataTable<TData>({ table, height }: DataTableProps<TData>) {
   return (
     <div ref={parentRef} className="overflow-auto" style={{ height }}>
       <div style={{ height: `${virtualizer.getTotalSize()}px` }}>
-        <table className="text-sm after:inline-block after:h-(--table-height)">
+        <table className="min-w-full text-sm after:inline-block after:h-(--table-height)">
           <TableHeader className="sticky z-50 top-0 bg-background shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
