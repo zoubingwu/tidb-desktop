@@ -244,11 +244,6 @@ export const AIPanel = ({
                 content: (
                   <div className="markdown-body">
                     <Markdown>{finalResult.explanation}</Markdown>
-                    {/* {finalResult.query && (
-                      <pre className="p-2 mt-2 bg-gray-100 dark:bg-gray-800 rounded text-sm overflow-x-auto">
-                        {format(finalResult.query, { language: "tidb" })}
-                      </pre>
-                    )} */}
                   </div>
                 ),
                 meta: finalResult,
@@ -375,7 +370,10 @@ export const AIPanel = ({
   };
 
   return (
-    <div ref={scrollAreaRef} className="h-full p-4 overflow-auto bg-muted/50">
+    <div
+      ref={scrollAreaRef}
+      className="h-full p-4 pt-0 overflow-auto bg-muted/50"
+    >
       {displayBlocks.map((block) => (
         <React.Fragment key={block.id}>
           {renderBlockContent(block)}
