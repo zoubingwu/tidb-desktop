@@ -19,6 +19,7 @@ export const availableThemes = [
   "quantum-rose",
   "sunset-horizon",
   "twitter",
+  "bubblegum",
 ];
 
 // Map theme names to their primary font families
