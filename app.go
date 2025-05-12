@@ -246,48 +246,18 @@ func (a *App) SaveAIProviderSettings(settings services.AIProviderSettings) error
 
 // --- Database Metadata Methods ---
 
-// GetDatabaseMetadata retrieves metadata for a database, extracting it if necessary
-func (a *App) GetDatabaseMetadata(dbName string) (*services.DatabaseMetadata, error) {
+// GetDatabaseMetadata retrieves metadata for the current connection
+func (a *App) GetDatabaseMetadata() (*services.ConnectionMetadata, error) {
 	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
 	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
 
-	if dbName == "" {
-		dbName = a.activeConnection.DBName
-	}
-
-	return a.metadataService.GetMetadata(a.ctx, a.activeConnection.Name, dbName)
+	return a.metadataService.GetMetadata(a.ctx, a.activeConnection.Name)
 }
 
 // ExtractDatabaseMetadata forces a fresh extraction of database metadata
-func (a *App) ExtractDatabaseMetadata(dbName string) (*services.DatabaseMetadata, error) {
+func (a *App) ExtractDatabaseMetadata() (*services.ConnectionMetadata, error) {
 	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
 	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
 
-	if dbName == "" {
-		dbName = a.activeConnection.DBName
-	}
-
-	return a.metadataService.ExtractMetadata(a.ctx, a.activeConnection.Name, dbName)
-}
-
-// GenerateTableDDL generates a simplified DDL for a table
-func (a *App) GenerateTableDDL(dbName string, tableName string) (string, error) {
-	if a.ctx == nil { return "", fmt.Errorf("app context not initialized") }
-	if a.activeConnection == nil { return "", fmt.Errorf("no active connection") }
-	if dbName == "" { return "", fmt.Errorf("database name is required") }
-	if tableName == "" { return "", fmt.Errorf("table name is required") }
-
-	metadata, err := a.metadataService.GetMetadata(a.ctx, a.activeConnection.Name, dbName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get metadata: %w", err)
-	}
-
-	// Find the table in metadata
-	for _, table := range metadata.Tables {
-		if table.Name == tableName {
-			return a.metadataService.GenerateSimplifiedDDL(table), nil
-		}
-	}
-
-	return "", fmt.Errorf("table %s not found in database %s", tableName, dbName)
+	return a.metadataService.ExtractMetadata(a.ctx, a.activeConnection.Name)
 }

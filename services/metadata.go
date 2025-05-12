@@ -106,7 +106,7 @@ func (s *MetadataService) getMetadataFilePath(connectionName string) string {
 }
 
 // ExtractMetadata extracts metadata from the database and stores it
-func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName, dbName string) (*DatabaseMetadata, error) {
+func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName string) (*ConnectionMetadata, error) {
 	// Get connection details
 	connDetails, exists, err := s.configService.GetConnection(connectionName)
 	if err != nil {
@@ -116,207 +116,209 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName, d
 		return nil, fmt.Errorf("connection %s not found", connectionName)
 	}
 
-	// Load existing connection metadata or create new one
-	connMetadata, err := s.loadMetadata(connectionName)
+	// Create new connection metadata
+	connMetadata := &ConnectionMetadata{
+		ConnectionName: connectionName,
+		LastExtracted: time.Now(),
+		Databases:     make(map[string]DatabaseMetadata),
+	}
+
+	// Get all databases
+	databases, err := s.dbService.ListDatabases(ctx, connDetails)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load connection metadata: %w", err)
-	}
-	if connMetadata == nil {
-		connMetadata = &ConnectionMetadata{
-			ConnectionName: connectionName,
-			Databases:     make(map[string]DatabaseMetadata),
-		}
+		return nil, fmt.Errorf("failed to list databases: %w", err)
 	}
 
-	// Use the specified database
-	connDetails.DBName = dbName
+	// Extract metadata for each database
+	for _, dbName := range databases {
+		// Use the specified database
+		connDetails.DBName = dbName
 
-	// Get all tables
-	tables, err := s.dbService.ListTables(ctx, connDetails, dbName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list tables: %w", err)
-	}
-
-	dbMetadata := DatabaseMetadata{
-		Name:   dbName,
-		Tables: make([]Table, 0, len(tables)),
-		Graph:  make(map[string][]Edge),
-	}
-
-	// Get database comment if available
-	dbCommentQuery := fmt.Sprintf(`
-		SELECT SCHEMA_COMMENT
-		FROM information_schema.SCHEMATA
-		WHERE SCHEMA_NAME = '%s';`, dbName)
-
-	if result, err := s.dbService.ExecuteSQL(ctx, connDetails, dbCommentQuery); err == nil && len(result.Rows) > 0 {
-		if comment, ok := result.Rows[0]["SCHEMA_COMMENT"].(string); ok && comment != "" {
-			dbMetadata.DBComment = comment
-		}
-	}
-
-	// Extract metadata for each table
-	for _, tableName := range tables {
-		tableSchema, err := s.dbService.GetTableSchema(ctx, connDetails, dbName, tableName)
+		// Get all tables
+		tables, err := s.dbService.ListTables(ctx, connDetails, dbName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get schema for table %s: %w", tableName, err)
+			return nil, fmt.Errorf("failed to list tables for database %s: %w", dbName, err)
 		}
 
-		table := Table{
-			Name:        tableName,
-			Columns:     make([]Column, 0, len(tableSchema.Columns)),
-			ForeignKeys: make([]ForeignKey, 0),
-			Indexes:     make([]Index, 0),
+		dbMetadata := DatabaseMetadata{
+			Name:   dbName,
+			Tables: make([]Table, 0, len(tables)),
+			Graph:  make(map[string][]Edge),
 		}
 
-		// Get table comment if available
-		tableCommentQuery := fmt.Sprintf(`
-			SELECT TABLE_COMMENT
-			FROM information_schema.TABLES
-			WHERE TABLE_SCHEMA = '%s'
-			AND TABLE_NAME = '%s';`, dbName, tableName)
+		// Get database comment if available
+		dbCommentQuery := fmt.Sprintf(`
+			SELECT SCHEMA_COMMENT
+			FROM information_schema.SCHEMATA
+			WHERE SCHEMA_NAME = '%s';`, dbName)
 
-		if result, err := s.dbService.ExecuteSQL(ctx, connDetails, tableCommentQuery); err == nil && len(result.Rows) > 0 {
-			if comment, ok := result.Rows[0]["TABLE_COMMENT"].(string); ok && comment != "" {
-				table.DBComment = comment
+		if result, err := s.dbService.ExecuteSQL(ctx, connDetails, dbCommentQuery); err == nil && len(result.Rows) > 0 {
+			if comment, ok := result.Rows[0]["SCHEMA_COMMENT"].(string); ok && comment != "" {
+				dbMetadata.DBComment = comment
 			}
 		}
 
-		// Extract column information with comments
-		columnCommentsQuery := fmt.Sprintf(`
-			SELECT COLUMN_NAME, COLUMN_COMMENT
-			FROM information_schema.COLUMNS
-			WHERE TABLE_SCHEMA = '%s'
-			AND TABLE_NAME = '%s';`, dbName, tableName)
+		// Extract metadata for each table
+		for _, tableName := range tables {
+			tableSchema, err := s.dbService.GetTableSchema(ctx, connDetails, dbName, tableName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get schema for table %s in database %s: %w", tableName, dbName, err)
+			}
 
-		columnComments := make(map[string]string)
-		if result, err := s.dbService.ExecuteSQL(ctx, connDetails, columnCommentsQuery); err == nil {
-			for _, row := range result.Rows {
-				if colName, ok := row["COLUMN_NAME"].(string); ok {
-					if comment, ok := row["COLUMN_COMMENT"].(string); ok && comment != "" {
-						columnComments[colName] = comment
-					}
+			table := Table{
+				Name:        tableName,
+				Columns:     make([]Column, 0, len(tableSchema.Columns)),
+				ForeignKeys: make([]ForeignKey, 0),
+				Indexes:     make([]Index, 0),
+			}
+
+			// Get table comment if available
+			tableCommentQuery := fmt.Sprintf(`
+				SELECT TABLE_COMMENT
+				FROM information_schema.TABLES
+				WHERE TABLE_SCHEMA = '%s'
+				AND TABLE_NAME = '%s';`, dbName, tableName)
+
+			if result, err := s.dbService.ExecuteSQL(ctx, connDetails, tableCommentQuery); err == nil && len(result.Rows) > 0 {
+				if comment, ok := result.Rows[0]["TABLE_COMMENT"].(string); ok && comment != "" {
+					table.DBComment = comment
 				}
 			}
-		}
 
-		// Extract column information
-		for _, col := range tableSchema.Columns {
-			column := Column{
-				Name:          col.ColumnName,
-				DataType:      col.ColumnType,
-				IsNullable:    col.IsNullable == "YES",
-				AutoIncrement: col.Extra == "auto_increment",
-				DBComment:     columnComments[col.ColumnName], // Add column comment if exists
-			}
-			if col.ColumnDefault.Valid {
-				column.DefaultValue = col.ColumnDefault.String
-			}
-			table.Columns = append(table.Columns, column)
-		}
+			// Extract column information with comments
+			columnCommentsQuery := fmt.Sprintf(`
+				SELECT COLUMN_NAME, COLUMN_COMMENT
+				FROM information_schema.COLUMNS
+				WHERE TABLE_SCHEMA = '%s'
+				AND TABLE_NAME = '%s';`, dbName, tableName)
 
-		// Extract foreign keys
-		fkQuery := fmt.Sprintf(`
-			SELECT
-				CONSTRAINT_NAME,
-				COLUMN_NAME,
-				REFERENCED_TABLE_NAME,
-				REFERENCED_COLUMN_NAME
-			FROM information_schema.KEY_COLUMN_USAGE
-			WHERE TABLE_SCHEMA = '%s'
-			AND TABLE_NAME = '%s'
-			AND REFERENCED_TABLE_NAME IS NOT NULL;`, dbName, tableName)
-
-		fkResult, err := s.dbService.ExecuteSQL(ctx, connDetails, fkQuery)
-		if err == nil && fkResult != nil && len(fkResult.Rows) > 0 {
-			fkMap := make(map[string]*ForeignKey)
-
-			for _, row := range fkResult.Rows {
-				constraintName := row["CONSTRAINT_NAME"].(string)
-				columnName := row["COLUMN_NAME"].(string)
-				refTableName := row["REFERENCED_TABLE_NAME"].(string)
-				refColumnName := row["REFERENCED_COLUMN_NAME"].(string)
-
-				if fk, exists := fkMap[constraintName]; exists {
-					fk.ColumnNames = append(fk.ColumnNames, columnName)
-					fk.RefColumnNames = append(fk.RefColumnNames, refColumnName)
-				} else {
-					fkMap[constraintName] = &ForeignKey{
-						Name:           constraintName,
-						ColumnNames:    []string{columnName},
-						RefTableName:   refTableName,
-						RefColumnNames: []string{refColumnName},
-					}
-				}
-
-				// Add to graph representation
-				dbMetadata.Graph[tableName] = append(dbMetadata.Graph[tableName], Edge{
-					ToTable:    refTableName,
-					FromColumn: columnName,
-					ToColumn:   refColumnName,
-				})
-			}
-
-			// Convert map to slice
-			for _, fk := range fkMap {
-				table.ForeignKeys = append(table.ForeignKeys, *fk)
-			}
-		}
-
-		// Extract indexes
-		indexQuery := fmt.Sprintf(`
-			SELECT
-				INDEX_NAME,
-				COLUMN_NAME,
-				NON_UNIQUE
-			FROM information_schema.STATISTICS
-			WHERE TABLE_SCHEMA = '%s'
-			AND TABLE_NAME = '%s'
-			ORDER BY INDEX_NAME, SEQ_IN_INDEX;`, dbName, tableName)
-
-		indexResult, err := s.dbService.ExecuteSQL(ctx, connDetails, indexQuery)
-		if err == nil && indexResult != nil && len(indexResult.Rows) > 0 {
-			indexMap := make(map[string]*Index)
-
-			for _, row := range indexResult.Rows {
-				indexName := row["INDEX_NAME"].(string)
-				columnName := row["COLUMN_NAME"].(string)
-				nonUnique := row["NON_UNIQUE"].(string) == "1"
-
-				if idx, exists := indexMap[indexName]; exists {
-					idx.ColumnNames = append(idx.ColumnNames, columnName)
-				} else {
-					indexMap[indexName] = &Index{
-						Name:        indexName,
-						ColumnNames: []string{columnName},
-						IsUnique:    !nonUnique,
+			columnComments := make(map[string]string)
+			if result, err := s.dbService.ExecuteSQL(ctx, connDetails, columnCommentsQuery); err == nil {
+				for _, row := range result.Rows {
+					if colName, ok := row["COLUMN_NAME"].(string); ok {
+						if comment, ok := row["COLUMN_COMMENT"].(string); ok && comment != "" {
+							columnComments[colName] = comment
+						}
 					}
 				}
 			}
 
-			// Convert map to slice
-			for _, idx := range indexMap {
-				table.Indexes = append(table.Indexes, *idx)
+			// Extract column information
+			for _, col := range tableSchema.Columns {
+				column := Column{
+					Name:          col.ColumnName,
+					DataType:      col.ColumnType,
+					IsNullable:    col.IsNullable == "YES",
+					AutoIncrement: col.Extra == "auto_increment",
+					DBComment:     columnComments[col.ColumnName],
+				}
+				if col.ColumnDefault.Valid {
+					column.DefaultValue = col.ColumnDefault.String
+				}
+				table.Columns = append(table.Columns, column)
 			}
+
+			// Extract foreign keys
+			fkQuery := fmt.Sprintf(`
+				SELECT
+					CONSTRAINT_NAME,
+					COLUMN_NAME,
+					REFERENCED_TABLE_NAME,
+					REFERENCED_COLUMN_NAME
+				FROM information_schema.KEY_COLUMN_USAGE
+				WHERE TABLE_SCHEMA = '%s'
+				AND TABLE_NAME = '%s'
+				AND REFERENCED_TABLE_NAME IS NOT NULL;`, dbName, tableName)
+
+			fkResult, err := s.dbService.ExecuteSQL(ctx, connDetails, fkQuery)
+			if err == nil && fkResult != nil && len(fkResult.Rows) > 0 {
+				fkMap := make(map[string]*ForeignKey)
+
+				for _, row := range fkResult.Rows {
+					constraintName := row["CONSTRAINT_NAME"].(string)
+					columnName := row["COLUMN_NAME"].(string)
+					refTableName := row["REFERENCED_TABLE_NAME"].(string)
+					refColumnName := row["REFERENCED_COLUMN_NAME"].(string)
+
+					if fk, exists := fkMap[constraintName]; exists {
+						fk.ColumnNames = append(fk.ColumnNames, columnName)
+						fk.RefColumnNames = append(fk.RefColumnNames, refColumnName)
+					} else {
+						fkMap[constraintName] = &ForeignKey{
+							Name:           constraintName,
+							ColumnNames:    []string{columnName},
+							RefTableName:   refTableName,
+							RefColumnNames: []string{refColumnName},
+						}
+					}
+
+					// Add to graph representation
+					dbMetadata.Graph[tableName] = append(dbMetadata.Graph[tableName], Edge{
+						ToTable:    refTableName,
+						FromColumn: columnName,
+						ToColumn:   refColumnName,
+					})
+				}
+
+				// Convert map to slice
+				for _, fk := range fkMap {
+					table.ForeignKeys = append(table.ForeignKeys, *fk)
+				}
+			}
+
+			// Extract indexes
+			indexQuery := fmt.Sprintf(`
+				SELECT
+					INDEX_NAME,
+					COLUMN_NAME,
+					NON_UNIQUE
+				FROM information_schema.STATISTICS
+				WHERE TABLE_SCHEMA = '%s'
+				AND TABLE_NAME = '%s'
+				ORDER BY INDEX_NAME, SEQ_IN_INDEX;`, dbName, tableName)
+
+			indexResult, err := s.dbService.ExecuteSQL(ctx, connDetails, indexQuery)
+			if err == nil && indexResult != nil && len(indexResult.Rows) > 0 {
+				indexMap := make(map[string]*Index)
+
+				for _, row := range indexResult.Rows {
+					indexName := row["INDEX_NAME"].(string)
+					columnName := row["COLUMN_NAME"].(string)
+					nonUnique := row["NON_UNIQUE"].(string) == "1"
+
+					if idx, exists := indexMap[indexName]; exists {
+						idx.ColumnNames = append(idx.ColumnNames, columnName)
+					} else {
+						indexMap[indexName] = &Index{
+							Name:        indexName,
+							ColumnNames: []string{columnName},
+							IsUnique:    !nonUnique,
+						}
+					}
+				}
+
+				// Convert map to slice
+				for _, idx := range indexMap {
+					table.Indexes = append(table.Indexes, *idx)
+				}
+			}
+
+			dbMetadata.Tables = append(dbMetadata.Tables, table)
 		}
 
-		dbMetadata.Tables = append(dbMetadata.Tables, table)
+		connMetadata.Databases[dbName] = dbMetadata
 	}
-
-	// Update connection metadata
-	connMetadata.LastExtracted = time.Now()
-	connMetadata.Databases[dbName] = dbMetadata
 
 	// Store the metadata
 	if err := s.storeMetadata(connMetadata); err != nil {
 		return nil, fmt.Errorf("failed to store metadata: %w", err)
 	}
 
-	return &dbMetadata, nil
+	return connMetadata, nil
 }
 
-// GetMetadata retrieves metadata for a database, extracting it if necessary
-func (s *MetadataService) GetMetadata(ctx context.Context, connectionName, dbName string) (*DatabaseMetadata, error) {
+// GetMetadata retrieves metadata for a connection, extracting it if necessary
+func (s *MetadataService) GetMetadata(ctx context.Context, connectionName string) (*ConnectionMetadata, error) {
 	// Try to load existing metadata first
 	connMetadata, err := s.loadMetadata(connectionName)
 	if err != nil {
@@ -326,14 +328,12 @@ func (s *MetadataService) GetMetadata(ctx context.Context, connectionName, dbNam
 	if connMetadata != nil {
 		// Check if metadata is still fresh
 		if time.Since(connMetadata.LastExtracted) < staleMetadataThreshold {
-			if dbMetadata, exists := connMetadata.Databases[dbName]; exists {
-				return &dbMetadata, nil
-			}
+			return connMetadata, nil
 		}
 	}
 
 	// If metadata doesn't exist, is too old, or failed to load, extract it
-	return s.ExtractMetadata(ctx, connectionName, dbName)
+	return s.ExtractMetadata(ctx, connectionName)
 }
 
 // storeMetadata saves the metadata to a file
