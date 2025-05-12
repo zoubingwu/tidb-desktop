@@ -314,8 +314,6 @@ export const AIPanel = ({
     }
   };
 
-  console.log("display blocks", displayBlocks);
-
   const renderBlockContent = (block: DisplayBlock) => {
     const baseClasses = "rounded-md break-words text-sm w-full";
     switch (block.type) {
