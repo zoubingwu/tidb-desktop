@@ -17,6 +17,8 @@ type Column struct {
 	DefaultValue  any    `json:"defaultValue,omitempty"`
 	IsPrimaryKey  bool   `json:"isPrimaryKey"`
 	AutoIncrement bool   `json:"autoIncrement"`
+	DBComment     string `json:"dbComment,omitempty"`     // Comment from database
+	AIDescription string `json:"aiDescription,omitempty"` // Description from AI
 }
 
 // ForeignKey represents a foreign key relationship
@@ -36,17 +38,21 @@ type Index struct {
 
 // Table represents a database table's metadata
 type Table struct {
-	Name        string       `json:"name"`
-	Columns     []Column     `json:"columns"`
-	ForeignKeys []ForeignKey `json:"foreignKeys,omitempty"`
-	Indexes     []Index      `json:"indexes,omitempty"`
+	Name          string       `json:"name"`
+	Columns       []Column     `json:"columns"`
+	ForeignKeys   []ForeignKey `json:"foreignKeys,omitempty"`
+	Indexes       []Index      `json:"indexes,omitempty"`
+	DBComment     string       `json:"dbComment,omitempty"`     // Comment from database
+	AIDescription string       `json:"aiDescription,omitempty"` // Description from AI
 }
 
 // DatabaseMetadata represents the metadata for a single database
 type DatabaseMetadata struct {
-	Name   string            `json:"name"`
-	Tables []Table           `json:"tables"`
-	Graph  map[string][]Edge `json:"graph,omitempty"` // Adjacency list representation
+	Name          string            `json:"name"`
+	Tables        []Table           `json:"tables"`
+	Graph         map[string][]Edge `json:"graph,omitempty"` // Adjacency list representation
+	DBComment     string            `json:"dbComment,omitempty"`     // Comment from database
+	AIDescription string            `json:"aiDescription,omitempty"` // Description from AI
 }
 
 // ConnectionMetadata represents the complete metadata for a connection
@@ -137,6 +143,18 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName, d
 		Graph:  make(map[string][]Edge),
 	}
 
+	// Get database comment if available
+	dbCommentQuery := fmt.Sprintf(`
+		SELECT SCHEMA_COMMENT
+		FROM information_schema.SCHEMATA
+		WHERE SCHEMA_NAME = '%s';`, dbName)
+
+	if result, err := s.dbService.ExecuteSQL(ctx, connDetails, dbCommentQuery); err == nil && len(result.Rows) > 0 {
+		if comment, ok := result.Rows[0]["SCHEMA_COMMENT"].(string); ok && comment != "" {
+			dbMetadata.DBComment = comment
+		}
+	}
+
 	// Extract metadata for each table
 	for _, tableName := range tables {
 		tableSchema, err := s.dbService.GetTableSchema(ctx, connDetails, dbName, tableName)
@@ -151,6 +169,37 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName, d
 			Indexes:     make([]Index, 0),
 		}
 
+		// Get table comment if available
+		tableCommentQuery := fmt.Sprintf(`
+			SELECT TABLE_COMMENT
+			FROM information_schema.TABLES
+			WHERE TABLE_SCHEMA = '%s'
+			AND TABLE_NAME = '%s';`, dbName, tableName)
+
+		if result, err := s.dbService.ExecuteSQL(ctx, connDetails, tableCommentQuery); err == nil && len(result.Rows) > 0 {
+			if comment, ok := result.Rows[0]["TABLE_COMMENT"].(string); ok && comment != "" {
+				table.DBComment = comment
+			}
+		}
+
+		// Extract column information with comments
+		columnCommentsQuery := fmt.Sprintf(`
+			SELECT COLUMN_NAME, COLUMN_COMMENT
+			FROM information_schema.COLUMNS
+			WHERE TABLE_SCHEMA = '%s'
+			AND TABLE_NAME = '%s';`, dbName, tableName)
+
+		columnComments := make(map[string]string)
+		if result, err := s.dbService.ExecuteSQL(ctx, connDetails, columnCommentsQuery); err == nil {
+			for _, row := range result.Rows {
+				if colName, ok := row["COLUMN_NAME"].(string); ok {
+					if comment, ok := row["COLUMN_COMMENT"].(string); ok && comment != "" {
+						columnComments[colName] = comment
+					}
+				}
+			}
+		}
+
 		// Extract column information
 		for _, col := range tableSchema.Columns {
 			column := Column{
@@ -158,6 +207,7 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName, d
 				DataType:      col.ColumnType,
 				IsNullable:    col.IsNullable == "YES",
 				AutoIncrement: col.Extra == "auto_increment",
+				DBComment:     columnComments[col.ColumnName], // Add column comment if exists
 			}
 			if col.ColumnDefault.Valid {
 				column.DefaultValue = col.ColumnDefault.String
@@ -364,4 +414,55 @@ func (s *MetadataService) GenerateSimplifiedDDL(table Table) string {
 
 	ddl += "\n);"
 	return ddl
+}
+
+// UpdateAIDescription updates the AI-generated description for a database component
+type DescriptionTarget struct {
+	Type       string `json:"type"`       // "database", "table", or "column"
+	TableName  string `json:"tableName"`  // Required for table and column
+	ColumnName string `json:"columnName"` // Required for column
+}
+
+func (s *MetadataService) UpdateAIDescription(ctx context.Context, connectionName, dbName string, target DescriptionTarget, description string) error {
+	connMetadata, err := s.loadMetadata(connectionName)
+	if err != nil {
+		return fmt.Errorf("failed to load metadata: %w", err)
+	}
+	if connMetadata == nil {
+		return fmt.Errorf("metadata not found for connection %s", connectionName)
+	}
+
+	dbMetadata, exists := connMetadata.Databases[dbName]
+	if !exists {
+		return fmt.Errorf("database %s not found in connection %s", dbName, connectionName)
+	}
+
+	switch target.Type {
+	case "database":
+		dbMetadata.AIDescription = description
+	case "table":
+		for i, table := range dbMetadata.Tables {
+			if table.Name == target.TableName {
+				dbMetadata.Tables[i].AIDescription = description
+				break
+			}
+		}
+	case "column":
+		for i, table := range dbMetadata.Tables {
+			if table.Name == target.TableName {
+				for j, column := range table.Columns {
+					if column.Name == target.ColumnName {
+						dbMetadata.Tables[i].Columns[j].AIDescription = description
+						break
+					}
+				}
+				break
+			}
+		}
+	default:
+		return fmt.Errorf("invalid target type: %s", target.Type)
+	}
+
+	connMetadata.Databases[dbName] = dbMetadata
+	return s.storeMetadata(connMetadata)
 }
