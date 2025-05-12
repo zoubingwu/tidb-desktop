@@ -94,6 +94,21 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 		fmt.Printf("Warning: Failed to record usage for connection '%s': %v\n", name, err)
 	}
 
+	// Check if metadata needs to be extracted
+	go func() {
+		ctx := context.Background() // Create a new context for background task
+
+		runtime.EventsEmit(a.ctx, "metadata:extraction:started", name)
+		metadata, err := a.metadataService.GetMetadata(ctx, name)
+		if err != nil {
+			fmt.Printf("Warning: Background metadata extraction failed for connection '%s': %v\n", name, err)
+			runtime.EventsEmit(a.ctx, "metadata:extraction:failed", err.Error())
+		} else {
+			fmt.Printf("Background metadata extraction completed for connection '%s'\n", name)
+			runtime.EventsEmit(a.ctx, "metadata:extraction:completed", metadata)
+		}
+	}()
+
 	// Emit event to notify frontend the active session is ready
 	runtime.EventsEmit(a.ctx, "connection:established", details)
 
