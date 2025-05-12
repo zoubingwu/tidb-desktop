@@ -253,9 +253,6 @@ You have access to the complete database schema and can explore relationships be
 </capabilities>
 
 <tools_available>
-- listDatabases: List all available databases
-- listTables: List all tables in a database
-- getTableSchema: Get detailed table structure
 - getDatabaseMetadata: Get complete database structure including tables, columns, relationships, and indexes
 - executeSql: Execute read-only SQL queries
 </tools_available>
