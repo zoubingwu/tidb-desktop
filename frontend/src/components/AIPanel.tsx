@@ -17,6 +17,7 @@ import React, {
 } from "react";
 import Markdown from "react-markdown";
 import TextareaAutosize from "react-textarea-autosize";
+import { GetDatabaseMetadata } from "wailsjs/go/main/App";
 
 // Expanded message type to better represent stream states
 type DisplayBlock = {
@@ -43,7 +44,6 @@ interface AIPanelProps {
 export const AIPanel = ({
   onApplyQueryFromAI,
   currentDb,
-  currentTable,
   opened,
 }: AIPanelProps) => {
   const [inputValue, setInputValue] = useState("");
@@ -99,6 +99,15 @@ export const AIPanel = ({
     setInputValue("");
     setIsLoading(true);
 
+    const metadata = await (async () => {
+      try {
+        return await GetDatabaseMetadata(currentDb ?? "");
+      } catch (error) {
+        console.error("Error getting metadata:", error);
+        return null;
+      }
+    })();
+
     let currentThinkingBlockId: string | null = null;
     let currentTextBlockId: string | null = null;
     let accumulatedText = "";
@@ -107,9 +116,8 @@ export const AIPanel = ({
     try {
       const agentStream = generateSqlAgent(
         userPrompt,
-        currentDb ?? undefined,
-        currentTable ?? undefined,
-        conversationHistory, // Pass history to generateSqlAgent
+        conversationHistory,
+        metadata,
       );
 
       for await (const event of agentStream) {
