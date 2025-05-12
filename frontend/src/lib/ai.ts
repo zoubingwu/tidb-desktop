@@ -220,15 +220,10 @@ const finalAnswerTool = tool({
 // --- The New Agent Generator Function ---
 export async function* generateSqlAgent(
   userPrompt: string,
-  currentDbName?: string | null,
-  currentTableName?: string | null,
   conversationHistory: CoreMessage[] = [],
+  metadata: services.DatabaseMetadata | null = null,
 ): AsyncGenerator<AgentStreamEvent, void, unknown> {
   const model = await createModel();
-
-  console.log(
-    `Starting generateSqlAgent streamer for prompt: "${userPrompt}" (DB: ${currentDbName}, Table: ${currentTableName})`,
-  );
 
   const agentTools = {
     ...dbTools,
@@ -236,13 +231,15 @@ export async function* generateSqlAgent(
   };
 
   const systemPrompt = `
-You are an expert database AI assistant, specialized in helping users interact with their database through natural language. Your primary goal is to understand user queries about their database and provide accurate responses through SQL operations.
+You are an expert database AI assistant, specialized in helping users interact with their database through natural language.
 
-<context>
-Current Database: ${currentDbName || "Not specified"}
-Current Table: ${currentTableName || "Not specified"}
-You have access to the complete database schema and can explore relationships between tables
-</context>
+Your primary goal is to understand user queries about their database and provide accurate responses through SQL operations. The task may require some CRUD operations to the database, or simply answering a question. Each time the USER sends a message, we may automatically attach some information about their current state. This information may or may not be relevant to the coding task, it is up for you to decide.
+
+You have access to the complete database schema and can explore relationships between tables.
+
+<database_metadata>
+${metadata ? JSON.stringify(metadata) : "No database metadata available"}
+</database_metadata>
 
 <capabilities>
 1. Generate and execute SQL queries based on natural language requests
