@@ -265,9 +265,7 @@ You have access to the complete database schema and can explore relationships be
    - Consider potential data relationships and constraints
 
 2. Information Gathering:
-   - Use listDatabases if database context is unclear
-   - Use listTables to understand available tables
-   - Use getTableSchema to understand table structure
+   - Use getDatabaseMetadata to understand the database structure and metadata
    - Use executeSql with SELECT queries to validate assumptions
 
 3. Query Generation & Execution:
