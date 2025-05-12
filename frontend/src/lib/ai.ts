@@ -13,14 +13,10 @@ import {
 import {
   ExecuteSQL,
   GetAIProviderSettings,
-  GetTableSchema,
-  ListDatabases,
-  ListTables,
+  GetDatabaseMetadata,
 } from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
 import { z } from "zod";
-
-type TableSchema = services.TableSchema;
 
 const createModel = async (options?: TestProviderConnectionOptions) => {
   const aiProviderSettings = await GetAIProviderSettings();
@@ -103,72 +99,22 @@ export const inferConnectionDetails = async (textFromClipboard: string) => {
 };
 
 const dbTools = {
-  listDatabases: tool({
+  getDatabaseMetadata: tool({
     description:
-      "List all available databases/schemas in the connected instance. Useful when the user's request isn't specific to the current database.",
-    parameters: z.object({}),
-    execute: async () => {
-      try {
-        console.log("Tool Call: listDatabases");
-        const dbs = await ListDatabases();
-        console.log("Tool Result: listDatabases ->", dbs);
-        // Yielding intermediate tool results might be noisy, consider if needed
-        return { success: true, databases: dbs };
-      } catch (error: any) {
-        console.error("Error calling ListDatabases:", error);
-        return { success: false, error: error.message };
-      }
-    },
-  }),
-  listTables: tool({
-    description:
-      "List all tables within a specific database. Use this if you need to know the tables in a database relevant to the user's request.",
+      "Get complete metadata for a database, including all tables, their schemas, relationships, and other structural information. This is the primary tool for understanding database structure.",
     parameters: z.object({
       dbName: z
         .string()
-        .describe("The name of the database for which to list tables."),
+        .describe("The name of the database to get metadata for"),
     }),
     execute: async ({ dbName }) => {
       try {
-        console.log(`Tool Call: listTables (dbName: ${dbName})`);
-        const tables = await ListTables(dbName);
-        console.log("Tool Result: listTables ->", tables);
-        return { success: true, tables: tables };
+        console.log(`Tool Call: getDatabaseMetadata (dbName: ${dbName})`);
+        const metadata = await GetDatabaseMetadata(dbName);
+        console.log("Tool Result: getDatabaseMetadata ->", metadata);
+        return { success: true, metadata };
       } catch (error: any) {
-        console.error(`Error calling ListTables for ${dbName}:`, error);
-        return { success: false, error: error.message };
-      }
-    },
-  }),
-  getTableSchema: tool({
-    description:
-      "Get the detailed schema (column names, types, constraints, etc.) for a specific table. Essential for constructing queries involving specific columns or understanding table structure.",
-    parameters: z.object({
-      dbName: z
-        .string()
-        .describe("The name of the database containing the table."),
-      tableName: z
-        .string()
-        .describe("The name of the table for which to get the schema."),
-    }),
-    execute: async ({ dbName, tableName }) => {
-      try {
-        console.log(
-          `Tool Call: getTableSchema (dbName: ${dbName}, tableName: ${tableName})`,
-        );
-        const schema: TableSchema = await GetTableSchema(dbName, tableName);
-        console.log("Tool Result: getTableSchema ->", schema);
-        return {
-          success: true,
-          databaseName: dbName, // Include db name for clarity
-          tableName: schema.name,
-          columns: schema.columns,
-        };
-      } catch (error: any) {
-        console.error(
-          `Error calling GetTableSchema for ${dbName}.${tableName}:`,
-          error,
-        );
+        console.error(`Error getting metadata for ${dbName}:`, error);
         return { success: false, error: error.message };
       }
     },
@@ -202,7 +148,7 @@ const dbTools = {
         const previewResult = JSON.stringify(result).slice(0, 1000); // Limit context size
         return { success: true, resultPreview: previewResult };
       } catch (error: any) {
-        console.error(`Error executing safe SQL query \"${query}\":`, error);
+        console.error(`Error executing safe SQL query "${query}":`, error);
         const errorMessage = error.message || "Unknown execution error";
         return { success: false, error: errorMessage };
       }
@@ -310,6 +256,7 @@ You have access to the complete database schema and can explore relationships be
 - listDatabases: List all available databases
 - listTables: List all tables in a database
 - getTableSchema: Get detailed table structure
+- getDatabaseMetadata: Get complete database structure including tables, columns, relationships, and indexes
 - executeSql: Execute read-only SQL queries
 </tools_available>
 
