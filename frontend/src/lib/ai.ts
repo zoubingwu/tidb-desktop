@@ -10,11 +10,7 @@ import {
   streamText,
   tool,
 } from "ai";
-import {
-  ExecuteSQL,
-  GetAIProviderSettings,
-  GetDatabaseMetadata,
-} from "wailsjs/go/main/App";
+import { ExecuteSQL, GetAIProviderSettings } from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
 import { z } from "zod";
 
@@ -99,26 +95,6 @@ export const inferConnectionDetails = async (textFromClipboard: string) => {
 };
 
 const dbTools = {
-  getDatabaseMetadata: tool({
-    description:
-      "Get complete metadata for a database, including all tables, their schemas, relationships, and other structural information. This is the primary tool for understanding database structure.",
-    parameters: z.object({
-      dbName: z
-        .string()
-        .describe("The name of the database to get metadata for"),
-    }),
-    execute: async ({ dbName }) => {
-      try {
-        console.log(`Tool Call: getDatabaseMetadata (dbName: ${dbName})`);
-        const metadata = await GetDatabaseMetadata(dbName);
-        console.log("Tool Result: getDatabaseMetadata ->", metadata);
-        return { success: true, metadata };
-      } catch (error: any) {
-        console.error(`Error getting metadata for ${dbName}:`, error);
-        return { success: false, error: error.message };
-      }
-    },
-  }),
   executeSql: tool({
     description:
       "Executes a *read-only* SQL query (primarily SELECT) to fetch sample data or check existence, helping to understand data patterns or confirm assumptions before generating the final query. Use LIMIT clauses (e.g., LIMIT 5) to keep results small. **DO NOT use this for INSERT, UPDATE, DELETE, or other modifying operations.**",
@@ -248,11 +224,6 @@ ${metadata ? JSON.stringify(metadata) : "No database metadata available"}
 4. Assist with database operations (SELECT, INSERT, UPDATE, DELETE)
 5. Ensure data safety and validate operations
 </capabilities>
-
-<tools_available>
-- getDatabaseMetadata: Get complete database structure including tables, columns, relationships, and indexes
-- executeSql: Execute read-only SQL queries
-</tools_available>
 
 <operation_guidelines>
 1. Understanding Phase:
