@@ -250,7 +250,10 @@ func (a *App) SaveAIProviderSettings(settings services.AIProviderSettings) error
 func (a *App) GetDatabaseMetadata(dbName string) (*services.DatabaseMetadata, error) {
 	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
 	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
-	if dbName == "" { return nil, fmt.Errorf("database name is required") }
+
+	if dbName == "" {
+		dbName = a.activeConnection.DBName
+	}
 
 	return a.metadataService.GetMetadata(a.ctx, a.activeConnection.Name, dbName)
 }
@@ -259,7 +262,10 @@ func (a *App) GetDatabaseMetadata(dbName string) (*services.DatabaseMetadata, er
 func (a *App) ExtractDatabaseMetadata(dbName string) (*services.DatabaseMetadata, error) {
 	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
 	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
-	if dbName == "" { return nil, fmt.Errorf("database name is required") }
+
+	if dbName == "" {
+		dbName = a.activeConnection.DBName
+	}
 
 	return a.metadataService.ExtractMetadata(a.ctx, a.activeConnection.Name, dbName)
 }
