@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	configDirName  = ".tidb-desktop"
-	configFileName = "config.json"
+	ConfigDirName  = ".tidb-desktop"
+	ConfigFileName = "config.json"
+	MetadataDirName = "metadata"
 )
 
 // ThemeSettings holds theme preferences
@@ -68,8 +69,8 @@ func NewConfigService() (*ConfigService, error) {
 		return nil, fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
-	configDirPath := filepath.Join(homeDir, configDirName)
-	configFilePath := filepath.Join(configDirPath, configFileName)
+	configDirPath := filepath.Join(homeDir, ConfigDirName)
+	configFilePath := filepath.Join(configDirPath, ConfigFileName)
 
 	service := &ConfigService{
 		configPath: configFilePath,
