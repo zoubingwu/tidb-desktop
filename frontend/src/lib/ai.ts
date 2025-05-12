@@ -134,20 +134,25 @@ const dbTools = {
 
 // --- Zod Schema for the Agent's Final Answer ---
 const sqlAgentResponseSchema = z.object({
+  responseType: z
+    .enum(["SQL", "TEXT"])
+    .describe("Whether this is a SQL query response or just text"),
   query: z
     .string()
+    .optional()
     .describe(
-      "The generated SQL query. Can be empty if the request is unsafe, ambiguous, or cannot be translated.",
+      "The generated SQL query. Optional - only present for SQL responses.",
     ),
   explanation: z
     .string()
     .describe(
-      "A brief explanation of the generated query, the reasoning process, or why a query couldn't be generated (e.g., safety concerns, ambiguity).",
+      "A brief explanation of the response - either explaining the SQL query or providing a direct text answer.",
     ),
   requiresConfirmation: z
     .boolean()
+    .optional()
     .describe(
-      "Set to true if the generated query performs potentially destructive actions (UPDATE, DELETE, INSERT, ALTER, DROP) or complex SELECTs that might have unintended consequences. Always true for non-SELECT queries.",
+      "Set to true if the generated query performs potentially destructive actions (UPDATE, DELETE, INSERT, ALTER, DROP) or complex SELECTs that might have unintended consequences. Always true for non-SELECT queries. Only present for SQL responses",
     ),
   type: z
     .enum([
@@ -160,12 +165,13 @@ const sqlAgentResponseSchema = z.object({
       "OTHER",
       "NONE",
     ])
+    .optional()
     .describe(
-      "The type of the generated SQL query. 'NONE' if no query was generated.",
+      "The type of the generated SQL query. Only present for SQL responses.",
     ),
   success: z
     .boolean()
-    .describe("True if the query was generated successfully."),
+    .describe("True if the response was generated successfully."),
 });
 
 // --- Define the return type based on the Zod schema ---
@@ -266,34 +272,41 @@ ${metadata ? JSON.stringify(metadata) : "No database metadata available"}
 <response_format>
 Your response must include:
 1. Clear explanation of what you're doing
-2. Generated SQL query (if applicable)
-3. Expected impact of the operation
-4. Any potential risks or considerations
-5. Results or confirmation requirements
+2. For SQL queries:
+   - Generated SQL query
+   - Expected impact of the operation
+   - Any potential risks or considerations
+   - Results or confirmation requirements
+3. For text-only responses:
+   - Direct answer to the question
+   - Any relevant context or explanations
 
 Always use the provideFinalAnswer tool with:
-- query: The SQL query (empty string if unsafe/unclear)
-- explanation: Clear description of the operation and its impact
+- responseType: "SQL" for database operations, "TEXT" for informational responses
+- query: The SQL query (only for SQL responses)
+- explanation: Clear description of the operation/answer
 - requiresConfirmation: Boolean (true for all write operations)
-- type: The type of SQL operation
+- type: The type of SQL operation (only for SQL responses)
 - success: Whether the response successfully addresses the user's request
 </response_format>
 
 <examples>
 1. User: "Show me all users who joined this month"
    Response: {
+     responseType: "SQL",
      query: "SELECT * FROM \`users\` WHERE MONTH(signup_date) = MONTH(CURRENT_DATE()) AND YEAR(signup_date) = YEAR(CURRENT_DATE())",
      explanation: "This query retrieves all users who signed up in the current month",
      requiresConfirmation: false,
-     type: "SELECT"
+     type: "SELECT",
+     success: true
    }
 
-2. User: "Delete all inactive users"
+2. User: "What tables are available in the database?"
    Response: {
-     query: "DELETE FROM \`users\` WHERE \`last_login\` < DATE_SUB(NOW(), INTERVAL 6 MONTH)",
-     explanation: "⚠️ This will permanently delete all users who haven't logged in for 6 months. Please confirm this action.",
-     requiresConfirmation: true,
-     type: "DELETE"
+     responseType: "TEXT",
+     explanation: "The database contains the following tables:\n- users: Stores user information\n- orders: Contains order details\n- products: Lists available products",
+     requiresConfirmation: false,
+     success: true
    }
 </examples>
 
@@ -415,6 +428,7 @@ Always use the provideFinalAnswer tool with:
               requiresConfirmation: true,
               type: "NONE",
               success: false,
+              responseType: "TEXT",
             },
           };
         }
@@ -424,27 +438,28 @@ Always use the provideFinalAnswer tool with:
     }
 
     // Fallback if the stream finishes without a proper final tool call yield
-    if (!finalAnswerYielded) {
-      console.error(
-        "Agent Warning: Stream finished, but 'provideFinalAnswer' tool call was not processed or yielded.",
-      );
-      const fallbackExplanation =
-        "Error: AI agent did not conclude with the expected final answer structure.";
-      const errorMsg = accumulatedText
-        ? `${fallbackExplanation}\nAgent final text output: ${accumulatedText}`
-        : fallbackExplanation;
-      yield { type: "error", error: errorMsg };
-      yield {
-        type: "final",
-        data: {
-          query: "",
-          explanation: errorMsg,
-          requiresConfirmation: true,
-          type: "NONE",
-          success: false,
-        },
-      };
-    }
+    // if (!finalAnswerYielded) {
+    //   console.error(
+    //     "Agent Warning: Stream finished, but 'provideFinalAnswer' tool call was not processed or yielded.",
+    //   );
+    //   const fallbackExplanation =
+    //     "Error: AI agent did not conclude with the expected final answer structure.";
+    //   const errorMsg = accumulatedText
+    //     ? `${fallbackExplanation}\nAgent final text output: ${accumulatedText}`
+    //     : fallbackExplanation;
+    //   yield { type: "error", error: errorMsg };
+    //   yield {
+    //     type: "final",
+    //     data: {
+    //       query: "",
+    //       explanation: errorMsg,
+    //       requiresConfirmation: true,
+    //       type: "NONE",
+    //       success: false,
+    //       responseType: "TEXT",
+    //     },
+    //   };
+    // }
   } catch (error: any) {
     console.error("Error during generateSqlAgent stream processing:", error);
     const errorMsg = `An unexpected error occurred: ${error.message}`;
@@ -459,6 +474,7 @@ Always use the provideFinalAnswer tool with:
           requiresConfirmation: true,
           type: "NONE",
           success: false,
+          responseType: "TEXT",
         },
       };
     }

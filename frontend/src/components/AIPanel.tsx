@@ -7,7 +7,7 @@ import {
 import { LoadingTypewriter } from "@/components/ui/loading-typewriter";
 import { SqlAgentResponse, generateSqlAgent } from "@/lib/ai";
 import { type CoreMessage } from "ai";
-import { CircleAlert, EyeIcon, Loader, SendHorizonal } from "lucide-react";
+import { EyeIcon, Loader, SendHorizonal } from "lucide-react";
 import React, {
   useState,
   useRef,
@@ -107,6 +107,8 @@ export const AIPanel = ({
         return null;
       }
     })();
+
+    console.log("metadata", metadata);
 
     let currentThinkingBlockId: string | null = null;
     let currentTextBlockId: string | null = null;
@@ -236,7 +238,10 @@ export const AIPanel = ({
 
           case "final":
             const finalResult = event.data;
-            assistantResponse = `${finalResult.explanation}\n\nQuery: ${finalResult.query}`;
+            assistantResponse = finalResult.explanation;
+            if (finalResult.responseType === "SQL" && finalResult.query) {
+              assistantResponse += `\n\nQuery: ${finalResult.query}`;
+            }
             setConversationHistory((prev) => [
               ...prev,
               {
@@ -252,23 +257,25 @@ export const AIPanel = ({
                 content: (
                   <div className="markdown-body">
                     <Markdown>{finalResult.explanation}</Markdown>
+                    {finalResult.responseType === "SQL" &&
+                      finalResult.query && (
+                        <div className="mt-2 p-2 bg-muted rounded">
+                          <pre className="whitespace-pre-wrap">
+                            {finalResult.query}
+                          </pre>
+                        </div>
+                      )}
                   </div>
                 ),
                 meta: finalResult,
               },
             ]);
-            onApplyQueryFromAI(finalResult);
-            break;
-
-          case "error":
-            setDisplayBlocks((prev) => [
-              ...prev,
-              {
-                id: `${uniqueId}-${Date.now()}-error`,
-                type: "error",
-                content: event.error,
-              },
-            ]);
+            if (
+              finalResult.responseType === "SQL" &&
+              !finalResult.requiresConfirmation
+            ) {
+              onApplyQueryFromAI(finalResult);
+            }
             break;
         }
       }
@@ -363,15 +370,7 @@ export const AIPanel = ({
             {block.content as string}
           </div>
         );
-      case "error":
-        return (
-          <div
-            className={`error ${baseClasses} bg-destructive/10 text-destructive flex items-start gap-2 p-2`}
-          >
-            <CircleAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>{block.content as string}</span>
-          </div>
-        );
+
       default:
         return null;
     }
