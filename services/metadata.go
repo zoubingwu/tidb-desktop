@@ -65,6 +65,10 @@ type MetadataService struct {
 	metadataDir   string
 }
 
+const (
+	staleMetadataThreshold = 24 * time.Hour
+)
+
 // NewMetadataService creates a new metadata service
 func NewMetadataService(configService *ConfigService, dbService *DatabaseService) (*MetadataService, error) {
 	homeDir, err := os.UserHomeDir()
@@ -247,8 +251,8 @@ func (s *MetadataService) GetMetadata(ctx context.Context, connectionName, dbNam
 	// Try to load existing metadata first
 	metadata, err := s.loadMetadata(connectionName, dbName)
 	if err == nil && metadata != nil {
-		// Check if metadata is still fresh (e.g., less than 1 hour old)
-		if time.Since(metadata.LastExtracted) < time.Hour {
+		// Check if metadata is still fresh
+		if time.Since(metadata.LastExtracted) < staleMetadataThreshold {
 			return metadata, nil
 		}
 	}
