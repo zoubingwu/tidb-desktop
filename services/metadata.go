@@ -42,13 +42,18 @@ type Table struct {
 	Indexes     []Index      `json:"indexes,omitempty"`
 }
 
-// DatabaseMetadata represents the complete metadata for a database
+// DatabaseMetadata represents the metadata for a single database
 type DatabaseMetadata struct {
-	Name           string            `json:"name"`
-	Tables         []Table           `json:"tables"`
-	LastExtracted  time.Time         `json:"lastExtracted"`
-	ConnectionName string            `json:"connectionName"`
-	Graph          map[string][]Edge `json:"graph,omitempty"` // Adjacency list representation
+	Name   string            `json:"name"`
+	Tables []Table           `json:"tables"`
+	Graph  map[string][]Edge `json:"graph,omitempty"` // Adjacency list representation
+}
+
+// ConnectionMetadata represents the complete metadata for a connection
+type ConnectionMetadata struct {
+	ConnectionName string                      `json:"connectionName"`
+	LastExtracted  time.Time                   `json:"lastExtracted"`
+	Databases     map[string]DatabaseMetadata  `json:"databases"`
 }
 
 // Edge represents a relationship between tables in the graph
@@ -88,9 +93,9 @@ func NewMetadataService(configService *ConfigService, dbService *DatabaseService
 	}, nil
 }
 
-// getMetadataFilePath returns the path to the metadata file for a given connection and database
-func (s *MetadataService) getMetadataFilePath(connectionName, dbName string) string {
-	fileName := fmt.Sprintf("%s_%s_metadata.json", connectionName, dbName)
+// getMetadataFilePath returns the path to the metadata file for a given connection
+func (s *MetadataService) getMetadataFilePath(connectionName string) string {
+	fileName := fmt.Sprintf("%s_metadata.json", connectionName)
 	return filepath.Join(s.metadataDir, fileName)
 }
 
@@ -105,6 +110,18 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName, d
 		return nil, fmt.Errorf("connection %s not found", connectionName)
 	}
 
+	// Load existing connection metadata or create new one
+	connMetadata, err := s.loadMetadata(connectionName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load connection metadata: %w", err)
+	}
+	if connMetadata == nil {
+		connMetadata = &ConnectionMetadata{
+			ConnectionName: connectionName,
+			Databases:     make(map[string]DatabaseMetadata),
+		}
+	}
+
 	// Use the specified database
 	connDetails.DBName = dbName
 
@@ -114,12 +131,10 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName, d
 		return nil, fmt.Errorf("failed to list tables: %w", err)
 	}
 
-	metadata := &DatabaseMetadata{
-		Name:           dbName,
-		Tables:         make([]Table, 0, len(tables)),
-		LastExtracted:  time.Now(),
-		ConnectionName: connectionName,
-		Graph:          make(map[string][]Edge),
+	dbMetadata := DatabaseMetadata{
+		Name:   dbName,
+		Tables: make([]Table, 0, len(tables)),
+		Graph:  make(map[string][]Edge),
 	}
 
 	// Extract metadata for each table
@@ -185,7 +200,7 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName, d
 				}
 
 				// Add to graph representation
-				metadata.Graph[tableName] = append(metadata.Graph[tableName], Edge{
+				dbMetadata.Graph[tableName] = append(dbMetadata.Graph[tableName], Edge{
 					ToTable:    refTableName,
 					FromColumn: columnName,
 					ToColumn:   refColumnName,
@@ -235,25 +250,35 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName, d
 			}
 		}
 
-		metadata.Tables = append(metadata.Tables, table)
+		dbMetadata.Tables = append(dbMetadata.Tables, table)
 	}
 
+	// Update connection metadata
+	connMetadata.LastExtracted = time.Now()
+	connMetadata.Databases[dbName] = dbMetadata
+
 	// Store the metadata
-	if err := s.storeMetadata(metadata); err != nil {
+	if err := s.storeMetadata(connMetadata); err != nil {
 		return nil, fmt.Errorf("failed to store metadata: %w", err)
 	}
 
-	return metadata, nil
+	return &dbMetadata, nil
 }
 
 // GetMetadata retrieves metadata for a database, extracting it if necessary
 func (s *MetadataService) GetMetadata(ctx context.Context, connectionName, dbName string) (*DatabaseMetadata, error) {
 	// Try to load existing metadata first
-	metadata, err := s.loadMetadata(connectionName, dbName)
-	if err == nil && metadata != nil {
+	connMetadata, err := s.loadMetadata(connectionName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load metadata: %w", err)
+	}
+
+	if connMetadata != nil {
 		// Check if metadata is still fresh
-		if time.Since(metadata.LastExtracted) < staleMetadataThreshold {
-			return metadata, nil
+		if time.Since(connMetadata.LastExtracted) < staleMetadataThreshold {
+			if dbMetadata, exists := connMetadata.Databases[dbName]; exists {
+				return &dbMetadata, nil
+			}
 		}
 	}
 
@@ -262,8 +287,8 @@ func (s *MetadataService) GetMetadata(ctx context.Context, connectionName, dbNam
 }
 
 // storeMetadata saves the metadata to a file
-func (s *MetadataService) storeMetadata(metadata *DatabaseMetadata) error {
-	filePath := s.getMetadataFilePath(metadata.ConnectionName, metadata.Name)
+func (s *MetadataService) storeMetadata(metadata *ConnectionMetadata) error {
+	filePath := s.getMetadataFilePath(metadata.ConnectionName)
 
 	data, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
@@ -278,8 +303,8 @@ func (s *MetadataService) storeMetadata(metadata *DatabaseMetadata) error {
 }
 
 // loadMetadata loads metadata from a file
-func (s *MetadataService) loadMetadata(connectionName, dbName string) (*DatabaseMetadata, error) {
-	filePath := s.getMetadataFilePath(connectionName, dbName)
+func (s *MetadataService) loadMetadata(connectionName string) (*ConnectionMetadata, error) {
+	filePath := s.getMetadataFilePath(connectionName)
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -289,7 +314,7 @@ func (s *MetadataService) loadMetadata(connectionName, dbName string) (*Database
 		return nil, fmt.Errorf("failed to read metadata file: %w", err)
 	}
 
-	var metadata DatabaseMetadata
+	var metadata ConnectionMetadata
 	if err := json.Unmarshal(data, &metadata); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
