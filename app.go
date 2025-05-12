@@ -13,6 +13,7 @@ type App struct {
 	ctx              context.Context
 	dbService        *services.DatabaseService
 	configService    *services.ConfigService
+	metadataService  *services.MetadataService
 	activeConnection *services.ConnectionDetails
 }
 
@@ -25,9 +26,15 @@ func NewApp() *App {
 		panic(fmt.Sprintf("FATAL: Failed to initialize Config Service: %v", err))
 	}
 
+	metadataService, err := services.NewMetadataService(configService, dbService)
+	if err != nil {
+		panic(fmt.Sprintf("FATAL: Failed to initialize Metadata Service: %v", err))
+	}
+
 	return &App{
-		dbService:     dbService,
-		configService: configService,
+		dbService:      dbService,
+		configService:  configService,
+		metadataService: metadataService,
 		// activeConnection starts as nil
 	}
 }
@@ -235,4 +242,46 @@ func (a *App) SaveAIProviderSettings(settings services.AIProviderSettings) error
 	}
 	fmt.Printf("Saving AI provider settings...\n") // Don't log keys/sensitive info
 	return a.configService.SaveAIProviderSettings(settings)
+}
+
+// --- Database Metadata Methods ---
+
+// GetDatabaseMetadata retrieves metadata for a database, extracting it if necessary
+func (a *App) GetDatabaseMetadata(dbName string) (*services.DatabaseMetadata, error) {
+	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
+	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
+	if dbName == "" { return nil, fmt.Errorf("database name is required") }
+
+	return a.metadataService.GetMetadata(a.ctx, a.activeConnection.Name, dbName)
+}
+
+// ExtractDatabaseMetadata forces a fresh extraction of database metadata
+func (a *App) ExtractDatabaseMetadata(dbName string) (*services.DatabaseMetadata, error) {
+	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
+	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
+	if dbName == "" { return nil, fmt.Errorf("database name is required") }
+
+	return a.metadataService.ExtractMetadata(a.ctx, a.activeConnection.Name, dbName)
+}
+
+// GenerateTableDDL generates a simplified DDL for a table
+func (a *App) GenerateTableDDL(dbName string, tableName string) (string, error) {
+	if a.ctx == nil { return "", fmt.Errorf("app context not initialized") }
+	if a.activeConnection == nil { return "", fmt.Errorf("no active connection") }
+	if dbName == "" { return "", fmt.Errorf("database name is required") }
+	if tableName == "" { return "", fmt.Errorf("table name is required") }
+
+	metadata, err := a.metadataService.GetMetadata(a.ctx, a.activeConnection.Name, dbName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get metadata: %w", err)
+	}
+
+	// Find the table in metadata
+	for _, table := range metadata.Tables {
+		if table.Name == tableName {
+			return a.metadataService.GenerateSimplifiedDDL(table), nil
+		}
+	}
+
+	return "", fmt.Errorf("table %s not found in database %s", tableName, dbName)
 }
