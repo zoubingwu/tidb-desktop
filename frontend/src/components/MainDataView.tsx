@@ -266,9 +266,9 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
 
         return res;
       } catch (error: any) {
-        setStatus(`Error fetching ${titleTarget}`);
+        setStatus(`Error fetching ${titleTarget}: ${error}`);
         toast.error("Error fetching table data", {
-          description: error.message,
+          description: error,
         });
         throw error;
       }
@@ -281,17 +281,17 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
     queryKey: ["sqlFromAI", sqlFromAI],
     queryFn: async () => {
       try {
-        setStatus("Executing SQL from AI...");
+        setStatus("Executing SQL...");
         const res = await ExecuteSQL(sqlFromAI);
-        setStatus("SQL from AI executed");
+        setStatus(`SQL executed successfully`);
         return res;
       } catch (error: any) {
-        toast.error("Error fetching SQL from AI", {
-          description: error.message,
-        });
+        setStatus(error);
+        toast.error(`Error executing SQL`, { description: error });
         throw error;
       }
     },
+    retry: false,
   });
 
   const handleFilterChange = useMemoizedFn((filters: ServerSideFilter[]) => {
@@ -482,8 +482,8 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
         <ReactSplitView
           key={`inner-split`}
           defaultSizes={[
-            window.innerWidth - DEFAULT_DB_TREE_WIDTH - DEFAULT_AI_PANEL_WIDTH,
-            DEFAULT_AI_PANEL_WIDTH,
+            window.innerWidth - dbTreeWidth! - aiPanelWidth!,
+            aiPanelWidth ?? DEFAULT_AI_PANEL_WIDTH,
           ]}
           separator={false}
           onChange={(sizes: number[]) => {
@@ -517,15 +517,32 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
           </ReactSplitView.Pane>
         </ReactSplitView>
 
-        <div className="flex items-center justify-between px-2 py-0 bg-background gap-2">
-          <div className="flex text-xs gap-1 items-center">
-            {tableViewState === "loading" && (
-              <Loader className="size-3 animate-spin" />
-            )}
-            <span className="relative top-[1px]">{status}</span>
-          </div>
+        <TooltipProvider delayDuration={0}>
+          <div className="flex items-center justify-between px-2 py-0 bg-background gap-2">
+            <div className="flex text-xs gap-1 items-center flex-1">
+              {tableViewState === "loading" && (
+                <Loader className="size-3 animate-spin" />
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="relative top-[1px] truncate"
+                    style={{
+                      maxWidth:
+                        window.innerWidth - dbTreeWidth! - aiPanelWidth!,
+                    }}
+                  >
+                    {status}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p style={{ maxWidth: "var(--radix-tooltip-trigger-width)" }}>
+                    {status}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
 
-          <TooltipProvider delayDuration={0}>
             <div className="flex flex-nowrap items-center gap-2">
               {!sqlFromAI && (
                 <DataTablePagination
@@ -595,8 +612,8 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
                 </Tooltip>
               </div>
             </div>
-          </TooltipProvider>
-        </div>
+          </div>
+        </TooltipProvider>
       </ReactSplitView.Pane>
     </ReactSplitView>
   );
