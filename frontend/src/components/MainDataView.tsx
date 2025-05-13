@@ -419,23 +419,25 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
 
           <TooltipProvider delayDuration={0}>
             <div className="flex flex-nowrap items-center gap-2">
-              <DataTablePagination
-                table={table}
-                totalRowCount={totalRowCount}
-                disabled={tableViewState !== "data" || !!sqlFromAI}
-              />
+              {tableViewState === "data" && !sqlFromAI && (
+                <DataTablePagination
+                  table={table}
+                  totalRowCount={totalRowCount}
+                />
+              )}
 
               <div className="flex gap-2">
-                <Tooltip>
-                  <DataTableFilter
-                    table={table}
-                    onChange={handleFilterChange}
-                    disabled={tableViewState !== "data" || !!sqlFromAIResult}
-                  />
-                  <TooltipContent>
-                    <p>Filter</p>
-                  </TooltipContent>
-                </Tooltip>
+                {tableViewState === "data" && !sqlFromAI && (
+                  <Tooltip>
+                    <DataTableFilter
+                      table={table}
+                      onChange={handleFilterChange}
+                    />
+                    <TooltipContent>
+                      <p>Filter</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
 
                 <Tooltip>
                   <TooltipTrigger asChild>
