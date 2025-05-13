@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/zoubingwu/tidb-desktop/services"
@@ -37,8 +36,8 @@ func NewApp() *App {
 	}
 
 	return &App{
-		dbService:      dbService,
-		configService:  configService,
+		dbService:       dbService,
+		configService:   configService,
 		metadataService: metadataService,
 		// activeConnection starts as nil
 	}
@@ -69,6 +68,34 @@ func (a *App) startup(ctx context.Context) {
 			}
 		}
 	}
+
+	// subscribe to metadata extraction events
+	runtime.EventsOn(a.ctx, "metadata:extraction:start", func(optionalData ...interface{}) {
+		connectionName := optionalData[0].(string)
+		force := optionalData[1].(bool)
+
+		if connectionName == "" {
+			connectionName = a.activeConnection.Name
+		}
+
+		var metadata *services.ConnectionMetadata
+		var err error
+
+		if force {
+			metadata, err = a.metadataService.ExtractMetadata(a.ctx, connectionName)
+		} else {
+			metadata, err = a.metadataService.GetMetadata(a.ctx, connectionName)
+
+		}
+
+		if err != nil {
+			services.Error("Background metadata extraction failed for connection '%s': %v", connectionName, err)
+			runtime.EventsEmit(a.ctx, "metadata:extraction:failed", err.Error())
+		} else {
+			services.Info("Background metadata extraction completed for connection '%s'", connectionName)
+			runtime.EventsEmit(a.ctx, "metadata:extraction:completed", metadata)
+		}
+	})
 }
 
 // shutdown is called when the app terminates.
@@ -93,6 +120,7 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 
 	// Perform other cleanup here if needed
+	runtime.EventsOff(a.ctx, "metadata:extraction:start")
 }
 
 // --- Exposed Methods ---
@@ -139,21 +167,6 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 		// Log the error but don't fail the connection for this
 		services.Info("Warning: Failed to record usage for connection '%s': %v", name, err)
 	}
-
-	// Check if metadata needs to be extracted
-	go func() {
-		time.Sleep(1 * time.Second)
-		ctx := context.Background()
-		runtime.EventsEmit(a.ctx, "metadata:extraction:started", name)
-		metadata, err := a.metadataService.GetMetadata(ctx, name)
-		if err != nil {
-			services.Info("Warning: Background metadata extraction failed for connection '%s': %v", name, err)
-			runtime.EventsEmit(a.ctx, "metadata:extraction:failed", err.Error())
-		} else {
-			services.Info("Background metadata extraction completed for connection '%s'", name)
-			runtime.EventsEmit(a.ctx, "metadata:extraction:completed", metadata)
-		}
-	}()
 
 	// Emit event to notify frontend the active session is ready
 	runtime.EventsEmit(a.ctx, "connection:established", details)
@@ -243,8 +256,12 @@ func (a *App) ExecuteSQL(query string) (*services.SQLResult, error) {
 
 // ListDatabases retrieves a list of database/schema names accessible by the connection.
 func (a *App) ListDatabases() ([]string, error) {
-	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
-	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
+	if a.ctx == nil {
+		return nil, fmt.Errorf("app context not initialized")
+	}
+	if a.activeConnection == nil {
+		return nil, fmt.Errorf("no active connection")
+	}
 
 	// Delegate to DatabaseService
 	return a.dbService.ListDatabases(a.ctx, *a.activeConnection)
@@ -253,8 +270,12 @@ func (a *App) ListDatabases() ([]string, error) {
 // ListTables retrieves a list of table names from the specified database.
 // If dbName is empty, it uses the database specified in the active connection details.
 func (a *App) ListTables(dbName string) ([]string, error) {
-	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
-	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
+	if a.ctx == nil {
+		return nil, fmt.Errorf("app context not initialized")
+	}
+	if a.activeConnection == nil {
+		return nil, fmt.Errorf("no active connection")
+	}
 
 	// Delegate to DatabaseService
 	return a.dbService.ListTables(a.ctx, *a.activeConnection, dbName)
@@ -263,8 +284,12 @@ func (a *App) ListTables(dbName string) ([]string, error) {
 // GetTableData retrieves data (rows and columns) for a specific table with pagination and filtering.
 // filterParams is a placeholder for potential future filtering implementation.
 func (a *App) GetTableData(dbName string, tableName string, limit int, offset int, filterParams *map[string]any) (*services.TableDataResponse, error) {
-	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
-	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
+	if a.ctx == nil {
+		return nil, fmt.Errorf("app context not initialized")
+	}
+	if a.activeConnection == nil {
+		return nil, fmt.Errorf("no active connection")
+	}
 
 	// Delegate to DatabaseService
 	return a.dbService.GetTableData(a.ctx, *a.activeConnection, dbName, tableName, limit, offset, filterParams)
@@ -272,8 +297,12 @@ func (a *App) GetTableData(dbName string, tableName string, limit int, offset in
 
 // GetTableSchema retrieves the detailed schema/structure for a specific table.
 func (a *App) GetTableSchema(dbName string, tableName string) (*services.TableSchema, error) {
-	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
-	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
+	if a.ctx == nil {
+		return nil, fmt.Errorf("app context not initialized")
+	}
+	if a.activeConnection == nil {
+		return nil, fmt.Errorf("no active connection")
+	}
 
 	// Delegate to DatabaseService
 	return a.dbService.GetTableSchema(a.ctx, *a.activeConnection, dbName, tableName)
@@ -341,16 +370,24 @@ func (a *App) SaveWindowSettings(settings services.WindowSettings) error {
 
 // GetDatabaseMetadata retrieves metadata for the current connection
 func (a *App) GetDatabaseMetadata() (*services.ConnectionMetadata, error) {
-	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
-	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
+	if a.ctx == nil {
+		return nil, fmt.Errorf("app context not initialized")
+	}
+	if a.activeConnection == nil {
+		return nil, fmt.Errorf("no active connection")
+	}
 
 	return a.metadataService.GetMetadata(a.ctx, a.activeConnection.Name)
 }
 
 // ExtractDatabaseMetadata forces a fresh extraction of database metadata
 func (a *App) ExtractDatabaseMetadata() (*services.ConnectionMetadata, error) {
-	if a.ctx == nil { return nil, fmt.Errorf("app context not initialized") }
-	if a.activeConnection == nil { return nil, fmt.Errorf("no active connection") }
+	if a.ctx == nil {
+		return nil, fmt.Errorf("app context not initialized")
+	}
+	if a.activeConnection == nil {
+		return nil, fmt.Errorf("no active connection")
+	}
 
 	return a.metadataService.ExtractMetadata(a.ctx, a.activeConnection.Name)
 }
