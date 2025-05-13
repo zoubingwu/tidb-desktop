@@ -322,7 +322,7 @@ export const AIPanel = ({
               <CollapsibleTrigger>
                 <div className="cursor-pointer flex items-start gap-1">
                   <EyeIcon className="size-3 flex-shrink-0 relative top-[1px]" />
-                  <p>{block.content as string}</p>
+                  <p className="text-left">{block.content as string}</p>
                 </div>
               </CollapsibleTrigger>
               <CollapsibleContent>
@@ -340,7 +340,9 @@ export const AIPanel = ({
               <Markdown>{block.content}</Markdown>
               {block.meta.responseType === "SQL" && block.meta.query && (
                 <div className="rounded relative">
-                  <pre className="whitespace-pre-wrap">{block.meta.query}</pre>
+                  <pre className="whitespace-pre-wrap p-2">
+                    {block.meta.query}
+                  </pre>
                   {block.meta.requiresConfirmation && (
                     <Button
                       size="icon"
