@@ -76,9 +76,8 @@ type MetadataService struct {
 	metadataDir   string
 }
 
-const (
-	staleMetadataThreshold = 24 * time.Hour
-)
+// StaleMetadataThreshold is the duration after which metadata is considered stale
+const StaleMetadataThreshold = 24 * time.Hour
 
 // NewMetadataService creates a new metadata service
 func NewMetadataService(configService *ConfigService, dbService *DatabaseService) (*MetadataService, error) {
@@ -327,7 +326,7 @@ func (s *MetadataService) GetMetadata(ctx context.Context, connectionName string
 
 	if connMetadata != nil {
 		// Check if metadata is still fresh
-		if time.Since(connMetadata.LastExtracted) < staleMetadataThreshold {
+		if time.Since(connMetadata.LastExtracted) < StaleMetadataThreshold {
 			return connMetadata, nil
 		}
 	}
