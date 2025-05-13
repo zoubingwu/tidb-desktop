@@ -178,21 +178,6 @@ const sqlAgentResponseSchema = z.object({
     .describe(
       "Set to true if the generated query performs potentially destructive actions (UPDATE, DELETE, INSERT, ALTER, DROP) or complex SELECTs that might have unintended consequences. Always true for non-SELECT queries. Only present for SQL responses",
     ),
-  type: z
-    .enum([
-      "SELECT",
-      "UPDATE",
-      "DELETE",
-      "INSERT",
-      "ALTER",
-      "DROP",
-      "OTHER",
-      "NONE",
-    ])
-    .optional()
-    .describe(
-      "The type of the generated SQL query. Only present for SQL responses.",
-    ),
   success: z
     .boolean()
     .describe("True if the response was generated successfully."),
@@ -456,7 +441,6 @@ Always use the provideFinalAnswer tool with:
               query: "",
               explanation: errorMsg,
               requiresConfirmation: true,
-              type: "NONE",
               success: false,
               responseType: "TEXT",
             },
@@ -502,7 +486,6 @@ Always use the provideFinalAnswer tool with:
           query: "",
           explanation: errorMsg,
           requiresConfirmation: true,
-          type: "NONE",
           success: false,
           responseType: "TEXT",
         },
