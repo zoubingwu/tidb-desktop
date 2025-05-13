@@ -154,7 +154,6 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
 
   useEffect(() => {
     const cleanup = EventsOn("metadata:extraction:started", () => {
-      console.log("metadata extraction started received");
       setStatus("Indexing...");
     });
 
@@ -166,7 +165,6 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
     const cleanup3 = EventsOn(
       "metadata:extraction:completed",
       (metadata: services.ConnectionMetadata) => {
-        console.log("metadata extraction completed received", metadata);
         setStatus("");
         mergeDatabaseTree(
           Object.keys(metadata.databases).map((dbName) => ({
@@ -428,7 +426,6 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
       defaultSizes={[dbTreeWidth!, window.innerWidth - dbTreeWidth!]}
       separator={false}
       onChange={(sizes: number[]) => {
-        console.log("onChange", sizes);
         if (sizes.length > 0 && sizes[0] > 50) {
           // Ensure a minimum sensible width
           setDbTreeWidth(sizes[0]);
