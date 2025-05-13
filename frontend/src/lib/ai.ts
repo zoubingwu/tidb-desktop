@@ -161,6 +161,10 @@ const sqlAgentResponseSchema = z.object({
   responseType: z
     .enum(["SQL", "TEXT"])
     .describe("Whether this is a SQL query response or just text"),
+  dbName: z
+    .string()
+    .optional()
+    .describe("The name of the database the query was executed on."),
   query: z
     .string()
     .optional()
