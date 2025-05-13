@@ -74,6 +74,8 @@ func (a *App) startup(ctx context.Context) {
 		connectionName := optionalData[0].(string)
 		force := optionalData[1].(bool)
 
+		services.Info("Metadata extraction started for connection '%s' and force extraction: %v", connectionName, force)
+
 		if connectionName == "" {
 			connectionName = a.activeConnection.Name
 		}

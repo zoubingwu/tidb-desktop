@@ -44,7 +44,7 @@ import {
   ListTables,
 } from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
-import { EventsOn } from "wailsjs/runtime";
+import { EventsEmit, EventsOn } from "wailsjs/runtime";
 import DataTable from "./DataTable";
 import SettingsModal from "./SettingModal";
 import TablePlaceholder from "./TablePlaceHolder";
@@ -76,7 +76,13 @@ const LAYOUT_AI_PANEL_VISIBLE_KEY = "layout:aiPanelVisible";
 // @TODO: make it configurable
 const SHOW_SYSTEM_DATABASES = false;
 
-const MainDataView = ({ onClose }: { onClose: () => void }) => {
+const MainDataView = ({
+  onClose,
+  connectionDetails,
+}: {
+  onClose: () => void;
+  connectionDetails: services.ConnectionDetails | null;
+}) => {
   const [status, setStatus] = useState("");
   const [databaseTree, setDatabaseTree] = useImmer<DatabaseTreeData>([]);
   const [tableDataPrameters, setTableDataPrameters] = useImmer<{
@@ -179,17 +185,12 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
   }, [databases]);
 
   useEffect(() => {
-    const cleanup = EventsOn("metadata:extraction:started", () => {
-      console.log("metadata extraction started received");
-      setStatus("Indexing database...");
-    });
-
-    const cleanup2 = EventsOn("metadata:extraction:failed", (error: string) => {
+    const cleanup1 = EventsOn("metadata:extraction:failed", (error: string) => {
       console.log("metadata extraction failed received", error);
-      setStatus("Index failed");
+      setStatus("Index database failed");
     });
 
-    const cleanup3 = EventsOn(
+    const cleanup2 = EventsOn(
       "metadata:extraction:completed",
       (metadata: services.ConnectionMetadata) => {
         console.log("metadata extraction completed received", metadata);
@@ -206,10 +207,12 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
       },
     );
 
+    setStatus("Indexing database...");
+    EventsEmit("metadata:extraction:start", connectionDetails?.name!, false);
+
     return () => {
-      cleanup();
+      cleanup1();
       cleanup2();
-      cleanup3();
     };
   }, []);
 
@@ -455,10 +458,14 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
     resetTableDataPrameters();
     await executeSql(sqlQuery);
     setSqlFromAI(sqlQuery);
+
     if (isModifyingQuery) {
       if (result.dbName) {
         fetchTables(result.dbName);
       }
+
+      setStatus("Indexing database...");
+      EventsEmit("metadata:extraction:start", connectionDetails?.name!, true);
     }
   };
 
