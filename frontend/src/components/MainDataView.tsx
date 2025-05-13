@@ -160,6 +160,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
       currentTable,
       currentPageSize,
       currentPageIndex,
+      currentServerFilters,
     ],
     queryFn: async () => {
       const dbName = currentDb;
@@ -268,10 +269,6 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
 
     return [];
   }, [tableData?.columns, sqlFromAIResult, sqlFromAI]);
-
-  console.log("tableData", tableData);
-  console.log("sqlFromAIResult", sqlFromAIResult);
-  console.log("columns", columns);
 
   const totalRowCount = sqlFromAIResult ? null : tableData?.totalRows;
 
