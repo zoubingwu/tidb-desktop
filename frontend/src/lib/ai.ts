@@ -227,9 +227,9 @@ const finalAnswerTool = tool({
 export async function* generateSqlAgent(
   userPrompt: string,
   conversationHistory: CoreMessage[] = [],
-  metadata: services.ConnectionMetadata | null = null,
 ): AsyncGenerator<AgentStreamEvent, void, unknown> {
   const model = await createModel();
+  const metadata = await GetDatabaseMetadata();
 
   const agentTools = {
     ...dbTools,
