@@ -38,6 +38,15 @@ type OpenRouterSettings struct {
 	APIKey string `json:"apiKey,omitempty"`
 }
 
+// WindowSettings holds window geometry preferences
+type WindowSettings struct {
+	Width       int  `json:"width,omitempty"`
+	Height      int  `json:"height,omitempty"`
+	X           int  `json:"x,omitempty"`
+	Y           int  `json:"y,omitempty"`
+	IsMaximized bool `json:"isMaximized,omitempty"`
+}
+
 // AIProviderSettings holds API keys and settings for different AI providers
 type AIProviderSettings struct {
 	CurrentProvider string             `json:"provider,omitempty"` // 'openai', 'anthropic', 'openrouter'
@@ -49,10 +58,11 @@ type AIProviderSettings struct {
 // ConfigData defines the structure of the entire configuration file.
 type ConfigData struct {
 	// Use ConnectionDetails from database.go
-	Connections   map[string]ConnectionDetails `json:"connections"`
+	Connections        map[string]ConnectionDetails `json:"connections"`
 	// Add other configuration fields here later, e.g., settings
-	ThemeSettings    *ThemeSettings               `json:"appearance,omitempty"` // Use pointer to handle nil easily
-	AIProviderSettings *AIProviderSettings          `json:"ai,omitempty"` // Settings for AI providers
+	ThemeSettings      *ThemeSettings               `json:"appearance,omitempty"` // Use pointer to handle nil easily
+	AIProviderSettings *AIProviderSettings          `json:"ai,omitempty"`         // Settings for AI providers
+	WindowSettings     *WindowSettings              `json:"window,omitempty"`
 }
 
 // ConfigService handles loading and saving application configuration.
@@ -83,6 +93,7 @@ func NewConfigService() (*ConfigService, error) {
 				Anthropic:       &AnthropicSettings{},
 				OpenRouter:      &OpenRouterSettings{},
 			},
+			WindowSettings: &WindowSettings{Width: 1024, Height: 768, X: -1, Y: -1, IsMaximized: false}, // Default window settings (-1 for X/Y means center)
 		},
 	}
 
@@ -95,11 +106,12 @@ func NewConfigService() (*ConfigService, error) {
 				Connections:   make(map[string]ConnectionDetails),
 				ThemeSettings: &ThemeSettings{Mode: "system", BaseTheme: "claude"},
 				AIProviderSettings: &AIProviderSettings{
-					CurrentProvider: "openai", // Default provider
+					CurrentProvider: "openai",
 					OpenAI:          &OpenAISettings{},
 					Anthropic:       &AnthropicSettings{},
 					OpenRouter:      &OpenRouterSettings{},
 				},
+				WindowSettings: &WindowSettings{Width: 1024, Height: 768, X: -1, Y: -1, IsMaximized: false},
 			}
 		}
 		// Ensure sub-maps/structs are initialized if config was partially loaded or nil
@@ -130,6 +142,10 @@ func NewConfigService() (*ConfigService, error) {
 			if service.config.AIProviderSettings.OpenRouter == nil {
 				service.config.AIProviderSettings.OpenRouter = &OpenRouterSettings{}
 			}
+		}
+		// Ensure WindowSettings is initialized if it was missing
+		if service.config.WindowSettings == nil {
+			service.config.WindowSettings = &WindowSettings{Width: 1024, Height: 768, X: -1, Y: -1, IsMaximized: false}
 		}
 	} else {
 		Info("Config loaded successfully from %s", configFilePath)
@@ -163,6 +179,10 @@ func NewConfigService() (*ConfigService, error) {
 				service.config.AIProviderSettings.OpenRouter = &OpenRouterSettings{}
 			}
 		}
+		// Ensure WindowSettings is initialized if it was missing in the loaded file
+		if service.config.WindowSettings == nil {
+			service.config.WindowSettings = &WindowSettings{Width: 1024, Height: 768, X: -1, Y: -1, IsMaximized: false}
+		}
 	}
 
 	return service, nil
@@ -176,15 +196,9 @@ func (s *ConfigService) loadConfig() error {
 	// Check if file exists
 	if _, err := os.Stat(s.configPath); os.IsNotExist(err) {
 		Info("Config file %s does not exist, creating empty config with defaults.", s.configPath)
-		// Defaults are already set in NewConfigService, ensure AI defaults are there too
-		if s.config.AIProviderSettings == nil {
-			s.config.AIProviderSettings = &AIProviderSettings{
-				CurrentProvider: "openai", // Default provider
-				OpenAI:          &OpenAISettings{},
-				Anthropic:       &AnthropicSettings{},
-				OpenRouter:      &OpenRouterSettings{},
-			}
-		}
+		// Defaults are already set in NewConfigService's s.config initialization.
+		// No need to re-initialize s.config.AIProviderSettings or s.config.WindowSettings here
+		// as they are part of the s.config struct that's already initialized with defaults.
 		return nil
 	}
 
@@ -196,15 +210,7 @@ func (s *ConfigService) loadConfig() error {
 	// If the file is empty, initialize config
 	if len(data) == 0 {
 		Info("Config file %s is empty, using default config.", s.configPath)
-		// Defaults are already set in NewConfigService, ensure AI defaults are there too
-		if s.config.AIProviderSettings == nil {
-			s.config.AIProviderSettings = &AIProviderSettings{
-				CurrentProvider: "openai", // Default provider
-				OpenAI:          &OpenAISettings{},
-				Anthropic:       &AnthropicSettings{},
-				OpenRouter:      &OpenRouterSettings{},
-			}
-		}
+		// Defaults are already set in NewConfigService's s.config initialization.
 		return nil
 	}
 
@@ -247,6 +253,10 @@ func (s *ConfigService) loadConfig() error {
 		if s.config.AIProviderSettings.OpenRouter == nil {
 			s.config.AIProviderSettings.OpenRouter = &OpenRouterSettings{}
 		}
+	}
+	// Ensure WindowSettings is non-nil
+	if s.config.WindowSettings == nil {
+		s.config.WindowSettings = &WindowSettings{Width: 1024, Height: 768, X: -1, Y: -1, IsMaximized: false}
 	}
 
 	return nil
@@ -438,8 +448,53 @@ func (s *ConfigService) SaveAIProviderSettings(settings AIProviderSettings) erro
 	}
 
 	// Ensure nested pointers are handled correctly before saving
-	if settings.OpenAI == nil { settings.OpenAI = &OpenAISettings{} }
+	// Check and initialize AI provider specific settings if they are nil
+	if settings.OpenAI == nil {
+		settings.OpenAI = &OpenAISettings{}
+	}
+	if settings.Anthropic == nil {
+		settings.Anthropic = &AnthropicSettings{}
+	}
+	if settings.OpenRouter == nil {
+		settings.OpenRouter = &OpenRouterSettings{}
+	}
 
 	s.config.AIProviderSettings = &settings // Update the internal config
+	return s.saveConfig()                   // Save the entire config file
+}
+
+// --- Window Settings Management Methods ---
+
+// GetWindowSettings retrieves the current window settings.
+func (s *ConfigService) GetWindowSettings() (*WindowSettings, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.config.WindowSettings == nil {
+		// This case should ideally not be hit if initialization in NewConfigService and loadConfig is correct.
+		Info("WindowSettings were nil in config, returning defaults.")
+		return &WindowSettings{Width: 1024, Height: 768, X: -1, Y: -1, IsMaximized: false}, nil
+	}
+	// Return a copy to be safe
+	settingsCopy := *s.config.WindowSettings
+	return &settingsCopy, nil
+}
+
+// SaveWindowSettings updates and saves the window settings.
+func (s *ConfigService) SaveWindowSettings(settings WindowSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Basic validation/defaulting (optional but good practice)
+	if settings.Width <= 0 {
+		settings.Width = 1024
+	}
+	if settings.Height <= 0 {
+		settings.Height = 768
+	}
+	// X and Y can be negative or anything, usually handled by OS/Wails if out of bounds.
+	// -1 for X/Y is our convention for "center on startup if no prior position".
+
+	s.config.WindowSettings = &settings // Update the internal config
+	Info("Saving window settings: %+v", settings)
 	return s.saveConfig() // Save the entire config file
 }

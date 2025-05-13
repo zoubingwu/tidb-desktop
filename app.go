@@ -47,12 +47,52 @@ func NewApp() *App {
 // startup is called when the app starts.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	runtime.WindowCenter(a.ctx)
+
+	// Load window settings
+	settings, err := a.configService.GetWindowSettings()
+	if err != nil {
+		services.Info("Warning: Failed to get window settings: %v. Using defaults.", err)
+		// Use Wails default (centered) or define fallback defaults here
+		runtime.WindowCenter(a.ctx)
+	} else {
+		if settings.IsMaximized {
+			runtime.WindowMaximise(a.ctx)
+		} else {
+			// Only set size and position if not maximized and position is valid
+			if settings.Width > 0 && settings.Height > 0 {
+				runtime.WindowSetSize(a.ctx, settings.Width, settings.Height)
+			}
+			if settings.X != -1 && settings.Y != -1 { // -1 means use default/centered
+				runtime.WindowSetPosition(a.ctx, settings.X, settings.Y)
+			} else {
+				runtime.WindowCenter(a.ctx) // Center if no specific position was saved
+			}
+		}
+	}
 }
 
 // shutdown is called when the app terminates.
 func (a *App) shutdown(ctx context.Context) {
-	// Perform cleanup here if needed
+	// Save current window state
+	width, height := runtime.WindowGetSize(a.ctx)
+	x, y := runtime.WindowGetPosition(a.ctx)
+	isMaximized := runtime.WindowIsMaximised(a.ctx)
+
+	settings := services.WindowSettings{
+		Width:       width,
+		Height:      height,
+		X:           x,
+		Y:           y,
+		IsMaximized: isMaximized,
+	}
+
+	if err := a.configService.SaveWindowSettings(settings); err != nil {
+		services.Info("Error saving window settings on shutdown: %v", err)
+	} else {
+		services.Info("Window settings saved on shutdown: %+v", settings)
+	}
+
+	// Perform other cleanup here if needed
 }
 
 // --- Exposed Methods ---
@@ -277,6 +317,26 @@ func (a *App) SaveAIProviderSettings(settings services.AIProviderSettings) error
 		return fmt.Errorf("config service not initialized")
 	}
 	return a.configService.SaveAIProviderSettings(settings)
+}
+
+// --- Window Settings (not directly exposed to frontend, but used internally) ---
+
+// GetWindowSettings retrieves the currently saved window settings.
+// This might be useful if you need to expose it to the frontend later.
+func (a *App) GetWindowSettings() (*services.WindowSettings, error) {
+	if a.configService == nil {
+		return nil, fmt.Errorf("config service not initialized")
+	}
+	return a.configService.GetWindowSettings()
+}
+
+// SaveWindowSettings saves the provided window settings to the config file.
+// This might be useful if you need to expose it to the frontend later.
+func (a *App) SaveWindowSettings(settings services.WindowSettings) error {
+	if a.configService == nil {
+		return fmt.Errorf("config service not initialized")
+	}
+	return a.configService.SaveWindowSettings(settings)
 }
 
 // --- Database Metadata Methods ---
