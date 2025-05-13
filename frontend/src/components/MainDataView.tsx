@@ -39,6 +39,8 @@ import {
   ListDatabases,
   ListTables,
 } from "wailsjs/go/main/App";
+import { services } from "wailsjs/go/models";
+import { EventsOn } from "wailsjs/runtime";
 import DataTable from "./DataTable";
 import SettingsModal from "./SettingModal";
 import TablePlaceholder from "./TablePlaceHolder";
@@ -86,16 +88,25 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
   const [sqlFromAI, setSqlFromAI] = useState<string>("");
   const [showAIPanel, setShowAIPanel] = useState(false);
 
-  const updateDatabaseTree = (
-    dbName: string,
-    newItem: Partial<Omit<DatabaseTreeItem, "name">>,
+  const mergeDatabaseTree = (
+    tree: { dbName: string; tables?: string[]; isLoadingTables?: boolean }[],
   ) => {
-    setDatabaseTree((prevTree: DatabaseTreeData) => {
-      const item = prevTree.find((item) => item.name === dbName);
-      if (item) {
-        item.isLoadingTables = newItem.isLoadingTables;
-        item.tables = newItem.tables || [];
-      }
+    setDatabaseTree((draft: DatabaseTreeData) => {
+      tree.forEach((db) => {
+        const existing = draft.find((item) => item.name === db.dbName);
+        if (existing) {
+          if (db.tables) {
+            existing.tables = db.tables;
+          }
+          existing.isLoadingTables = db.isLoadingTables ?? false;
+        } else {
+          draft.push({
+            name: db.dbName,
+            tables: db.tables || [],
+            isLoadingTables: db.isLoadingTables ?? false,
+          });
+        }
+      });
     });
   };
 
@@ -113,39 +124,57 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
 
   useEffect(() => {
     if (databases?.length) {
-      setDatabaseTree((draft) => {
-        databases.forEach((dbName) => {
-          const existingItem = draft.find((item) => item.name === dbName);
-          if (existingItem) {
-            existingItem.isLoadingTables = false;
-          } else {
-            draft.push({
-              name: dbName,
-              tables: [],
-              isLoadingTables: false,
-            });
-          }
-        });
-        return draft;
-      });
+      mergeDatabaseTree(databases.map((dbName) => ({ dbName })));
     }
   }, [databases]);
+
+  useEffect(() => {
+    const cleanup = EventsOn("metadata:extraction:started", () => {
+      console.log("metadata extraction started received");
+      setStatus("Indexing...");
+    });
+
+    const cleanup2 = EventsOn("metadata:extraction:failed", (error: string) => {
+      console.log("metadata extraction failed received", error);
+      setStatus("Index failed");
+    });
+
+    const cleanup3 = EventsOn(
+      "metadata:extraction:completed",
+      (metadata: services.ConnectionMetadata) => {
+        console.log("metadata extraction completed received", metadata);
+        setStatus("");
+        mergeDatabaseTree(
+          Object.keys(metadata.databases).map((dbName) => ({
+            dbName,
+            tables: metadata.databases[dbName].tables.map(
+              (table) => table.name,
+            ),
+            isLoadingTables: false,
+          })),
+        );
+      },
+    );
+
+    return () => {
+      cleanup();
+      cleanup2();
+      cleanup3();
+    };
+  }, []);
 
   const { mutate: fetchTables } = useMutation({
     mutationFn: (dbName: string) => ListTables(dbName),
     onMutate: (dbName: string) => {
       if (!databaseTree.find((db) => db.name === dbName)?.tables?.length) {
-        updateDatabaseTree(dbName, { isLoadingTables: true });
+        mergeDatabaseTree([{ dbName, isLoadingTables: true }]);
       }
     },
     onSuccess: (tables, dbName) => {
-      updateDatabaseTree(dbName, {
-        tables: tables || [],
-        isLoadingTables: false,
-      });
+      mergeDatabaseTree([{ dbName, tables, isLoadingTables: false }]);
     },
     onError: (error, dbName) => {
-      updateDatabaseTree(dbName, { isLoadingTables: false });
+      mergeDatabaseTree([{ dbName, isLoadingTables: false }]);
       toast.error("Error fetching tables", {
         description: error.message,
       });
@@ -380,7 +409,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
       <ReactSplitView.Pane>
         <DatabaseTree
           databaseTree={databaseTree}
-          isLoadingDatabases={isLoadingDatabases}
+          isLoadingDatabases={isLoadingDatabases && databaseTree.length === 0}
           databasesError={databasesError}
           onSelectDatabase={handleSelectDatabase}
           onSelectTable={handleSelectTable}
