@@ -357,13 +357,17 @@ export const AIPanel = ({ onApplyQueryFromAI, opened }: AIPanelProps) => {
   return (
     <div
       ref={scrollAreaRef}
-      className="h-full px-4 py-2 overflow-auto bg-muted/50"
+      className="h-full flex flex-col px-4 py-2 overflow-auto bg-muted/50"
     >
-      {displayBlocks.map((block) => (
-        <React.Fragment key={block.id}>
-          {renderBlockContent(block)}
-        </React.Fragment>
-      ))}
+      {displayBlocks.length > 0 && (
+        <div className="flex-1">
+          {displayBlocks.map((block) => (
+            <React.Fragment key={block.id}>
+              {renderBlockContent(block)}
+            </React.Fragment>
+          ))}
+        </div>
+      )}
 
       <div className="bg-background rounded-md overflow-hidden text-sm">
         <TextareaAutosize
