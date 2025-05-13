@@ -381,7 +381,7 @@ export const AIPanel = ({
         </div>
       )}
 
-      <div className="bg-background rounded-md overflow-hidden text-sm">
+      <div className="bg-background rounded-md overflow-hidden text-sm flex-shrink-0">
         <TextareaAutosize
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
