@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -108,11 +109,14 @@ func (s *MetadataService) getMetadataFilePath(connectionName string) string {
 func isSystemDatabase(dbName string) bool {
 	systemDBs := map[string]bool{
 		"information_schema":  true,
-		"mysql":              true,
 		"performance_schema": true,
+		"metrics_schema":    true,  // TiDB specific
+		"mysql":              true,
 		"sys":               true,
 	}
-	return systemDBs[dbName]
+
+	// Convert to lowercase for case-insensitive comparison
+	return systemDBs[strings.ToLower(dbName)]
 }
 
 // ExtractMetadata extracts metadata from the database and stores it
