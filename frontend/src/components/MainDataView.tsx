@@ -501,168 +501,169 @@ const MainDataView = ({
   });
 
   return (
-    <ReactSplitView
-      key="outer-split"
-      defaultSizes={[dbTreeWidth!, window.innerWidth - dbTreeWidth!]}
-      separator={false}
-      onChange={(sizes: number[]) => {
-        if (sizes.length > 0 && sizes[0] > 50) {
-          // Ensure a minimum sensible width
-          setDbTreeWidth(sizes[0]);
-        }
-      }}
-    >
-      <ReactSplitView.Pane
-        minSize={DEFAULT_DB_TREE_WIDTH / 2}
-        maxSize={DEFAULT_DB_TREE_WIDTH * 2}
+    <div className="flex flex-col h-full">
+      <ReactSplitView
+        key="outer-split"
+        defaultSizes={[dbTreeWidth!, window.innerWidth - dbTreeWidth!]}
+        separator={false}
+        onChange={(sizes: number[]) => {
+          if (sizes.length > 0 && sizes[0] > 50) {
+            // Ensure a minimum sensible width
+            setDbTreeWidth(sizes[0]);
+          }
+        }}
       >
-        <DatabaseTree
-          databaseTree={databaseTree}
-          isLoadingDatabases={isLoadingDatabases && databaseTree.length === 0}
-          databasesError={databasesError}
-          onSelectDatabase={handleSelectDatabase}
-          onSelectTable={handleSelectTable}
-          selectedTable={{ db: currentDb, table: currentTable }}
-        />
-      </ReactSplitView.Pane>
-
-      <ReactSplitView.Pane className="flex flex-col overflow-hidden">
-        <ReactSplitView
-          key={`inner-split`}
-          defaultSizes={[
-            window.innerWidth - dbTreeWidth! - aiPanelWidth!,
-            aiPanelWidth ?? DEFAULT_AI_PANEL_WIDTH,
-          ]}
-          separator={false}
-          onChange={(sizes: number[]) => {
-            // sizes[0] is table width, sizes[1] is AI panel width (if visible)
-            if (showAIPanel && sizes.length === 2 && sizes[1] > 50) {
-              // Ensure a minimum
-              setAiPanelWidth(sizes[1]);
-            }
-          }}
+        <ReactSplitView.Pane
+          minSize={DEFAULT_DB_TREE_WIDTH / 2}
+          maxSize={DEFAULT_DB_TREE_WIDTH * 2}
         >
-          <ReactSplitView.Pane minSize={200}>
-            {tableViewState === "data" ? (
-              <DataTable<TableRowData> table={table} height={TABLE_HEIGHT} />
-            ) : (
-              <TablePlaceholder animate={tableViewState === "loading"} />
-            )}
-          </ReactSplitView.Pane>
+          <DatabaseTree
+            databaseTree={databaseTree}
+            isLoadingDatabases={isLoadingDatabases && databaseTree.length === 0}
+            databasesError={databasesError}
+            onSelectDatabase={handleSelectDatabase}
+            onSelectTable={handleSelectTable}
+            selectedTable={{ db: currentDb, table: currentTable }}
+          />
+        </ReactSplitView.Pane>
 
-          <ReactSplitView.Pane
-            visible={showAIPanel}
-            minSize={DEFAULT_AI_PANEL_WIDTH / 2}
-            preferredSize={aiPanelWidth ?? DEFAULT_AI_PANEL_WIDTH}
-            maxSize={DEFAULT_AI_PANEL_WIDTH * 2}
+        <ReactSplitView.Pane className="flex flex-col overflow-hidden">
+          <ReactSplitView
+            key={`inner-split`}
+            defaultSizes={[
+              window.innerWidth - dbTreeWidth! - aiPanelWidth!,
+              aiPanelWidth ?? DEFAULT_AI_PANEL_WIDTH,
+            ]}
+            separator={false}
+            onChange={(sizes: number[]) => {
+              // sizes[0] is table width, sizes[1] is AI panel width (if visible)
+              if (showAIPanel && sizes.length === 2 && sizes[1] > 50) {
+                // Ensure a minimum
+                setAiPanelWidth(sizes[1]);
+              }
+            }}
           >
-            <AIPanel
-              onApplyQueryFromAI={handleApplyAIGeneratedQuery}
-              opened={showAIPanel}
-              isExecutingSQLFromAI={isExecutingSQLFromAI}
-            />
-          </ReactSplitView.Pane>
-        </ReactSplitView>
-
-        <TooltipProvider delayDuration={0}>
-          <div className="flex items-center justify-between px-2 py-0 bg-background gap-2">
-            <div className="flex text-xs gap-1 items-center flex-1">
-              {tableViewState === "loading" && (
-                <Loader className="size-3 animate-spin" />
+            <ReactSplitView.Pane minSize={200}>
+              {tableViewState === "data" ? (
+                <DataTable<TableRowData> table={table} height={TABLE_HEIGHT} />
+              ) : (
+                <TablePlaceholder animate={tableViewState === "loading"} />
               )}
+            </ReactSplitView.Pane>
+
+            <ReactSplitView.Pane
+              visible={showAIPanel}
+              minSize={DEFAULT_AI_PANEL_WIDTH / 2}
+              preferredSize={aiPanelWidth ?? DEFAULT_AI_PANEL_WIDTH}
+              maxSize={DEFAULT_AI_PANEL_WIDTH * 2}
+            >
+              <AIPanel
+                onApplyQueryFromAI={handleApplyAIGeneratedQuery}
+                opened={showAIPanel}
+                isExecutingSQLFromAI={isExecutingSQLFromAI}
+              />
+            </ReactSplitView.Pane>
+          </ReactSplitView>
+        </ReactSplitView.Pane>
+      </ReactSplitView>
+
+      <TooltipProvider delayDuration={0}>
+        <div className="flex items-center justify-between px-2 py-0 bg-background gap-2">
+          <div className="flex text-xs gap-1 items-center flex-1">
+            {tableViewState === "loading" && (
+              <Loader className="size-3 animate-spin" />
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className="relative top-[1px] truncate"
+                  style={{
+                    maxWidth: window.innerWidth - dbTreeWidth! - aiPanelWidth!,
+                  }}
+                >
+                  {status}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p style={{ maxWidth: "var(--radix-tooltip-trigger-width)" }}>
+                  {status}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
+          <div className="flex flex-nowrap items-center gap-2">
+            {!sqlFromAI && (
+              <DataTablePagination
+                table={table}
+                totalRowCount={totalRowCount}
+                disabled={tableViewState !== "data"}
+              />
+            )}
+
+            <div className="flex gap-2">
+              {!sqlFromAI && (
+                <Tooltip>
+                  <DataTableFilter
+                    table={table}
+                    onChange={handleFilterChange}
+                    disabled={tableViewState !== "data"}
+                  />
+                  <TooltipContent>
+                    <p>Filter</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span
-                    className="relative top-[1px] truncate"
-                    style={{
-                      maxWidth:
-                        window.innerWidth - dbTreeWidth! - aiPanelWidth!,
-                    }}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowAIPanel(!showAIPanel)}
                   >
-                    {status}
-                  </span>
+                    <SparkleIcon className="size-3.5" />
+                    <span className="sr-only">Ask AI</span>
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p style={{ maxWidth: "var(--radix-tooltip-trigger-width)" }}>
-                    {status}
-                  </p>
+                  <p>Ask AI</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <SettingsModal>
+                  <Button title="Preferences" variant="ghost" size="icon">
+                    <SettingsIcon className="size-3.5" />
+                    <span className="sr-only">Preferences</span>
+                  </Button>
+                </SettingsModal>
+                <TooltipContent>
+                  <p>Preferences</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleClose}
+                    title="Disconnect"
+                  >
+                    <UnplugIcon className="size-3.5" />
+                    <span className="sr-only">Disconnect</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Disconnect</p>
                 </TooltipContent>
               </Tooltip>
             </div>
-
-            <div className="flex flex-nowrap items-center gap-2">
-              {!sqlFromAI && (
-                <DataTablePagination
-                  table={table}
-                  totalRowCount={totalRowCount}
-                  disabled={tableViewState !== "data"}
-                />
-              )}
-
-              <div className="flex gap-2">
-                {!sqlFromAI && (
-                  <Tooltip>
-                    <DataTableFilter
-                      table={table}
-                      onChange={handleFilterChange}
-                      disabled={tableViewState !== "data"}
-                    />
-                    <TooltipContent>
-                      <p>Filter</p>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setShowAIPanel(!showAIPanel)}
-                    >
-                      <SparkleIcon className="size-3.5" />
-                      <span className="sr-only">Ask AI</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Ask AI</p>
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <SettingsModal>
-                    <Button title="Preferences" variant="ghost" size="icon">
-                      <SettingsIcon className="size-3.5" />
-                      <span className="sr-only">Preferences</span>
-                    </Button>
-                  </SettingsModal>
-                  <TooltipContent>
-                    <p>Preferences</p>
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleClose}
-                      title="Disconnect"
-                    >
-                      <UnplugIcon className="size-3.5" />
-                      <span className="sr-only">Disconnect</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Disconnect</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </div>
           </div>
-        </TooltipProvider>
-      </ReactSplitView.Pane>
-    </ReactSplitView>
+        </div>
+      </TooltipProvider>
+    </div>
   );
 };
 
