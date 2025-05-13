@@ -239,7 +239,7 @@ export const AIPanel = ({ onApplyQueryFromAI, opened }: AIPanelProps) => {
                     <Markdown>{finalResult.explanation}</Markdown>
                     {finalResult.responseType === "SQL" &&
                       finalResult.query && (
-                        <div className="mt-2 p-2 bg-muted rounded">
+                        <div className="rounded">
                           <pre className="whitespace-pre-wrap">
                             {finalResult.query}
                           </pre>
