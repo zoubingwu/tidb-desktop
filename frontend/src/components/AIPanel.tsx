@@ -57,14 +57,10 @@ export const AIPanel = ({
 
   useEffect(() => {
     if (scrollAreaRef.current) {
-      const scrollViewport = scrollAreaRef.current.querySelector(
-        "div[data-radix-scroll-area-viewport]",
-      );
-      if (scrollViewport) {
-        requestAnimationFrame(() => {
-          scrollViewport.scrollTop = scrollViewport.scrollHeight;
-        });
-      }
+      const container = scrollAreaRef.current;
+      requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+      });
     }
   }, [displayBlocks]);
 
