@@ -119,104 +119,109 @@ func isSystemDatabase(dbName string) bool {
 	return systemDBs[strings.ToLower(dbName)]
 }
 
-// ExtractMetadata extracts metadata from the database and stores it
-// If optionalDbName is provided, only metadata for that specific database is extracted.
+// ExtractMetadata extracts metadata from the database and stores it.
+// If optionalDbName is provided, metadata for that specific database is extracted and
+// merged into the existing connection metadata. Otherwise, a full extraction is performed.
 func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName string, optionalDbName ...string) (*ConnectionMetadata, error) {
-	Info("Starting metadata extraction for connection: %s", connectionName)
-	// Get connection details
+	Info("ExtractMetadata: Starting for connection: %s, Optional DBs: %v", connectionName, optionalDbName)
+
 	connDetails, exists, err := s.configService.GetConnection(connectionName)
 	if err != nil {
-		Error("failed to get connection details: %v", err)
-		return nil, fmt.Errorf("failed to get connection details: %w", err)
+		Error("ExtractMetadata: Failed to get connection details for %s: %v", connectionName, err)
+		return nil, fmt.Errorf("failed to get connection details for %s: %w", connectionName, err)
 	}
 	if !exists {
-		Error("connection %s not found", connectionName)
+		Error("ExtractMetadata: Connection %s not found", connectionName)
 		return nil, fmt.Errorf("connection %s not found", connectionName)
 	}
 
-	connMetadata := &ConnectionMetadata{
-		ConnectionName: connectionName,
-		LastExtracted:  time.Now(),
-		Databases:      make(map[string]DatabaseMetadata),
-	}
+	var connMetadata *ConnectionMetadata
+	var userDatabases []string // Databases to actually process
+	var targetDbName string    // Only set if optionalDbName is provided
 
-	var userDatabases []string
-	var targetDbName string
+	isPartialExtraction := len(optionalDbName) > 0 && optionalDbName[0] != ""
 
-	if len(optionalDbName) > 0 && optionalDbName[0] != "" {
+	if isPartialExtraction {
 		targetDbName = optionalDbName[0]
-		Info("Extracting metadata for specific database: %s under connection: %s", targetDbName, connectionName)
-		// We'll assume the provided dbName is valid and accessible.
-		// If specific validation is needed (e.g., check if it's a system DB or actually exists),
-		// that logic could be added here. For now, we directly use it.
-		userDatabases = []string{targetDbName}
-	} else {
-		Info("No specific database provided, listing all user databases for connection: %s", connectionName)
-		// Get all databases
-		allDatabases, errDbList := s.dbService.ListDatabases(ctx, connDetails)
-		if errDbList != nil {
-			Error("failed to list databases: %v", errDbList)
-			return nil, fmt.Errorf("failed to list databases: %w", errDbList)
+		Info("ExtractMetadata: Partial mode for connection '%s', database '%s'", connectionName, targetDbName)
+
+		existingConnMetadata, loadErr := s.loadMetadata(connectionName)
+		if loadErr != nil { // loadMetadata returns (nil, nil) if file not exist, error otherwise
+			Error("ExtractMetadata: Failed to load existing metadata for connection '%s' to merge: %v", connectionName, loadErr)
+			return nil, fmt.Errorf("failed to load existing metadata for %s to merge: %w", connectionName, loadErr)
 		}
 
-		// Filter out system databases
+		if existingConnMetadata != nil {
+			connMetadata = existingConnMetadata
+			Info("ExtractMetadata: Loaded existing metadata for connection '%s' to merge with.", connectionName)
+		} else {
+			Info("ExtractMetadata: No existing metadata found for connection '%s'. New metadata file will be created including database '%s'.", connectionName, targetDbName)
+			connMetadata = &ConnectionMetadata{
+				ConnectionName: connectionName,
+				Databases:      make(map[string]DatabaseMetadata),
+				// LastExtracted will be set before storing
+			}
+		}
+		userDatabases = []string{targetDbName} // Process only the specified database
+	} else {
+		Info("ExtractMetadata: Full mode for connection '%s'. All user databases will be processed.", connectionName)
+		connMetadata = &ConnectionMetadata{
+			ConnectionName: connectionName,
+			Databases:      make(map[string]DatabaseMetadata), // Overwrite with fresh data
+			// LastExtracted will be set before storing
+		}
+
+		allDatabases, errDbList := s.dbService.ListDatabases(ctx, connDetails)
+		if errDbList != nil {
+			Error("ExtractMetadata: Failed to list databases for connection %s: %v", connectionName, errDbList)
+			return nil, fmt.Errorf("failed to list databases for %s: %w", connectionName, errDbList)
+		}
+
 		userDatabases = make([]string, 0, len(allDatabases))
 		for _, dbName := range allDatabases {
 			if !isSystemDatabase(dbName) {
 				userDatabases = append(userDatabases, dbName)
 			}
 		}
+
+		if len(userDatabases) == 0 {
+			Info("ExtractMetadata: No user databases found for full extraction on connection '%s'. Storing empty metadata.", connectionName)
+			connMetadata.LastExtracted = time.Now()
+			if errStore := s.storeMetadata(connMetadata); errStore != nil {
+				Error("ExtractMetadata: Failed to store empty metadata for connection %s: %v", connectionName, errStore)
+				return connMetadata, fmt.Errorf("failed to store empty metadata for %s: %w", connectionName, errStore)
+			}
+			Info("ExtractMetadata: Successfully stored empty metadata for connection '%s'.", connectionName)
+			return connMetadata, nil
+		}
 	}
 
-	if len(userDatabases) == 0 {
-		if targetDbName != "" {
-			// This case means a specific DB was requested but might not be valid or leads to no tables/data.
-			// The function will proceed and likely store empty metadata for this DB name,
-			// or subsequent steps might fail if the DB truly doesn't exist.
-			Info("Specified database '%s' resulted in no user databases to process for connection '%s'. It might be invalid, a system DB, or empty.", targetDbName, connectionName)
-		} else {
-			Info("No user databases found to process for connection '%s'.", connectionName)
-		}
-		// Return an empty (but valid) metadata structure if no databases are to be processed.
-		// The caller can decide how to interpret this (e.g., no data vs. error).
-		// For now, let it try to store what it has (which will be empty).
-		// Storing empty metadata for the connection:
-		if errStore := s.storeMetadata(connMetadata); errStore != nil {
-			Error("failed to store (empty) metadata: %v", errStore)
-			// Fallthrough to return the connMetadata, which will be empty, plus the store error.
-			return connMetadata, fmt.Errorf("failed to store (empty) metadata: %w", errStore)
-		}
-		Info("No user databases processed. Stored empty metadata for connection: %s", connectionName)
-		return connMetadata, nil // Successfully stored empty metadata.
-	}
+	Info("ExtractMetadata: Processing %d database(s) for connection '%s': %v", len(userDatabases), connectionName, userDatabases)
 
-	Info("Processing %d database(s) for connection %s: %v", len(userDatabases), connectionName, userDatabases)
-	// Extract metadata for each database concurrently
 	type dbResult struct {
 		dbName   string
 		metadata DatabaseMetadata
 		err      error
 	}
-	dbResults := make(chan dbResult, len(userDatabases))
+	dbResultsChan := make(chan dbResult, len(userDatabases))
 
 	for _, dbName := range userDatabases {
-		go func(dbName string) {
-			Info("Extracting metadata for database: %s", dbName)
-			// Use the specified database
-			connDetailsCopy := connDetails
-			connDetailsCopy.DBName = dbName
+		// dbName is passed to the goroutine, creating a new instance for each.
+		go func(currentDbName string) {
+			Info("ExtractMetadata: Goroutine started for database: %s (Connection: %s)", currentDbName, connectionName)
+			connDetailsCopy := connDetails // Copy base connection details
+			connDetailsCopy.DBName = currentDbName
 
-			// Get all tables
-			tables, err := s.dbService.ListTables(ctx, connDetailsCopy, dbName)
-			if err != nil {
-				dbResults <- dbResult{dbName: dbName, err: fmt.Errorf("failed to list tables for database %s: %w", dbName, err)}
+			tables, tableErr := s.dbService.ListTables(ctx, connDetailsCopy, currentDbName)
+			if tableErr != nil {
+				dbResultsChan <- dbResult{dbName: currentDbName, err: fmt.Errorf("failed to list tables for database %s: %w", currentDbName, tableErr)}
 				return
 			}
 
 			if len(tables) == 0 {
-				Info("No tables found in database: %s, skipping", dbName)
-				dbResults <- dbResult{dbName: dbName, metadata: DatabaseMetadata{
-					Name:   dbName,
+				Info("ExtractMetadata: No tables found in database: %s, creating empty metadata entry.", currentDbName)
+				dbResultsChan <- dbResult{dbName: currentDbName, metadata: DatabaseMetadata{
+					Name:   currentDbName,
 					Tables: []Table{},
 					Graph:  make(map[string][]Edge),
 				}}
@@ -224,79 +229,73 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName st
 			}
 
 			dbMetadata := DatabaseMetadata{
-				Name:   dbName,
+				Name:   currentDbName,
 				Tables: make([]Table, 0, len(tables)),
 				Graph:  make(map[string][]Edge),
 			}
 
-			// Get database comment if available
 			dbCommentQuery := fmt.Sprintf(`
 				SELECT SCHEMA_COMMENT
 				FROM information_schema.SCHEMATA
-				WHERE SCHEMA_NAME = '%s';`, dbName)
+				WHERE SCHEMA_NAME = '%s';`, currentDbName)
 
-			if result, err := s.dbService.ExecuteSQL(ctx, connDetailsCopy, dbCommentQuery); err == nil && len(result.Rows) > 0 {
+			if result, execErr := s.dbService.ExecuteSQL(ctx, connDetailsCopy, dbCommentQuery); execErr == nil && len(result.Rows) > 0 {
 				if comment, ok := result.Rows[0]["SCHEMA_COMMENT"].(string); ok && comment != "" {
 					dbMetadata.DBComment = comment
 				}
-			}
+			} // Errors fetching DB comment are non-fatal for metadata extraction
 
-			// Extract metadata for each table concurrently
 			type tableResult struct {
 				table Table
 				err   error
 			}
-			results := make(chan tableResult, len(tables))
+			tableResultsChan := make(chan tableResult, len(tables))
 
 			for _, tableName := range tables {
-				go func(tableName string) {
-					Info("Extracting schema for table: %s.%s", dbName, tableName)
+				go func(currentTableName string) {
+					Info("ExtractMetadata: Goroutine started for table: %s.%s", currentDbName, currentTableName)
 					table := Table{
-						Name:        tableName,
+						Name:        currentTableName,
 						Columns:     make([]Column, 0),
 						ForeignKeys: make([]ForeignKey, 0),
 						Indexes:     make([]Index, 0),
 					}
 
-					// Get table schema
-					tableSchema, err := s.dbService.GetTableSchema(ctx, connDetailsCopy, dbName, tableName)
-					if err != nil {
-						results <- tableResult{err: fmt.Errorf("failed to get schema for table %s in database %s: %w", tableName, dbName, err)}
+					tableSchema, schemaErr := s.dbService.GetTableSchema(ctx, connDetailsCopy, currentDbName, currentTableName)
+					if schemaErr != nil {
+						tableResultsChan <- tableResult{err: fmt.Errorf("failed to get schema for table %s in database %s: %w", currentTableName, currentDbName, schemaErr)}
 						return
 					}
 
-					// Get table comment
 					tableCommentQuery := fmt.Sprintf(`
 						SELECT TABLE_COMMENT
 						FROM information_schema.TABLES
 						WHERE TABLE_SCHEMA = '%s'
-						AND TABLE_NAME = '%s';`, dbName, tableName)
+						AND TABLE_NAME = '%s';`, currentDbName, currentTableName)
 
-					if result, err := s.dbService.ExecuteSQL(ctx, connDetailsCopy, tableCommentQuery); err == nil && len(result.Rows) > 0 {
+					if result, tableCommentErr := s.dbService.ExecuteSQL(ctx, connDetailsCopy, tableCommentQuery); tableCommentErr == nil && len(result.Rows) > 0 {
 						if comment, ok := result.Rows[0]["TABLE_COMMENT"].(string); ok && comment != "" {
 							table.DBComment = comment
 						}
-					}
+					} // Errors fetching table comment are non-fatal
 
-					// Get column comments
 					columnCommentsQuery := fmt.Sprintf(`
 						SELECT COLUMN_NAME, COLUMN_COMMENT
 						FROM information_schema.COLUMNS
 						WHERE TABLE_SCHEMA = '%s'
-						AND TABLE_NAME = '%s';`, dbName, tableName)
+						AND TABLE_NAME = '%s';`, currentDbName, currentTableName)
 
 					columnComments := make(map[string]string)
-					if result, err := s.dbService.ExecuteSQL(ctx, connDetailsCopy, columnCommentsQuery); err == nil {
+					if result, colCommentErr := s.dbService.ExecuteSQL(ctx, connDetailsCopy, columnCommentsQuery); colCommentErr == nil {
 						for _, row := range result.Rows {
 							if colName, ok := row["COLUMN_NAME"].(string); ok {
-								if comment, ok := row["COLUMN_COMMENT"].(string); ok && comment != "" {
+								if comment, okComment := row["COLUMN_COMMENT"].(string); okComment && comment != "" {
 									columnComments[colName] = comment
 								}
 							}
 						}
-					}
+					} // Errors fetching column comments are non-fatal
 
-					// Extract column information
 					for _, col := range tableSchema.Columns {
 						column := Column{
 							Name:          col.ColumnName,
@@ -311,29 +310,21 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName st
 						table.Columns = append(table.Columns, column)
 					}
 
-					// Extract foreign keys
 					fkQuery := fmt.Sprintf(`
-						SELECT
-							CONSTRAINT_NAME,
-							COLUMN_NAME,
-							REFERENCED_TABLE_NAME,
-							REFERENCED_COLUMN_NAME
+						SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
 						FROM information_schema.KEY_COLUMN_USAGE
-						WHERE TABLE_SCHEMA = '%s'
-						AND TABLE_NAME = '%s'
-						AND REFERENCED_TABLE_NAME IS NOT NULL;`, dbName, tableName)
+						WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND REFERENCED_TABLE_NAME IS NOT NULL;`, currentDbName, currentTableName)
 
-					fkResult, err := s.dbService.ExecuteSQL(ctx, connDetailsCopy, fkQuery)
-					if err == nil && fkResult != nil && len(fkResult.Rows) > 0 {
+					fkResult, fkErr := s.dbService.ExecuteSQL(ctx, connDetailsCopy, fkQuery)
+					if fkErr == nil && fkResult != nil && len(fkResult.Rows) > 0 {
 						fkMap := make(map[string]*ForeignKey)
-
 						for _, row := range fkResult.Rows {
-							constraintName := row["CONSTRAINT_NAME"].(string)
-							columnName := row["COLUMN_NAME"].(string)
-							refTableName := row["REFERENCED_TABLE_NAME"].(string)
-							refColumnName := row["REFERENCED_COLUMN_NAME"].(string)
+							constraintName, _ := row["CONSTRAINT_NAME"].(string)
+							columnName, _ := row["COLUMN_NAME"].(string)
+							refTableName, _ := row["REFERENCED_TABLE_NAME"].(string)
+							refColumnName, _ := row["REFERENCED_COLUMN_NAME"].(string)
 
-							if fk, exists := fkMap[constraintName]; exists {
+							if fk, ok := fkMap[constraintName]; ok {
 								fk.ColumnNames = append(fk.ColumnNames, columnName)
 								fk.RefColumnNames = append(fk.RefColumnNames, refColumnName)
 							} else {
@@ -345,116 +336,132 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName st
 								}
 							}
 						}
-
-						// Convert map to slice
 						for _, fk := range fkMap {
 							table.ForeignKeys = append(table.ForeignKeys, *fk)
 						}
-					}
+					} // Errors fetching FKs are non-fatal for basic table metadata
 
-					// Extract indexes
 					indexQuery := fmt.Sprintf(`
-						SELECT
-							INDEX_NAME,
-							COLUMN_NAME,
-							NON_UNIQUE
+						SELECT INDEX_NAME, COLUMN_NAME, NON_UNIQUE
 						FROM information_schema.STATISTICS
-						WHERE TABLE_SCHEMA = '%s'
-						AND TABLE_NAME = '%s'
-						ORDER BY INDEX_NAME, SEQ_IN_INDEX;`, dbName, tableName)
+						WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' ORDER BY INDEX_NAME, SEQ_IN_INDEX;`, currentDbName, currentTableName)
 
-					indexResult, err := s.dbService.ExecuteSQL(ctx, connDetailsCopy, indexQuery)
-					if err == nil && indexResult != nil && len(indexResult.Rows) > 0 {
+					indexResult, indexErr := s.dbService.ExecuteSQL(ctx, connDetailsCopy, indexQuery)
+					if indexErr == nil && indexResult != nil && len(indexResult.Rows) > 0 {
 						indexMap := make(map[string]*Index)
-
 						for _, row := range indexResult.Rows {
-							indexName := row["INDEX_NAME"].(string)
-							columnName := row["COLUMN_NAME"].(string)
-							nonUnique := row["NON_UNIQUE"].(string) == "1"
+							indexName, _ := row["INDEX_NAME"].(string)
+							columnName, _ := row["COLUMN_NAME"].(string)
+							var nonUniqueVal int64
+							switch v := row["NON_UNIQUE"].(type) {
+							case int64:
+								nonUniqueVal = v // MySQL/TiDB typically use 0 or 1 (numeric)
+							case float64:
+								nonUniqueVal = int64(v) // Handle if it comes as float
+							case string:
+								if v == "1" {
+									nonUniqueVal = 1
+								} // Handle if it comes as string "1"
+							}
+							isNonUnique := nonUniqueVal == 1
 
-							if idx, exists := indexMap[indexName]; exists {
+							if idx, ok := indexMap[indexName]; ok {
 								idx.ColumnNames = append(idx.ColumnNames, columnName)
 							} else {
 								indexMap[indexName] = &Index{
 									Name:        indexName,
 									ColumnNames: []string{columnName},
-									IsUnique:    !nonUnique,
+									IsUnique:    !isNonUnique,
 								}
 							}
 						}
-
-						// Convert map to slice
 						for _, idx := range indexMap {
 							table.Indexes = append(table.Indexes, *idx)
 						}
-					}
+					} // Errors fetching Indexes are non-fatal
 
-					results <- tableResult{table: table}
-				}(tableName)
+					tableResultsChan <- tableResult{table: table}
+				}(tableName) // Pass tableName to the goroutine
 			}
 
-			// Collect table results into a temporary map to handle out-of-order arrivals
-			// while preserving the ability to reconstruct the original table order.
 			processedTablesMap := make(map[string]Table, len(tables))
-			for i := 0; i < len(tables); i++ { // Loop exactly len(tables) times to get all results
-				result := <-results
+			var firstTableError error
+			for i := 0; i < len(tables); i++ {
+				result := <-tableResultsChan
 				if result.err != nil {
-					// If an error occurred fetching details for any table, propagate this error
-					// for the entire database metadata extraction.
-					dbResults <- dbResult{dbName: dbName, err: result.err}
+					errMsg := result.err
+					Error("ExtractMetadata: Error processing table during collection for database '%s': %v", currentDbName, errMsg)
+					firstTableError = errMsg
+					dbResultsChan <- dbResult{dbName: currentDbName, err: firstTableError}
 					return
 				}
-				// Store successfully processed table details by table name.
 				processedTablesMap[result.table.Name] = result.table
 			}
 
-			// Now, populate dbMetadata.Tables in the original order defined by the 'tables' slice.
-			// dbMetadata.Tables was initialized as make([]Table, 0, len(tables)).
-			for _, tableName := range tables {
-				tableData, found := processedTablesMap[tableName]
+			for _, tableNameFromList := range tables {
+				tableData, found := processedTablesMap[tableNameFromList]
 				if !found {
-					// This indicates an internal logic error: a table listed was not found
-					// in the processed results, despite no error being reported for it.
-					// This should ideally not happen if error handling in the loop above is correct.
-					errMsg := fmt.Errorf("internal error: table '%s' metadata not found after processing for database '%s'", tableName, dbName)
-					Error("%v", errMsg) // Log the specific internal error
-					dbResults <- dbResult{dbName: dbName, err: errMsg}
+					errMsg := fmt.Errorf("internal logic error: table '%s' from initial list not found in processed map for database '%s'", tableNameFromList, currentDbName)
+					Error("ExtractMetadata: %v", errMsg)
+					dbResultsChan <- dbResult{dbName: currentDbName, err: errMsg}
 					return
 				}
 				dbMetadata.Tables = append(dbMetadata.Tables, tableData)
 			}
 
-			// Build graph after collecting all tables
 			for _, table := range dbMetadata.Tables {
 				for _, fk := range table.ForeignKeys {
-					dbMetadata.Graph[table.Name] = append(dbMetadata.Graph[table.Name], Edge{
-						ToTable:    fk.RefTableName,
-						FromColumn: fk.ColumnNames[0],
-						ToColumn:   fk.RefColumnNames[0],
-					})
+					if len(fk.ColumnNames) > 0 && len(fk.RefColumnNames) > 0 {
+						dbMetadata.Graph[table.Name] = append(dbMetadata.Graph[table.Name], Edge{
+							ToTable:    fk.RefTableName,
+							FromColumn: fk.ColumnNames[0],
+							ToColumn:   fk.RefColumnNames[0],
+						})
+					}
 				}
 			}
 
-			dbResults <- dbResult{dbName: dbName, metadata: dbMetadata}
-		}(dbName)
+			dbResultsChan <- dbResult{dbName: currentDbName, metadata: dbMetadata}
+		}(dbName) // Pass dbName to the goroutine (it becomes currentDbName inside)
 	}
 
-	// Collect database results
-	for range userDatabases {
-		result := <-dbResults
+	var firstExtractionError error
+	successfulTempMetadata := make(map[string]DatabaseMetadata)
+
+	for i := 0; i < len(userDatabases); i++ {
+		result := <-dbResultsChan
 		if result.err != nil {
-			Error("Error extracting database metadata: %v", result.err)
-			return nil, result.err
+			if firstExtractionError == nil {
+				firstExtractionError = result.err
+			}
+		} else {
+			if firstExtractionError == nil { // Only collect if no global error flag is set
+				successfulTempMetadata[result.dbName] = result.metadata
+			}
 		}
-		connMetadata.Databases[result.dbName] = result.metadata
 	}
 
-	// Store the metadata
-	if err := s.storeMetadata(connMetadata); err != nil {
-		Error("failed to store metadata: %v", err)
-		return nil, fmt.Errorf("failed to store metadata: %w", err)
+	if firstExtractionError != nil {
+		Error("ExtractMetadata: Failed overall for connection '%s' due to first error: %v. No metadata changes will be stored.", connectionName, firstExtractionError)
+		return nil, firstExtractionError
 	}
-	Info("Successfully extracted and stored metadata for connection: %s", connectionName)
+
+	for dbNameKey, metaValue := range successfulTempMetadata {
+		connMetadata.Databases[dbNameKey] = metaValue
+	}
+
+	connMetadata.LastExtracted = time.Now()
+
+	if err := s.storeMetadata(connMetadata); err != nil {
+		Error("ExtractMetadata: Failed to store metadata for connection %s: %v", connectionName, err)
+		return nil, fmt.Errorf("failed to store metadata for %s: %w", connectionName, err)
+	}
+
+	if isPartialExtraction {
+		Info("ExtractMetadata: Successfully refreshed and stored metadata for database '%s' in connection '%s'.", targetDbName, connectionName)
+	} else {
+		Info("ExtractMetadata: Successfully performed full extraction and stored metadata for connection '%s'. Processed %d database(s): %v", connectionName, len(userDatabases), userDatabases)
+	}
 
 	return connMetadata, nil
 }
@@ -523,33 +530,40 @@ func (s *MetadataService) loadMetadata(connectionName string) (*ConnectionMetada
 		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
 
-	Info("Successfully loaded metadata for connection: %s", connectionName)
+	Info("Successfully loaded metadata for connection: %s", metadata.ConnectionName)
 	return &metadata, nil
 }
 
 // GenerateSimplifiedDDL generates a simplified DDL for a table
 func (s *MetadataService) GenerateSimplifiedDDL(table Table) string {
-	var ddl string
-	ddl = fmt.Sprintf("CREATE TABLE %s (\n", table.Name)
+	var ddl strings.Builder
+	ddl.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", table.Name))
 
-	// Add columns
 	for i, col := range table.Columns {
-		ddl += fmt.Sprintf("  %s %s", col.Name, col.DataType)
+		ddl.WriteString(fmt.Sprintf("  %s %s", col.Name, col.DataType))
 		if !col.IsNullable {
-			ddl += " NOT NULL"
+			ddl.WriteString(" NOT NULL")
 		}
 		if col.AutoIncrement {
-			ddl += " AUTO_INCREMENT"
+			ddl.WriteString(" AUTO_INCREMENT")
 		}
 		if col.DefaultValue != nil {
-			ddl += fmt.Sprintf(" DEFAULT %v", col.DefaultValue)
+			if strVal, ok := col.DefaultValue.(string); ok {
+				ddl.WriteString(fmt.Sprintf(" DEFAULT '%s'", strings.ReplaceAll(strVal, "'", "''")))
+			} else {
+				ddl.WriteString(fmt.Sprintf(" DEFAULT %v", col.DefaultValue))
+			}
+		}
+		if col.DBComment != "" {
+			ddl.WriteString(fmt.Sprintf(" COMMENT '%s'", strings.ReplaceAll(col.DBComment, "'", "''")))
 		}
 		if i < len(table.Columns)-1 {
-			ddl += ",\n"
+			ddl.WriteString(",\n")
+		} else {
+			ddl.WriteString("\n") // Newline after the last column definition
 		}
 	}
 
-	// Add primary key if exists
 	var pkColumns []string
 	for _, col := range table.Columns {
 		if col.IsPrimaryKey {
@@ -557,18 +571,15 @@ func (s *MetadataService) GenerateSimplifiedDDL(table Table) string {
 		}
 	}
 	if len(pkColumns) > 0 {
-		ddl += ",\n  PRIMARY KEY ("
-		for i, col := range pkColumns {
-			if i > 0 {
-				ddl += ", "
-			}
-			ddl += col
-		}
-		ddl += ")"
+		ddl.WriteString(fmt.Sprintf(",\n  PRIMARY KEY (%s)\n", strings.Join(pkColumns, ", ")))
 	}
 
-	ddl += "\n);"
-	return ddl
+	ddl.WriteString(")")
+	if table.DBComment != "" {
+		ddl.WriteString(fmt.Sprintf(" COMMENT='%s'", strings.ReplaceAll(table.DBComment, "'", "''")))
+	}
+	ddl.WriteString(";")
+	return ddl.String()
 }
 
 // UpdateAIDescription updates the AI-generated description for a database component
