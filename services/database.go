@@ -82,10 +82,10 @@ func getDBConnection(details ConnectionDetails) (*sql.DB, error) {
 	}
 
 	// Configure connection pool
-	db.SetMaxOpenConns(25)  // Maximum number of open connections
-	db.SetMaxIdleConns(10)  // Maximum number of idle connections
-	db.SetConnMaxLifetime(5 * time.Minute) // Maximum lifetime of a connection
-	db.SetConnMaxIdleTime(5 * time.Minute) // Maximum idle time of a connection
+	db.SetMaxOpenConns(50)  // Increased to handle high concurrency
+	db.SetMaxIdleConns(25)  // Half of max open connections
+	db.SetConnMaxLifetime(10 * time.Minute) // Increased slightly for better connection reuse
+	db.SetConnMaxIdleTime(5 * time.Minute)  // Keep idle time shorter to free up resources
 
 	return db, nil
 }
