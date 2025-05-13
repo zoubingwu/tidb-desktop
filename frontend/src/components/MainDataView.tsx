@@ -181,7 +181,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
   useEffect(() => {
     const cleanup = EventsOn("metadata:extraction:started", () => {
       console.log("metadata extraction started received");
-      setStatus("Indexing...");
+      setStatus("Indexing database...");
     });
 
     const cleanup2 = EventsOn("metadata:extraction:failed", (error: string) => {
@@ -368,7 +368,11 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
   }, [totalRowCount, currentPageSize]);
 
   const tableViewState = (() => {
-    if (isFetchingTableData || isLoadingDatabases || isExecutingSQLFromAI) {
+    if (isLoadingDatabases) {
+      return "init";
+    }
+
+    if (isFetchingTableData || isExecutingSQLFromAI) {
       return "loading";
     }
 
