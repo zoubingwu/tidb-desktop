@@ -321,8 +321,8 @@ export const AIPanel = ({ onApplyQueryFromAI, opened }: AIPanelProps) => {
           </div>
         );
       case "ai-tool-call":
-        const isFinished = block.status === "finished";
-        const metaContent = isFinished ? block.meta?.result : block.meta;
+        const metaContent = block.meta;
+
         return (
           <div
             className={`ai-tool-call ${baseClasses} text-muted-foreground text-xs py-0`}
@@ -330,7 +330,7 @@ export const AIPanel = ({ onApplyQueryFromAI, opened }: AIPanelProps) => {
             <Collapsible>
               <CollapsibleTrigger>
                 <div className="cursor-pointer flex items-start gap-1">
-                  <EyeIcon className="size-3 flex-shrink-0" />
+                  <EyeIcon className="size-3 flex-shrink-0 relative top-[1px]" />
                   <p>{block.content as string}</p>
                 </div>
               </CollapsibleTrigger>
