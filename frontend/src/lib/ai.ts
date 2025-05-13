@@ -254,6 +254,8 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
    - Use executeSql with SELECT queries to validate assumptions
 
 3. Query Generation & Execution:
+   **Critical SQL Formatting Rule:** All table names in generated SQL queries MUST be explicitly qualified with their database name (e.g., \`database_name\`.\`table_name\`). For instance, use \`FROM main_db.users\` instead of \`FROM users\`. Refer to the provided \`<database_metadata>\` to identify the correct database names. If the database name is ambiguous or not specified, you should first try to infer it or ask the user for clarification if multiple databases contain similarly named tables.
+
    For READ operations (SELECT):
    - Generate efficient queries with appropriate JOINs and WHERE clauses
    - Use LIMIT when returning large datasets
@@ -302,13 +304,12 @@ Always use the provideFinalAnswer tool with:
 </response_format>
 
 <examples>
-1. User: "Show me all users who joined this month"
+1. User: "Show me all users from the 'sales' database who joined this month"
    Response: {
      responseType: "SQL",
-     query: "SELECT * FROM \`users\` WHERE MONTH(signup_date) = MONTH(CURRENT_DATE()) AND YEAR(signup_date) = YEAR(CURRENT_DATE())",
-     explanation: "This query retrieves all users who signed up in the current month",
+     query: "SELECT * FROM \`sales\`.\`users\` WHERE MONTH(signup_date) = MONTH(CURRENT_DATE()) AND YEAR(signup_date) = YEAR(CURRENT_DATE())",
+     explanation: "This query retrieves all users from the 'sales.users' table who signed up in the current month.",
      requiresConfirmation: false,
-     type: "SELECT",
      success: true
    }
 
