@@ -27,7 +27,7 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { useMemoizedFn } from "ahooks";
+import { useLocalStorageState, useMemoizedFn } from "ahooks";
 import { Allotment as ReactSplitView } from "allotment";
 import { Loader, SettingsIcon, SparkleIcon, UnplugIcon } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
@@ -65,6 +65,10 @@ const DEFAULT_DB_TREE_WIDTH = 240;
 const DEFAULT_AI_PANEL_WIDTH = 300;
 const TABLE_HEIGHT = window.innerHeight - TITLE_BAR_HEIGHT - FOOTER_HEIGHT;
 
+const LAYOUT_DB_TREE_WIDTH_KEY = "layout:dbTreeWidth";
+const LAYOUT_AI_PANEL_WIDTH_KEY = "layout:aiPanelWidth";
+const LAYOUT_AI_PANEL_VISIBLE_KEY = "layout:aiPanelVisible";
+
 const MainDataView = ({ onClose }: { onClose: () => void }) => {
   const [status, setStatus] = useState("");
   const [databaseTree, setDatabaseTree] = useImmer<DatabaseTreeData>([]);
@@ -86,7 +90,27 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
   });
 
   const [sqlFromAI, setSqlFromAI] = useState<string>("");
-  const [showAIPanel, setShowAIPanel] = useState(false);
+
+  const [dbTreeWidth, setDbTreeWidth] = useLocalStorageState<number>(
+    LAYOUT_DB_TREE_WIDTH_KEY,
+    {
+      defaultValue: DEFAULT_DB_TREE_WIDTH,
+    },
+  );
+
+  const [aiPanelWidth, setAiPanelWidth] = useLocalStorageState<number>(
+    LAYOUT_AI_PANEL_WIDTH_KEY,
+    {
+      defaultValue: DEFAULT_AI_PANEL_WIDTH,
+    },
+  );
+
+  const [showAIPanel, setShowAIPanel] = useLocalStorageState<boolean>(
+    LAYOUT_AI_PANEL_VISIBLE_KEY,
+    {
+      defaultValue: false,
+    },
+  );
 
   const mergeDatabaseTree = (
     tree: { dbName: string; tables?: string[]; isLoadingTables?: boolean }[],
@@ -400,13 +424,21 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
 
   return (
     <ReactSplitView
-      defaultSizes={[
-        DEFAULT_DB_TREE_WIDTH,
-        window.innerWidth - DEFAULT_DB_TREE_WIDTH,
-      ]}
+      key="outer-split"
+      defaultSizes={[dbTreeWidth!, window.innerWidth - dbTreeWidth!]}
       separator={false}
+      onChange={(sizes: number[]) => {
+        console.log("onChange", sizes);
+        if (sizes.length > 0 && sizes[0] > 50) {
+          // Ensure a minimum sensible width
+          setDbTreeWidth(sizes[0]);
+        }
+      }}
     >
-      <ReactSplitView.Pane>
+      <ReactSplitView.Pane
+        minSize={DEFAULT_DB_TREE_WIDTH / 2}
+        maxSize={DEFAULT_DB_TREE_WIDTH * 2}
+      >
         <DatabaseTree
           databaseTree={databaseTree}
           isLoadingDatabases={isLoadingDatabases && databaseTree.length === 0}
@@ -419,13 +451,21 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
 
       <ReactSplitView.Pane className="flex flex-col overflow-hidden">
         <ReactSplitView
+          key={`inner-split`}
           defaultSizes={[
             window.innerWidth - DEFAULT_DB_TREE_WIDTH - DEFAULT_AI_PANEL_WIDTH,
             DEFAULT_AI_PANEL_WIDTH,
           ]}
           separator={false}
+          onChange={(sizes: number[]) => {
+            // sizes[0] is table width, sizes[1] is AI panel width (if visible)
+            if (showAIPanel && sizes.length === 2 && sizes[1] > 50) {
+              // Ensure a minimum
+              setAiPanelWidth(sizes[1]);
+            }
+          }}
         >
-          <ReactSplitView.Pane>
+          <ReactSplitView.Pane minSize={200}>
             {tableViewState === "data" ? (
               <DataTable<TableRowData> table={table} height={TABLE_HEIGHT} />
             ) : (
@@ -433,7 +473,12 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
             )}
           </ReactSplitView.Pane>
 
-          <ReactSplitView.Pane visible={showAIPanel}>
+          <ReactSplitView.Pane
+            visible={showAIPanel}
+            minSize={DEFAULT_AI_PANEL_WIDTH / 2}
+            preferredSize={aiPanelWidth ?? DEFAULT_AI_PANEL_WIDTH}
+            maxSize={DEFAULT_AI_PANEL_WIDTH * 2}
+          >
             <AIPanel
               currentDb={currentDb}
               currentTable={currentTable}
