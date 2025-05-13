@@ -63,13 +63,8 @@ const DEFAULT_DB_TREE_WIDTH = 240;
 const DEFAULT_AI_PANEL_WIDTH = 300;
 const TABLE_HEIGHT = window.innerHeight - TITLE_BAR_HEIGHT - FOOTER_HEIGHT;
 
-const MainDataView = ({
-  onClose,
-  onUpdateTitle,
-}: {
-  onClose: () => void;
-  onUpdateTitle: (title: string, loading?: boolean) => void;
-}) => {
+const MainDataView = ({ onClose }: { onClose: () => void }) => {
+  const [status, setStatus] = useState("");
   const [databaseTree, setDatabaseTree] = useImmer<DatabaseTreeData>([]);
   const [tableDataPrameters, setTableDataPrameters] = useImmer<{
     dbName: string;
@@ -179,7 +174,7 @@ const MainDataView = ({
         : "SQL Query Result";
 
       try {
-        onUpdateTitle(`Fetching data from ${titleTarget}...`, true);
+        setStatus(`Fetching data from ${titleTarget}...`);
         const res = await GetTableData(
           dbName,
           tableName,
@@ -187,11 +182,11 @@ const MainDataView = ({
           currentPageIndex * currentPageSize,
           filterObject,
         );
-        onUpdateTitle(`${dbName}.${tableName}`);
+        setStatus(`Fetched data from ${dbName}.${tableName}`);
 
         return res;
       } catch (error: any) {
-        onUpdateTitle(`Error fetching ${titleTarget}`);
+        setStatus(`Error fetching ${titleTarget}`);
         toast.error("Error fetching table data", {
           description: error.message,
         });
@@ -206,9 +201,9 @@ const MainDataView = ({
     queryKey: ["sqlFromAI", sqlFromAI],
     queryFn: async () => {
       try {
-        onUpdateTitle("Executing SQL from AI...", true);
+        setStatus("Executing SQL from AI...");
         const res = await ExecuteSQL(sqlFromAI);
-        onUpdateTitle("SQL from AI executed");
+        setStatus("SQL from AI executed");
         return res;
       } catch (error: any) {
         toast.error("Error fetching SQL from AI", {
@@ -345,14 +340,16 @@ const MainDataView = ({
   );
 
   const handleClose = useMemoizedFn(() => {
-    onUpdateTitle("");
+    setStatus("");
     onClose();
   });
 
   const handleApplyAIGeneratedQuery = (result: SqlAgentResponse) => {
     if (result.success) {
       resetTableDataPrameters();
-      setSqlFromAI(result.query);
+      if (result.query) {
+        setSqlFromAI(result.query);
+      }
     }
   };
 
@@ -421,7 +418,7 @@ const MainDataView = ({
         </ReactSplitView>
 
         <div className="flex items-center justify-between px-2 py-2 bg-background gap-2">
-          <div className="flex gap-2"></div>
+          <div className="flex text-xs gap-1 items-center">{status}</div>
 
           <TooltipProvider delayDuration={0}>
             <div className="flex flex-nowrap items-center gap-2">
