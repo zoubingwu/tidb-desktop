@@ -73,6 +73,7 @@ func (a *App) startup(ctx context.Context) {
 	runtime.EventsOn(a.ctx, "metadata:extraction:start", func(optionalData ...interface{}) {
 		connectionName := optionalData[0].(string)
 		force := optionalData[1].(bool)
+		dbName := optionalData[2].(string)
 
 		services.Info("Metadata extraction started for connection '%s' and force extraction: %v", connectionName, force)
 
@@ -84,10 +85,9 @@ func (a *App) startup(ctx context.Context) {
 		var err error
 
 		if force {
-			metadata, err = a.metadataService.ExtractMetadata(a.ctx, connectionName)
+			metadata, err = a.metadataService.ExtractMetadata(a.ctx, connectionName, dbName)
 		} else {
 			metadata, err = a.metadataService.GetMetadata(a.ctx, connectionName)
-
 		}
 
 		if err != nil {

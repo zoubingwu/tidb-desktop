@@ -465,7 +465,12 @@ const MainDataView = ({
       }
 
       setStatus("Indexing database...");
-      EventsEmit("metadata:extraction:start", connectionDetails?.name!, true);
+      EventsEmit(
+        "metadata:extraction:start",
+        connectionDetails?.name!,
+        true,
+        result.dbName,
+      );
     }
   };
 

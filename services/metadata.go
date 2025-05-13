@@ -120,7 +120,8 @@ func isSystemDatabase(dbName string) bool {
 }
 
 // ExtractMetadata extracts metadata from the database and stores it
-func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName string) (*ConnectionMetadata, error) {
+// If optionalDbName is provided, only metadata for that specific database is extracted.
+func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName string, optionalDbName ...string) (*ConnectionMetadata, error) {
 	Info("Starting metadata extraction for connection: %s", connectionName)
 	// Get connection details
 	connDetails, exists, err := s.configService.GetConnection(connectionName)
@@ -133,29 +134,63 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName st
 		return nil, fmt.Errorf("connection %s not found", connectionName)
 	}
 
-	// Create new connection metadata
 	connMetadata := &ConnectionMetadata{
 		ConnectionName: connectionName,
 		LastExtracted:  time.Now(),
 		Databases:      make(map[string]DatabaseMetadata),
 	}
 
-	// Get all databases
-	databases, err := s.dbService.ListDatabases(ctx, connDetails)
-	if err != nil {
-		Error("failed to list databases: %v", err)
-		return nil, fmt.Errorf("failed to list databases: %w", err)
-	}
+	var userDatabases []string
+	var targetDbName string
 
-	// Filter out system databases
-	userDatabases := make([]string, 0, len(databases))
-	for _, dbName := range databases {
-		if !isSystemDatabase(dbName) {
-			userDatabases = append(userDatabases, dbName)
+	if len(optionalDbName) > 0 && optionalDbName[0] != "" {
+		targetDbName = optionalDbName[0]
+		Info("Extracting metadata for specific database: %s under connection: %s", targetDbName, connectionName)
+		// We'll assume the provided dbName is valid and accessible.
+		// If specific validation is needed (e.g., check if it's a system DB or actually exists),
+		// that logic could be added here. For now, we directly use it.
+		userDatabases = []string{targetDbName}
+	} else {
+		Info("No specific database provided, listing all user databases for connection: %s", connectionName)
+		// Get all databases
+		allDatabases, errDbList := s.dbService.ListDatabases(ctx, connDetails)
+		if errDbList != nil {
+			Error("failed to list databases: %v", errDbList)
+			return nil, fmt.Errorf("failed to list databases: %w", errDbList)
+		}
+
+		// Filter out system databases
+		userDatabases = make([]string, 0, len(allDatabases))
+		for _, dbName := range allDatabases {
+			if !isSystemDatabase(dbName) {
+				userDatabases = append(userDatabases, dbName)
+			}
 		}
 	}
-	Info("Found %d user databases for connection %s", len(userDatabases), connectionName)
 
+	if len(userDatabases) == 0 {
+		if targetDbName != "" {
+			// This case means a specific DB was requested but might not be valid or leads to no tables/data.
+			// The function will proceed and likely store empty metadata for this DB name,
+			// or subsequent steps might fail if the DB truly doesn't exist.
+			Info("Specified database '%s' resulted in no user databases to process for connection '%s'. It might be invalid, a system DB, or empty.", targetDbName, connectionName)
+		} else {
+			Info("No user databases found to process for connection '%s'.", connectionName)
+		}
+		// Return an empty (but valid) metadata structure if no databases are to be processed.
+		// The caller can decide how to interpret this (e.g., no data vs. error).
+		// For now, let it try to store what it has (which will be empty).
+		// Storing empty metadata for the connection:
+		if errStore := s.storeMetadata(connMetadata); errStore != nil {
+			Error("failed to store (empty) metadata: %v", errStore)
+			// Fallthrough to return the connMetadata, which will be empty, plus the store error.
+			return connMetadata, fmt.Errorf("failed to store (empty) metadata: %w", errStore)
+		}
+		Info("No user databases processed. Stored empty metadata for connection: %s", connectionName)
+		return connMetadata, nil // Successfully stored empty metadata.
+	}
+
+	Info("Processing %d database(s) for connection %s: %v", len(userDatabases), connectionName, userDatabases)
 	// Extract metadata for each database concurrently
 	type dbResult struct {
 		dbName   string
