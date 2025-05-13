@@ -88,7 +88,7 @@ func NewConfigService() (*ConfigService, error) {
 
 	// Load existing config on startup, potentially overwriting defaults
 	if err := service.loadConfig(); err != nil {
-		fmt.Printf("Warning: Failed to load config file %s: %v. Starting with default config.\n", configFilePath, err)
+		Info("Warning: Failed to load config file %s: %v. Starting with default config.", configFilePath, err)
 		// Ensure base structure is still valid even if load fails
 		if service.config == nil {
 			service.config = &ConfigData{
@@ -132,13 +132,13 @@ func NewConfigService() (*ConfigService, error) {
 			}
 		}
 	} else {
-		fmt.Printf("Config loaded successfully from %s\n", configFilePath)
+		Info("Config loaded successfully from %s", configFilePath)
 		// Ensure ThemeSettings is initialized if it was missing in the loaded file
 		if service.config.ThemeSettings == nil {
-			service.config.ThemeSettings = &ThemeSettings{Mode: "system", BaseTheme: "claude"}
+			service.config.ThemeSettings = &ThemeSettings{Mode: "system", BaseTheme: "solar-dusk"}
 			// Optionally save immediately to persist the default theme settings
 			// if err := service.saveConfig(); err != nil {
-			//  fmt.Printf("Warning: Failed to save default theme settings after load: %v\n", err)
+			//  Info("Warning: Failed to save default theme settings after load: %v", err)
 			// }
 		}
 		// Ensure AIProviderSettings is initialized if it was missing
@@ -175,7 +175,7 @@ func (s *ConfigService) loadConfig() error {
 
 	// Check if file exists
 	if _, err := os.Stat(s.configPath); os.IsNotExist(err) {
-		fmt.Printf("Config file %s does not exist, creating empty config with defaults.\n", s.configPath)
+		Info("Config file %s does not exist, creating empty config with defaults.", s.configPath)
 		// Defaults are already set in NewConfigService, ensure AI defaults are there too
 		if s.config.AIProviderSettings == nil {
 			s.config.AIProviderSettings = &AIProviderSettings{
@@ -195,7 +195,7 @@ func (s *ConfigService) loadConfig() error {
 
 	// If the file is empty, initialize config
 	if len(data) == 0 {
-		fmt.Printf("Config file %s is empty, using default config.\n", s.configPath)
+		Info("Config file %s is empty, using default config.", s.configPath)
 		// Defaults are already set in NewConfigService, ensure AI defaults are there too
 		if s.config.AIProviderSettings == nil {
 			s.config.AIProviderSettings = &AIProviderSettings{
@@ -257,27 +257,27 @@ func (s *ConfigService) loadConfig() error {
 func (s *ConfigService) saveConfig() error {
 	// Ensure the directory exists
 	configDir := filepath.Dir(s.configPath)
-	fmt.Printf("Attempting to create directory: %s\n", configDir)
+	Info("Attempting to create directory: %s", configDir)
 	if err := os.MkdirAll(configDir, 0750); err != nil {
-		fmt.Printf("ERROR during MkdirAll: %v\n", err)
+		Info("ERROR during MkdirAll: %v", err)
 		return fmt.Errorf("failed to create config directory %s: %w", configDir, err)
 	}
-	fmt.Printf("Directory ensured successfully.\n")
+	Info("Directory ensured successfully.")
 
-	fmt.Printf("Attempting to marshal config data...\n")
+	Info("Attempting to marshal config data...")
 	data, err := json.MarshalIndent(s.config, "", "  ")
 	if err != nil {
-		fmt.Printf("ERROR during MarshalIndent: %v\n", err)
+		Info("ERROR during MarshalIndent: %v", err)
 		return fmt.Errorf("failed to marshal config data: %w", err)
 	}
-	fmt.Printf("Config marshaled successfully. Size: %d bytes\n", len(data))
+	Info("Config marshaled successfully. Size: %d bytes", len(data))
 
-	fmt.Printf("Attempting to write file: %s\n", s.configPath)
+	Info("Attempting to write file: %s", s.configPath)
 	if err := os.WriteFile(s.configPath, data, 0600); err != nil {
-		fmt.Printf("ERROR during WriteFile: %v\n", err)
+		Info("ERROR during WriteFile: %v", err)
 		return fmt.Errorf("failed to write config file %s: %w", s.configPath, err)
 	}
-	fmt.Printf("Config saved successfully to %s\n", s.configPath)
+	Info("Config saved successfully to %s", s.configPath)
 	return nil
 }
 
@@ -347,7 +347,7 @@ func (s *ConfigService) RecordConnectionUsage(name string) error {
 	details, found := s.config.Connections[name]
 	if !found {
 		// Should we error? Or just ignore? Ignoring is safer if called speculatively.
-		fmt.Printf("Warning: Attempted to record usage for non-existent connection '%s'\n", name)
+		Info("Warning: Attempted to record usage for non-existent connection '%s'", name)
 		return nil // Don't block connection flow if name somehow doesn't exist
 		// return fmt.Errorf("connection '%s' not found", name) // Stricter alternative
 	}
@@ -433,7 +433,7 @@ func (s *ConfigService) SaveAIProviderSettings(settings AIProviderSettings) erro
 		}
 	}
 	if !isValidProvider {
-		fmt.Printf("Warning: Invalid CurrentProvider '%s' received in SaveAIProviderSettings. Defaulting to 'openai'.\n", settings.CurrentProvider)
+		Info("Warning: Invalid CurrentProvider '%s' received in SaveAIProviderSettings. Defaulting to 'openai'.", settings.CurrentProvider)
 		settings.CurrentProvider = "openai" // Default if invalid
 	}
 
