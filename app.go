@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/zoubingwu/tidb-desktop/services"
@@ -96,6 +97,8 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 
 	// Check if metadata needs to be extracted
 	go func() {
+		time.Sleep(2 * time.Second) // Wait for 2 seconds before starting
+
 		ctx := context.Background() // Create a new context for background task
 
 		runtime.EventsEmit(a.ctx, "metadata:extraction:started", name)
