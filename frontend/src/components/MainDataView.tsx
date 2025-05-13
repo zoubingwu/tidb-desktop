@@ -517,7 +517,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
           </ReactSplitView.Pane>
         </ReactSplitView>
 
-        <div className="flex items-center justify-between px-2 py-2 bg-background gap-2">
+        <div className="flex items-center justify-between px-2 py-0 bg-background gap-2">
           <div className="flex text-xs gap-1 items-center">
             {tableViewState === "loading" && (
               <Loader className="size-3 animate-spin" />
@@ -556,7 +556,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
                       size="icon"
                       onClick={() => setShowAIPanel(!showAIPanel)}
                     >
-                      <SparkleIcon className="h-4 w-4" />
+                      <SparkleIcon className="size-3.5" />
                       <span className="sr-only">Ask AI</span>
                     </Button>
                   </TooltipTrigger>
@@ -568,7 +568,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
                 <Tooltip>
                   <SettingsModal>
                     <Button title="Preferences" variant="ghost" size="icon">
-                      <SettingsIcon className="h-4 w-4" />
+                      <SettingsIcon className="size-3.5" />
                       <span className="sr-only">Preferences</span>
                     </Button>
                   </SettingsModal>
@@ -585,7 +585,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
                       onClick={handleClose}
                       title="Disconnect"
                     >
-                      <UnplugIcon className="h-4 w-4" />
+                      <UnplugIcon className="size-3.5" />
                       <span className="sr-only">Disconnect</span>
                     </Button>
                   </TooltipTrigger>

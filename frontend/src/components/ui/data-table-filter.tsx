@@ -1,18 +1,3 @@
-import type { Column, ColumnMeta, RowData, Table } from "@tanstack/react-table";
-import { format, isEqual } from "date-fns";
-import { ArrowRight, Filter, X, Ellipsis } from "lucide-react";
-import React, {
-  cloneElement,
-  isValidElement,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  createContext,
-  useContext,
-} from "react";
-import type { DateRange } from "react-day-picker";
-import { useDebounce, useMemoizedFn } from "ahooks";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,7 +18,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
+import { TooltipTrigger } from "@/components/ui/tooltip";
+import { useUncontrolled } from "@/hooks/use-uncontrolled";
 import { take, uniq } from "@/lib/array";
 import {
   type ColumnDataType,
@@ -51,8 +37,22 @@ import {
   textFilterDetails,
 } from "@/lib/filters";
 import type { ColumnOption, ElementType } from "@/lib/filters";
-import { useUncontrolled } from "@/hooks/use-uncontrolled";
-import { TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import type { Column, ColumnMeta, RowData, Table } from "@tanstack/react-table";
+import { useDebounce, useMemoizedFn } from "ahooks";
+import { format, isEqual } from "date-fns";
+import { ArrowRight, Ellipsis, Filter, X } from "lucide-react";
+import React, {
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  createContext,
+  useContext,
+} from "react";
+import type { DateRange } from "react-day-picker";
 
 // Type to represent a serializable filter that can be sent to the server
 export type ServerSideFilter = {
@@ -267,7 +267,7 @@ export function FilterSelector<TData>({
             className={cn(hasFilters && "w-fit !px-2")}
             disabled={disabled}
           >
-            <Filter className="size-4" />
+            <Filter className="size-3.5" />
           </Button>
         </TooltipTrigger>
       </PopoverTrigger>

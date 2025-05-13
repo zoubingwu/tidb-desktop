@@ -53,7 +53,7 @@ export function DataTablePagination<TData>({
           size="icon"
         >
           <span className="sr-only">Go to first page</span>
-          <ChevronsLeft className="h-4 w-4" />
+          <ChevronsLeft className="size-3.5" />
         </Button>
         <Button
           variant="ghost"
@@ -63,7 +63,7 @@ export function DataTablePagination<TData>({
           size="icon"
         >
           <span className="sr-only">Go to previous page</span>
-          <ChevronLeft className="h-4 w-4" />
+          <ChevronLeft className="size-3.5" />
         </Button>
         <Button
           variant="ghost"
@@ -73,7 +73,7 @@ export function DataTablePagination<TData>({
           title="Go to next page"
         >
           <span className="sr-only">Go to next page</span>
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="size-3.5" />
         </Button>
         <Button
           variant="ghost"
@@ -88,7 +88,7 @@ export function DataTablePagination<TData>({
           size="icon"
         >
           <span className="sr-only">Go to last page</span>
-          <ChevronsRight className="h-4 w-4" />
+          <ChevronsRight className="size-3.5" />
         </Button>
       </div>
     </div>
