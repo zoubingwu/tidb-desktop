@@ -73,6 +73,9 @@ const LAYOUT_DB_TREE_WIDTH_KEY = "layout:dbTreeWidth";
 const LAYOUT_AI_PANEL_WIDTH_KEY = "layout:aiPanelWidth";
 const LAYOUT_AI_PANEL_VISIBLE_KEY = "layout:aiPanelVisible";
 
+// @TODO: make it configurable
+const SHOW_SYSTEM_DATABASES = false;
+
 const MainDataView = ({ onClose }: { onClose: () => void }) => {
   const [status, setStatus] = useState("");
   const [databaseTree, setDatabaseTree] = useImmer<DatabaseTreeData>([]);
@@ -166,7 +169,12 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
 
   useEffect(() => {
     if (databases?.length) {
-      mergeDatabaseTree(databases.map((dbName) => ({ dbName })));
+      console.log("databases fetched", databases);
+      mergeDatabaseTree(
+        databases
+          .filter((i) => (SHOW_SYSTEM_DATABASES ? true : !isSystemDatabase(i)))
+          .map((dbName) => ({ dbName })),
+      );
     }
   }, [databases]);
 
