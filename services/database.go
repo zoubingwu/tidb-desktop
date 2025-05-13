@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	mysql "github.com/go-sql-driver/mysql"
 )
@@ -79,6 +80,12 @@ func getDBConnection(details ConnectionDetails) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database connection: %w", err)
 	}
+
+	// Configure connection pool
+	db.SetMaxOpenConns(25)  // Maximum number of open connections
+	db.SetMaxIdleConns(10)  // Maximum number of idle connections
+	db.SetConnMaxLifetime(5 * time.Minute) // Maximum lifetime of a connection
+	db.SetConnMaxIdleTime(5 * time.Minute) // Maximum idle time of a connection
 
 	return db, nil
 }
