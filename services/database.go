@@ -85,8 +85,8 @@ func getDBConnection(details ConnectionDetails) (*sql.DB, error) {
 	Info("Database connection established successfully")
 
 	// Configure connection pool
-	db.SetMaxOpenConns(50)  // Increased to handle high concurrency
-	db.SetMaxIdleConns(25)  // Half of max open connections
+	db.SetMaxOpenConns(50)                  // Increased to handle high concurrency
+	db.SetMaxIdleConns(25)                  // Half of max open connections
 	db.SetConnMaxLifetime(10 * time.Minute) // Increased slightly for better connection reuse
 	db.SetConnMaxIdleTime(5 * time.Minute)  // Keep idle time shorter to free up resources
 
@@ -653,5 +653,3 @@ func (s *DatabaseService) checkTableExists(ctx context.Context, details Connecti
 	}
 	return exists == 1, nil
 }
-
-

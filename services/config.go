@@ -10,14 +10,14 @@ import (
 )
 
 const (
-	ConfigDirName  = ".tidb-desktop"
-	ConfigFileName = "config.json"
+	ConfigDirName   = ".tidb-desktop"
+	ConfigFileName  = "config.json"
 	MetadataDirName = "metadata"
 )
 
 // ThemeSettings holds theme preferences
 type ThemeSettings struct {
-	Mode      string `json:"mode"` // e.g., "light", "dark", "system"
+	Mode      string `json:"mode"`      // e.g., "light", "dark", "system"
 	BaseTheme string `json:"baseTheme"` // e.g., "claude", "nature"
 }
 
@@ -49,20 +49,20 @@ type WindowSettings struct {
 
 // AIProviderSettings holds API keys and settings for different AI providers
 type AIProviderSettings struct {
-	CurrentProvider string             `json:"provider,omitempty"` // 'openai', 'anthropic', 'openrouter'
-	OpenAI          *OpenAISettings    `json:"openai,omitempty"`
-	Anthropic       *AnthropicSettings `json:"anthropic,omitempty"`
+	CurrentProvider string              `json:"provider,omitempty"` // 'openai', 'anthropic', 'openrouter'
+	OpenAI          *OpenAISettings     `json:"openai,omitempty"`
+	Anthropic       *AnthropicSettings  `json:"anthropic,omitempty"`
 	OpenRouter      *OpenRouterSettings `json:"openrouter,omitempty"`
 }
 
 // ConfigData defines the structure of the entire configuration file.
 type ConfigData struct {
 	// Use ConnectionDetails from database.go
-	Connections        map[string]ConnectionDetails `json:"connections"`
+	Connections map[string]ConnectionDetails `json:"connections"`
 	// Add other configuration fields here later, e.g., settings
-	ThemeSettings      *ThemeSettings               `json:"appearance,omitempty"` // Use pointer to handle nil easily
-	AIProviderSettings *AIProviderSettings          `json:"ai,omitempty"`         // Settings for AI providers
-	WindowSettings     *WindowSettings              `json:"window,omitempty"`
+	ThemeSettings      *ThemeSettings      `json:"appearance,omitempty"` // Use pointer to handle nil easily
+	AIProviderSettings *AIProviderSettings `json:"ai,omitempty"`         // Settings for AI providers
+	WindowSettings     *WindowSettings     `json:"window,omitempty"`
 }
 
 // ConfigService handles loading and saving application configuration.
@@ -393,12 +393,16 @@ func (s *ConfigService) SaveThemeSettings(settings ThemeSettings) error {
 	defer s.mu.Unlock()
 
 	// Basic validation (optional but good practice)
-	if settings.Mode == "" { settings.Mode = "system" } // Default if empty
-	if settings.BaseTheme == "" { settings.BaseTheme = "claude" } // Default if empty
+	if settings.Mode == "" {
+		settings.Mode = "system"
+	} // Default if empty
+	if settings.BaseTheme == "" {
+		settings.BaseTheme = "claude"
+	} // Default if empty
 	// Add validation against availableThemes if needed
 
 	s.config.ThemeSettings = &settings // Update the internal config
-	return s.saveConfig() // Save the entire config file
+	return s.saveConfig()              // Save the entire config file
 }
 
 // --- AI Provider Settings Management Methods ---
@@ -421,9 +425,15 @@ func (s *ConfigService) GetAIProviderSettings() (*AIProviderSettings, error) {
 	if settingsCopy.CurrentProvider == "" {
 		settingsCopy.CurrentProvider = "openai" // Ensure CurrentProvider has a default if empty
 	}
-	if settingsCopy.OpenAI == nil { settingsCopy.OpenAI = &OpenAISettings{} } // Ensure nested are non-nil
-	if settingsCopy.Anthropic == nil { settingsCopy.Anthropic = &AnthropicSettings{} }
-	if settingsCopy.OpenRouter == nil { settingsCopy.OpenRouter = &OpenRouterSettings{} }
+	if settingsCopy.OpenAI == nil {
+		settingsCopy.OpenAI = &OpenAISettings{}
+	} // Ensure nested are non-nil
+	if settingsCopy.Anthropic == nil {
+		settingsCopy.Anthropic = &AnthropicSettings{}
+	}
+	if settingsCopy.OpenRouter == nil {
+		settingsCopy.OpenRouter = &OpenRouterSettings{}
+	}
 
 	return &settingsCopy, nil
 }

@@ -35,7 +35,7 @@ func main() {
 	}
 
 	err := wails.Run(&options.App{
-		Title:  appName,
+		Title: appName,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
@@ -52,7 +52,7 @@ func main() {
 				Message: fmt.Sprintf("A modern lightweight TiDB desktop client.\n\nCopyright © 2025\nCommit: %s", commitHash),
 				Icon:    icon,
 			},
-			TitleBar: mac.TitleBarHidden(),
+			TitleBar:             mac.TitleBarHidden(),
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,
 		},

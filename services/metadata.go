@@ -24,10 +24,10 @@ type Column struct {
 
 // ForeignKey represents a foreign key relationship
 type ForeignKey struct {
-	Name            string   `json:"name"`
-	ColumnNames     []string `json:"columnNames"`
-	RefTableName    string   `json:"refTableName"`
-	RefColumnNames  []string `json:"refColumnNames"`
+	Name           string   `json:"name"`
+	ColumnNames    []string `json:"columnNames"`
+	RefTableName   string   `json:"refTableName"`
+	RefColumnNames []string `json:"refColumnNames"`
 }
 
 // Index represents a database index
@@ -51,7 +51,7 @@ type Table struct {
 type DatabaseMetadata struct {
 	Name          string            `json:"name"`
 	Tables        []Table           `json:"tables"`
-	Graph         map[string][]Edge `json:"graph,omitempty"` // Adjacency list representation
+	Graph         map[string][]Edge `json:"graph,omitempty"`         // Adjacency list representation
 	DBComment     string            `json:"dbComment,omitempty"`     // Comment from database
 	AIDescription string            `json:"aiDescription,omitempty"` // Description from AI
 }
@@ -60,7 +60,7 @@ type DatabaseMetadata struct {
 type ConnectionMetadata struct {
 	ConnectionName string                      `json:"connectionName"`
 	LastExtracted  time.Time                   `json:"lastExtracted"`
-	Databases     map[string]DatabaseMetadata  `json:"databases"`
+	Databases      map[string]DatabaseMetadata `json:"databases"`
 }
 
 // Edge represents a relationship between tables in the graph
@@ -108,11 +108,11 @@ func (s *MetadataService) getMetadataFilePath(connectionName string) string {
 // isSystemDatabase returns true if the given database name is a system database
 func isSystemDatabase(dbName string) bool {
 	systemDBs := map[string]bool{
-		"information_schema":  true,
+		"information_schema": true,
 		"performance_schema": true,
-		"metrics_schema":    true,  // TiDB specific
+		"metrics_schema":     true, // TiDB specific
 		"mysql":              true,
-		"sys":               true,
+		"sys":                true,
 	}
 
 	// Convert to lowercase for case-insensitive comparison
@@ -136,8 +136,8 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName st
 	// Create new connection metadata
 	connMetadata := &ConnectionMetadata{
 		ConnectionName: connectionName,
-		LastExtracted: time.Now(),
-		Databases:     make(map[string]DatabaseMetadata),
+		LastExtracted:  time.Now(),
+		Databases:      make(map[string]DatabaseMetadata),
 	}
 
 	// Get all databases
@@ -158,9 +158,9 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName st
 
 	// Extract metadata for each database concurrently
 	type dbResult struct {
-		dbName string
+		dbName   string
 		metadata DatabaseMetadata
-		err    error
+		err      error
 	}
 	dbResults := make(chan dbResult, len(userDatabases))
 
