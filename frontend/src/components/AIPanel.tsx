@@ -17,6 +17,7 @@ import React, {
 } from "react";
 import Markdown from "react-markdown";
 import TextareaAutosize from "react-textarea-autosize";
+import { toast } from "sonner";
 
 // Expanded message type to better represent stream states
 type DisplayBlock = {
@@ -346,8 +347,27 @@ export const AIPanel = ({
                   {block.meta.requiresConfirmation && (
                     <Button
                       size="icon"
-                      onClick={() => onApplyQueryFromAI(block.meta)}
-                      className="absolute bottom-2 right-2"
+                      onClick={() => {
+                        toast(
+                          "This action is irreversible, are you really sure you want to execute this query?",
+                          {
+                            action: (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="text-xs"
+                                onClick={() => {
+                                  onApplyQueryFromAI(block.meta);
+                                  toast.dismiss();
+                                }}
+                              >
+                                Confirm
+                              </Button>
+                            ),
+                          },
+                        );
+                      }}
+                      className="absolute bottom-2 right-2 size-5"
                       disabled={isExecutingSQLFromAI}
                     >
                       {isExecutingSQLFromAI ? (
