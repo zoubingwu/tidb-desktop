@@ -7,7 +7,7 @@ import {
 import { LoadingTypewriter } from "@/components/ui/loading-typewriter";
 import { SqlAgentResponse, generateSqlAgent } from "@/lib/ai";
 import { type CoreMessage } from "ai";
-import { EyeIcon, Loader, SendHorizonal } from "lucide-react";
+import { EyeIcon, Loader, PlayIcon, SendHorizonal } from "lucide-react";
 import React, {
   useState,
   useRef,
@@ -28,19 +28,22 @@ type DisplayBlock = {
     | "ai-tool-call"
     | "ai-final"
     | "error";
-  content: string | React.ReactNode;
+  content: string;
   meta?: any;
   status?: "started" | "finished";
 };
 
 interface AIPanelProps {
   onApplyQueryFromAI: (query: SqlAgentResponse) => void;
-  currentDb?: string;
-  currentTable?: string;
   opened?: boolean;
+  isExecutingSQLFromAI?: boolean;
 }
 
-export const AIPanel = ({ onApplyQueryFromAI, opened }: AIPanelProps) => {
+export const AIPanel = ({
+  onApplyQueryFromAI,
+  opened,
+  isExecutingSQLFromAI,
+}: AIPanelProps) => {
   const [inputValue, setInputValue] = useState("");
   const [displayBlocks, setDisplayBlocks] = useState<DisplayBlock[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -234,19 +237,7 @@ export const AIPanel = ({ onApplyQueryFromAI, opened }: AIPanelProps) => {
               {
                 id: `${uniqueId}-${Date.now()}-final`,
                 type: "ai-final",
-                content: (
-                  <div className="markdown-body">
-                    <Markdown>{finalResult.explanation}</Markdown>
-                    {finalResult.responseType === "SQL" &&
-                      finalResult.query && (
-                        <div className="rounded">
-                          <pre className="whitespace-pre-wrap">
-                            {finalResult.query}
-                          </pre>
-                        </div>
-                      )}
-                  </div>
-                ),
+                content: finalResult.explanation,
                 meta: finalResult,
               },
             ]);
@@ -345,7 +336,28 @@ export const AIPanel = ({ onApplyQueryFromAI, opened }: AIPanelProps) => {
       case "ai-final":
         return (
           <div className={`ai-final ${baseClasses} my-2 force-select-text`}>
-            {block.content as string}
+            <div className="markdown-body">
+              <Markdown>{block.content}</Markdown>
+              {block.meta.responseType === "SQL" && block.meta.query && (
+                <div className="rounded relative">
+                  <pre className="whitespace-pre-wrap">{block.meta.query}</pre>
+                  {block.meta.requiresConfirmation && (
+                    <Button
+                      size="icon"
+                      onClick={() => onApplyQueryFromAI(block.meta)}
+                      className="absolute bottom-2 right-2"
+                      disabled={isExecutingSQLFromAI}
+                    >
+                      {isExecutingSQLFromAI ? (
+                        <Loader className="size-3 animate-spin" />
+                      ) : (
+                        <PlayIcon className="size-3" />
+                      )}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         );
 
