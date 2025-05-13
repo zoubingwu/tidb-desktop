@@ -20,6 +20,7 @@ root.render(
           <App />
         </ErrorBoundary>
         <Toaster
+          offset={{ bottom: 48, right: 32 }}
           icons={{
             success: <CheckCircle2 color="green" size={16} />,
             error: <AlertCircle color="red" size={16} />,
