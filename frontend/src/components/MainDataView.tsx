@@ -15,7 +15,11 @@ import {
 } from "@/components/ui/tooltip";
 import { SqlAgentResponse } from "@/lib/ai";
 import { filterFn } from "@/lib/filters";
-import { ColumnDataTypeIcons, mapDbColumnTypeToFilterType } from "@/lib/utils";
+import {
+  ColumnDataTypeIcons,
+  isSystemDatabase,
+  mapDbColumnTypeToFilterType,
+} from "@/lib/utils";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import {
   CellContext,
@@ -130,6 +134,20 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
             isLoadingTables: db.isLoadingTables ?? false,
           });
         }
+
+        // system databases first, then alphabetically
+        draft.sort((a, b) => {
+          const isASystemDb = isSystemDatabase(a.name);
+          const isBSystemDb = isSystemDatabase(b.name);
+          if (isASystemDb && !isBSystemDb) {
+            return -1; // a comes first
+          }
+          if (!isASystemDb && isBSystemDb) {
+            return 1; // b comes first
+          }
+          // If both are system or both are not system, sort alphabetically by name
+          return a.name.localeCompare(b.name);
+        });
       });
     });
   };
@@ -154,6 +172,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
 
   useEffect(() => {
     const cleanup = EventsOn("metadata:extraction:started", () => {
+      console.log("metadata extraction started received");
       setStatus("Indexing...");
     });
 
@@ -165,6 +184,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
     const cleanup3 = EventsOn(
       "metadata:extraction:completed",
       (metadata: services.ConnectionMetadata) => {
+        console.log("metadata extraction completed received", metadata);
         setStatus("");
         mergeDatabaseTree(
           Object.keys(metadata.databases).map((dbName) => ({
