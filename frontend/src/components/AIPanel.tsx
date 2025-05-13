@@ -357,7 +357,7 @@ export const AIPanel = ({ onApplyQueryFromAI, opened }: AIPanelProps) => {
   return (
     <div
       ref={scrollAreaRef}
-      className="h-full p-4 pt-0 overflow-auto bg-muted/50"
+      className="h-full px-4 py-2 overflow-auto bg-muted/50"
     >
       {displayBlocks.map((block) => (
         <React.Fragment key={block.id}>
@@ -365,7 +365,7 @@ export const AIPanel = ({ onApplyQueryFromAI, opened }: AIPanelProps) => {
         </React.Fragment>
       ))}
 
-      <div className="bg-background rounded-md overflow-hidden text-sm mt-2">
+      <div className="bg-background rounded-md overflow-hidden text-sm">
         <TextareaAutosize
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
