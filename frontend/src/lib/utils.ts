@@ -85,3 +85,14 @@ export function mapDbColumnTypeToFilterType(dbType: string): ColumnDataType {
 export function capitalize(str: string) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
+
+export function isSystemDatabase(dbName: string): boolean {
+  const systemDatabases = [
+    "mysql",
+    "information_schema",
+    "performance_schema",
+    "metrics_schema",
+    "sys",
+  ];
+  return systemDatabases.includes(dbName.toLowerCase());
+}
