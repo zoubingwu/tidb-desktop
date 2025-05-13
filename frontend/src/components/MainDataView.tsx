@@ -502,7 +502,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
                 <DataTablePagination
                   table={table}
                   totalRowCount={totalRowCount}
-                  disabled={tableViewState === "loading"}
+                  disabled={tableViewState !== "data"}
                 />
               )}
 
@@ -512,7 +512,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
                     <DataTableFilter
                       table={table}
                       onChange={handleFilterChange}
-                      disabled={tableViewState === "loading"}
+                      disabled={tableViewState !== "data"}
                     />
                     <TooltipContent>
                       <p>Filter</p>
