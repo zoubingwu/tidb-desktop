@@ -358,14 +358,35 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName st
 				}(tableName)
 			}
 
-			// Collect table results
-			for range tables {
+			// Collect table results into a temporary map to handle out-of-order arrivals
+			// while preserving the ability to reconstruct the original table order.
+			processedTablesMap := make(map[string]Table, len(tables))
+			for i := 0; i < len(tables); i++ { // Loop exactly len(tables) times to get all results
 				result := <-results
 				if result.err != nil {
+					// If an error occurred fetching details for any table, propagate this error
+					// for the entire database metadata extraction.
 					dbResults <- dbResult{dbName: dbName, err: result.err}
 					return
 				}
-				dbMetadata.Tables = append(dbMetadata.Tables, result.table)
+				// Store successfully processed table details by table name.
+				processedTablesMap[result.table.Name] = result.table
+			}
+
+			// Now, populate dbMetadata.Tables in the original order defined by the 'tables' slice.
+			// dbMetadata.Tables was initialized as make([]Table, 0, len(tables)).
+			for _, tableName := range tables {
+				tableData, found := processedTablesMap[tableName]
+				if !found {
+					// This indicates an internal logic error: a table listed was not found
+					// in the processed results, despite no error being reported for it.
+					// This should ideally not happen if error handling in the loop above is correct.
+					errMsg := fmt.Errorf("internal error: table '%s' metadata not found after processing for database '%s'", tableName, dbName)
+					Error("%v", errMsg) // Log the specific internal error
+					dbResults <- dbResult{dbName: dbName, err: errMsg}
+					return
+				}
+				dbMetadata.Tables = append(dbMetadata.Tables, tableData)
 			}
 
 			// Build graph after collecting all tables
