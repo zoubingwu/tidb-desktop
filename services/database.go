@@ -176,7 +176,7 @@ func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDeta
 		// If both Query and Exec failed, return a combined or more specific error.
 		// The initial queryErr might be more indicative (e.g., syntax error)
 		// Or execErr might be more relevant (e.g., constraint violation)
-		return nil, fmt.Errorf("SQL execution failed. Query attempt error: [%v]. Exec attempt error: [%v]", queryErr, execErr)
+		return nil, fmt.Errorf("SQL execution failed: [%v]", execErr)
 	}
 
 	// Exec succeeded, return affected rows and last insert ID
