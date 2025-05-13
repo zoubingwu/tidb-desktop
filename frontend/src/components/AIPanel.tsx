@@ -282,8 +282,13 @@ export const AIPanel = ({
     }
   };
 
-  const renderBlockContent = (block: DisplayBlock) => {
-    const baseClasses = "rounded-md break-words text-sm w-full my-2";
+  const renderBlockContent = (block: DisplayBlock, index: number) => {
+    let baseClasses = "rounded-md break-words text-sm w-full";
+    if (index > 0) {
+      baseClasses += " my-2";
+    } else {
+      baseClasses += " mb-2";
+    }
     switch (block.type) {
       case "user":
         return (
@@ -391,9 +396,9 @@ export const AIPanel = ({
     >
       {displayBlocks.length > 0 && (
         <div className="flex-1">
-          {displayBlocks.map((block) => (
+          {displayBlocks.map((block, index) => (
             <React.Fragment key={block.id}>
-              {renderBlockContent(block)}
+              {renderBlockContent(block, index)}
             </React.Fragment>
           ))}
         </div>
