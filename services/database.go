@@ -248,7 +248,7 @@ type TableDataResponse struct {
 // Note: This function specifically expects rows, so we handle the SQLResult directly.
 func (s *DatabaseService) ListDatabases(ctx context.Context, details ConnectionDetails) ([]string, error) {
 	Info("Listing available databases for host: %s", details.Host)
-	query := "SHOW DATABASES;"
+	query := "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA ORDER BY `SCHEMA_NAME` ASC;"
 	sqlResult, err := s.ExecuteSQL(ctx, details, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list databases: %w", err)
@@ -276,13 +276,11 @@ func (s *DatabaseService) ListDatabases(ctx context.Context, details ConnectionD
 
 	for _, row := range dbRows {
 		if name, ok := row[columnKey].(string); ok {
-			if name != "information_schema" && name != "performance_schema" && name != "mysql" && name != "sys" {
-				dbNames = append(dbNames, name)
-			}
+			dbNames = append(dbNames, name)
 		}
 	}
 
-	Info("Found %d user databases", len(dbNames))
+	Info("Found %d databases", len(dbNames))
 	return dbNames, nil
 }
 
@@ -297,7 +295,7 @@ func (s *DatabaseService) ListTables(ctx context.Context, details ConnectionDeta
 		return nil, fmt.Errorf("no database specified or configured in the connection details")
 	}
 
-	query := fmt.Sprintf("SHOW TABLES FROM `%s`;", targetDB)
+	query := fmt.Sprintf("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = '%s' ORDER BY TABLE_NAME ASC;", targetDB)
 	sqlResult, err := s.ExecuteSQL(ctx, details, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tables from database '%s': %w", targetDB, err)
