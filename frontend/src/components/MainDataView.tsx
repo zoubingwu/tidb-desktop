@@ -277,25 +277,33 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
   });
 
   const {
+    mutateAsync: executeSql,
     data: sqlFromAIResult,
-    isFetching: isExecutingSQLFromAI,
-    refetch: rerunSQLFromAI,
-  } = useQuery({
-    enabled: !!sqlFromAI,
-    queryKey: ["sqlFromAI", sqlFromAI],
-    queryFn: async () => {
+    isPending: isExecutingSQLFromAI,
+    reset: resetSqlFromAIResult,
+  } = useMutation<services.SQLResult, Error, string>({
+    mutationFn: async (sqlToExecute: string) => {
       try {
         setStatus("Executing SQL...");
-        const res = await ExecuteSQL(sqlFromAI);
-        setStatus(`SQL executed successfully`);
+        const res = await ExecuteSQL(sqlToExecute);
+
+        if (res.rowsAffected && res.rowsAffected > 0) {
+          setStatus(
+            `SQL executed successfully, ${res.rowsAffected} row${
+              res.rowsAffected === 1 ? "" : "s"
+            } affected`,
+          );
+        } else {
+          setStatus("SQL executed successfully");
+        }
         return res;
       } catch (error: any) {
-        setStatus(error);
-        toast.error(`Error executing SQL`, { description: error });
+        const errorMessage = error?.message || String(error);
+        setStatus(errorMessage);
+        toast.error("Error executing SQL", { description: errorMessage });
         throw error;
       }
     },
-    retry: false,
   });
 
   const handleFilterChange = useMemoizedFn((filters: ServerSideFilter[]) => {
@@ -400,6 +408,7 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
   const handleSelectTable = useMemoizedFn(
     (dbName: string, tableName: string) => {
       setSqlFromAI("");
+      resetSqlFromAIResult();
       setTableDataPrameters((draft) => {
         draft.dbName = dbName;
         draft.tableName = tableName;
@@ -428,20 +437,35 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
     onClose();
   });
 
-  const handleApplyAIGeneratedQuery = (result: SqlAgentResponse) => {
-    if (!result.success) return;
-    resetTableDataPrameters();
+  const handleApplyAIGeneratedQuery = async (result: SqlAgentResponse) => {
+    if (!result.success || !result.query) return;
 
-    if (result.query) {
-      if (sqlFromAI === result.query) {
-        rerunSQLFromAI();
+    const sqlQuery = result.query;
+    const upperSqlQuery = sqlQuery.toUpperCase();
+    const tableModifyingKeywords = [
+      "CREATE TABLE",
+      "ALTER TABLE",
+      "DROP TABLE",
+      "RENAME TABLE",
+    ];
+    const isModifyingQuery = tableModifyingKeywords.some((keyword) =>
+      upperSqlQuery.includes(keyword),
+    );
+
+    resetTableDataPrameters();
+    await executeSql(sqlQuery);
+    setSqlFromAI(sqlQuery);
+    if (isModifyingQuery) {
+      if (result.dbName) {
+        fetchTables(result.dbName);
       }
-      setSqlFromAI(result.query);
     }
   };
 
   const table: ReactTable<TableRowData> = useReactTable({
-    data: (sqlFromAIResult ? sqlFromAIResult.rows : tableData?.rows) || [],
+    data:
+      (sqlFromAI && sqlFromAIResult ? sqlFromAIResult.rows : tableData?.rows) ||
+      [],
     columns,
     state: {
       pagination,
