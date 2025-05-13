@@ -110,7 +110,7 @@ const dbTools = {
     execute: async ({ dbName }) => {
       try {
         console.log(`Tool Call: getDatabaseMetadata (dbName: ${dbName})`);
-        const metadata = await GetDatabaseMetadata(dbName);
+        const metadata = await GetDatabaseMetadata();
         console.log("Tool Result: getDatabaseMetadata ->", metadata);
         return { success: true, metadata };
       } catch (error: any) {
@@ -227,7 +227,7 @@ const finalAnswerTool = tool({
 export async function* generateSqlAgent(
   userPrompt: string,
   conversationHistory: CoreMessage[] = [],
-  metadata: services.DatabaseMetadata | null = null,
+  metadata: services.ConnectionMetadata | null = null,
 ): AsyncGenerator<AgentStreamEvent, void, unknown> {
   const model = await createModel();
 
