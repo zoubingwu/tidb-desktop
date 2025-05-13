@@ -142,10 +142,8 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 
 	// Check if metadata needs to be extracted
 	go func() {
-		time.Sleep(2 * time.Second) // Wait for 2 seconds before starting
-
-		ctx := context.Background() // Create a new context for background task
-
+		time.Sleep(1 * time.Second)
+		ctx := context.Background()
 		runtime.EventsEmit(a.ctx, "metadata:extraction:started", name)
 		metadata, err := a.metadataService.GetMetadata(ctx, name)
 		if err != nil {
