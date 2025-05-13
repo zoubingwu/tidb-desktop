@@ -25,12 +25,10 @@ function App() {
     const cleanupEstablished = EventsOn(
       "connection:established",
       (details: services.ConnectionDetails) => {
-        console.log("App.tsx: connection:established received", details);
         navigateToMain(details);
       },
     );
     const cleanupDisconnected = EventsOn("connection:disconnected", () => {
-      console.log("App.tsx: connection:disconnected received");
       handleDisconnect();
     });
 
@@ -41,13 +39,11 @@ function App() {
   }, []);
 
   const handleDisconnect = useMemoizedFn(() => {
-    console.log("App.tsx: Handling disconnect state update.");
     setConnectionDetails(null);
     setCurrentView("welcome");
   });
 
   const triggerDisconnect = useMemoizedFn(() => {
-    console.log("App.tsx: Triggering disconnect via UI.");
     Disconnect();
   });
 
