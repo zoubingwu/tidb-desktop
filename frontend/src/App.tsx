@@ -13,8 +13,6 @@ function App() {
   const [currentView, setCurrentView] = useState<ViewState>("welcome");
   const [connectionDetails, setConnectionDetails] =
     useState<services.ConnectionDetails | null>(null);
-  const [titleSuffix, setTitleSuffix] = useState<string>("");
-  const [titleLoading, setTitleLoading] = useState<boolean>(false);
 
   const navigateToMain = useMemoizedFn(
     (details: services.ConnectionDetails) => {
@@ -53,40 +51,29 @@ function App() {
     Disconnect();
   });
 
-  const handleUpdateTitle = useMemoizedFn(
-    (title: string, loading?: boolean) => {
-      setTitleSuffix(title);
-      setTitleLoading(loading ?? false);
-    },
-  );
-
   const renderView = () => {
     switch (currentView) {
       case "welcome":
         return <WelcomeScreen />;
       case "main":
-        return (
-          <MainDataView
-            onClose={triggerDisconnect}
-            onUpdateTitle={handleUpdateTitle}
-          />
-        );
+        return <MainDataView onClose={triggerDisconnect} />;
       default:
         return <div>Unknown View</div>;
     }
   };
 
-  const title = connectionDetails
-    ? connectionDetails.name ||
-      `${connectionDetails.user}@${connectionDetails.host}:${connectionDetails.port}`
+  const connectionName = connectionDetails
+    ? connectionDetails?.name ||
+      `${connectionDetails?.user}@${connectionDetails?.host}:${connectionDetails?.port}`
+    : "";
+
+  const title = connectionName
+    ? `TiDB Desktop - ${connectionName}`
     : "TiDB Desktop";
 
   return (
     <div id="App" className="h-screen w-screen flex flex-col">
-      <TitleBar
-        title={titleSuffix ? `${title} - ${titleSuffix}` : title}
-        loading={titleLoading}
-      />
+      <TitleBar title={title} />
       <div className="flex-grow overflow-auto">{renderView()}</div>
     </div>
   );
