@@ -208,7 +208,12 @@ const MainDataView = ({
     );
 
     setStatus("Indexing database...");
-    EventsEmit("metadata:extraction:start", connectionDetails?.name!, false);
+    EventsEmit(
+      "metadata:extraction:start",
+      connectionDetails?.name!,
+      false,
+      "",
+    );
 
     return () => {
       cleanup1();
