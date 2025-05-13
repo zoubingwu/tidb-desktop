@@ -29,7 +29,7 @@ import {
 } from "@tanstack/react-table";
 import { useMemoizedFn } from "ahooks";
 import { Allotment as ReactSplitView } from "allotment";
-import { SettingsIcon, SparkleIcon, UnplugIcon } from "lucide-react";
+import { Loader, SettingsIcon, SparkleIcon, UnplugIcon } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useImmer } from "use-immer";
@@ -415,23 +415,30 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
         </ReactSplitView>
 
         <div className="flex items-center justify-between px-2 py-2 bg-background gap-2">
-          <div className="flex text-xs gap-1 items-center">{status}</div>
+          <div className="flex text-xs gap-1 items-center">
+            {tableViewState === "loading" && (
+              <Loader className="size-3 animate-spin" />
+            )}
+            <span className="relative top-[1px]">{status}</span>
+          </div>
 
           <TooltipProvider delayDuration={0}>
             <div className="flex flex-nowrap items-center gap-2">
-              {tableViewState === "data" && !sqlFromAI && (
+              {!sqlFromAI && (
                 <DataTablePagination
                   table={table}
                   totalRowCount={totalRowCount}
+                  disabled={tableViewState === "loading"}
                 />
               )}
 
               <div className="flex gap-2">
-                {tableViewState === "data" && !sqlFromAI && (
+                {!sqlFromAI && (
                   <Tooltip>
                     <DataTableFilter
                       table={table}
                       onChange={handleFilterChange}
+                      disabled={tableViewState === "loading"}
                     />
                     <TooltipContent>
                       <p>Filter</p>
