@@ -276,7 +276,11 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
     placeholderData: keepPreviousData,
   });
 
-  const { data: sqlFromAIResult, isFetching: isExecutingSQLFromAI } = useQuery({
+  const {
+    data: sqlFromAIResult,
+    isFetching: isExecutingSQLFromAI,
+    refetch: rerunSQLFromAI,
+  } = useQuery({
     enabled: !!sqlFromAI,
     queryKey: ["sqlFromAI", sqlFromAI],
     queryFn: async () => {
@@ -425,11 +429,14 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
   });
 
   const handleApplyAIGeneratedQuery = (result: SqlAgentResponse) => {
-    if (result.success) {
-      resetTableDataPrameters();
-      if (result.query) {
-        setSqlFromAI(result.query);
+    if (!result.success) return;
+    resetTableDataPrameters();
+
+    if (result.query) {
+      if (sqlFromAI === result.query) {
+        rerunSQLFromAI();
       }
+      setSqlFromAI(result.query);
     }
   };
 
@@ -509,10 +516,9 @@ const MainDataView = ({ onClose }: { onClose: () => void }) => {
             maxSize={DEFAULT_AI_PANEL_WIDTH * 2}
           >
             <AIPanel
-              currentDb={currentDb}
-              currentTable={currentTable}
               onApplyQueryFromAI={handleApplyAIGeneratedQuery}
               opened={showAIPanel}
+              isExecutingSQLFromAI={isExecutingSQLFromAI}
             />
           </ReactSplitView.Pane>
         </ReactSplitView>
