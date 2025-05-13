@@ -568,7 +568,7 @@ const MainDataView = ({
       </ReactSplitView>
 
       <TooltipProvider delayDuration={0}>
-        <div className="flex items-center justify-between px-2 py-0 bg-background gap-2">
+        <div className="flex items-center justify-between px-2 py-0 bg-[var(--card)] gap-2 border-t border-[var(--muted)]">
           <div className="flex text-xs gap-1 items-center flex-1">
             {tableViewState === "loading" && (
               <Loader className="size-3 animate-spin" />
