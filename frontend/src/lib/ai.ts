@@ -112,7 +112,7 @@ const dbTools = {
         console.log(`Tool Call: getDatabaseMetadata (dbName: ${dbName})`);
         const metadata = await GetDatabaseMetadata();
         console.log("Tool Result: getDatabaseMetadata ->", metadata);
-        return { success: true, metadata };
+        return { success: true, metadata: metadata.databases[dbName] };
       } catch (error: any) {
         console.error(`Error getting metadata for ${dbName}:`, error);
         return { success: false, error: error.message };
@@ -244,7 +244,7 @@ Your primary goal is to understand user queries about their database and provide
 You have access to the complete database schema and can explore relationships between tables.
 
 <database_metadata>
-${metadata ? JSON.stringify(metadata) : "No database metadata available"}
+${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name: i.name, graph: i.graph }))) : "No database metadata available"}
 </database_metadata>
 
 <capabilities>
