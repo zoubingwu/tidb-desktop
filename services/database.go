@@ -64,6 +64,7 @@ func buildDSN(details ConnectionDetails) (string, bool) {
 // getDBConnection handles creating the DB connection, including TLS setup.
 func getDBConnection(details ConnectionDetails) (*sql.DB, error) {
 	dsn, useTLS := buildDSN(details)
+	Info("Attempting to connect to database %s on %s:%s", details.DBName, details.Host, details.Port)
 
 	if useTLS {
 		// Register TLS config, allowing re-registration for different hosts.
@@ -74,12 +75,14 @@ func getDBConnection(details ConnectionDetails) (*sql.DB, error) {
 		if err != nil && !strings.Contains(err.Error(), "already registered") {
 			return nil, fmt.Errorf("failed to register TLS config: %w", err)
 		}
+		Info("TLS config registered for host: %s", details.Host)
 	}
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database connection: %w", err)
 	}
+	Info("Database connection established successfully")
 
 	// Configure connection pool
 	db.SetMaxOpenConns(50)  // Increased to handle high concurrency
@@ -107,6 +110,8 @@ func (s *DatabaseService) TestConnection(ctx context.Context, details Connection
 
 // ExecuteSQL runs a query and returns results or execution status in a structured format.
 func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDetails, query string) (*SQLResult, error) {
+	Info("Executing SQL query: %s", query)
+
 	db, err := getDBConnection(details)
 	if err != nil {
 		return nil, fmt.Errorf("connection setup failed: %w", err)
@@ -116,6 +121,7 @@ func (s *DatabaseService) ExecuteSQL(ctx context.Context, details ConnectionDeta
 	// Attempt to execute as a query first (SELECT, SHOW, DESCRIBE, etc.)
 	rows, queryErr := db.QueryContext(ctx, query)
 	if queryErr == nil {
+		Info("Query executed successfully, processing results")
 		defer rows.Close()
 		columns, err := rows.Columns()
 		if err != nil {
@@ -241,6 +247,7 @@ type TableDataResponse struct {
 // ListDatabases retrieves a list of database/schema names accessible by the connection.
 // Note: This function specifically expects rows, so we handle the SQLResult directly.
 func (s *DatabaseService) ListDatabases(ctx context.Context, details ConnectionDetails) ([]string, error) {
+	Info("Listing available databases for host: %s", details.Host)
 	query := "SHOW DATABASES;"
 	sqlResult, err := s.ExecuteSQL(ctx, details, query)
 	if err != nil {
@@ -275,6 +282,7 @@ func (s *DatabaseService) ListDatabases(ctx context.Context, details ConnectionD
 		}
 	}
 
+	Info("Found %d user databases", len(dbNames))
 	return dbNames, nil
 }
 
@@ -335,6 +343,8 @@ func (s *DatabaseService) GetTableData(ctx context.Context, details ConnectionDe
 	if targetDB == "" {
 		targetDB = details.DBName
 	}
+	Info("Fetching table data for %s.%s (limit: %d, offset: %d)", targetDB, tableName, limit, offset)
+
 	if targetDB == "" {
 		return nil, fmt.Errorf("database name is required either explicitly or in connection details")
 	}
@@ -496,6 +506,7 @@ func (s *DatabaseService) GetTableData(ctx context.Context, details ConnectionDe
 	var dataRows []map[string]any
 	if dataSQLResult != nil && dataSQLResult.Rows != nil {
 		dataRows = dataSQLResult.Rows // Use rows if available
+		Info("Retrieved %d rows from table %s.%s", len(dataRows), targetDB, tableName)
 	} else {
 		log.Printf("Warning: Data query for %s.%s returned no rows or unexpected result type (%T), assuming empty.", targetDB, tableName, dataSQLResult)
 		dataRows = []map[string]any{} // Ensure empty slice if no rows returned

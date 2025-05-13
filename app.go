@@ -72,6 +72,7 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 	if a.ctx == nil {
 		return nil, fmt.Errorf("app context not initialized")
 	}
+	services.Info("Attempting to connect using saved connection: %s", name)
 	details, found, err := a.configService.GetConnection(name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve saved connection '%s': %w", name, err)
@@ -91,7 +92,7 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 
 	// Store as the *active* connection for this session
 	a.activeConnection = &details
-	services.Info("Session connection activated using saved connection '%s'", name)
+	services.Info("Connection '%s' activated successfully", name)
 
 	// Record usage timestamp in config
 	if err := a.configService.RecordConnectionUsage(name); err != nil {
@@ -147,8 +148,14 @@ func (a *App) SaveConnection(name string, details services.ConnectionDetails) er
 	if name == "" {
 		return fmt.Errorf("connection name cannot be empty")
 	}
-	services.Info("Saving connection '%s'", name)
-	return a.configService.AddOrUpdateConnection(name, details)
+	services.Info("Saving connection details for: %s", name)
+	err := a.configService.AddOrUpdateConnection(name, details)
+	if err != nil {
+		services.Info("Failed to save connection '%s': %v", name, err)
+		return err
+	}
+	services.Info("Connection '%s' saved successfully", name)
+	return nil
 }
 
 // DeleteSavedConnection removes a connection from the config file.
@@ -180,14 +187,20 @@ func (a *App) DeleteSavedConnection(name string) error {
 
 // ExecuteSQL uses the *active session connection* details to execute a query.
 func (a *App) ExecuteSQL(query string) (*services.SQLResult, error) {
-	services.Info("Executing SQL: %+v\n", query)
+	services.Info("Executing SQL with active connection: %s", query)
 	if a.ctx == nil {
 		return nil, fmt.Errorf("app context not initialized")
 	}
 	if a.activeConnection == nil {
 		return nil, fmt.Errorf("no active database connection established for this session")
 	}
-	return a.dbService.ExecuteSQL(a.ctx, *a.activeConnection, query)
+	result, err := a.dbService.ExecuteSQL(a.ctx, *a.activeConnection, query)
+	if err != nil {
+		services.Info("SQL execution failed: %v", err)
+		return nil, err
+	}
+	services.Info("SQL execution completed successfully")
+	return result, nil
 }
 
 // ListDatabases retrieves a list of database/schema names accessible by the connection.
