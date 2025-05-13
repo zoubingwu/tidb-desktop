@@ -104,6 +104,17 @@ func (s *MetadataService) getMetadataFilePath(connectionName string) string {
 	return filepath.Join(s.metadataDir, fileName)
 }
 
+// isSystemDatabase returns true if the given database name is a system database
+func isSystemDatabase(dbName string) bool {
+	systemDBs := map[string]bool{
+		"information_schema":  true,
+		"mysql":              true,
+		"performance_schema": true,
+		"sys":               true,
+	}
+	return systemDBs[dbName]
+}
+
 // ExtractMetadata extracts metadata from the database and stores it
 func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName string) (*ConnectionMetadata, error) {
 	Info("Starting metadata extraction for connection: %s", connectionName)
@@ -131,10 +142,18 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName st
 		Error("failed to list databases: %v", err)
 		return nil, fmt.Errorf("failed to list databases: %w", err)
 	}
-	Info("Found %d databases for connection %s", len(databases), connectionName)
+
+	// Filter out system databases
+	userDatabases := make([]string, 0, len(databases))
+	for _, dbName := range databases {
+		if !isSystemDatabase(dbName) {
+			userDatabases = append(userDatabases, dbName)
+		}
+	}
+	Info("Found %d user databases for connection %s", len(userDatabases), connectionName)
 
 	// Extract metadata for each database
-	for _, dbName := range databases {
+	for _, dbName := range userDatabases {
 		Info("Extracting metadata for database: %s", dbName)
 		// Use the specified database
 		connDetails.DBName = dbName
