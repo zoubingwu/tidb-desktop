@@ -421,18 +421,7 @@ const MainDataView = ({
         </ReactSplitView>
 
         <div className="flex items-center justify-between px-2 py-2 bg-background gap-2">
-          <div className="flex gap-2">
-            <Tooltip>
-              <DataTableFilter
-                table={table}
-                onChange={handleFilterChange}
-                disabled={tableViewState !== "data" || !!sqlFromAIResult}
-              />
-              <TooltipContent>
-                <p>Filter</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
+          <div className="flex gap-2"></div>
 
           <TooltipProvider delayDuration={0}>
             <div className="flex flex-nowrap items-center gap-2">
@@ -443,6 +432,17 @@ const MainDataView = ({
               />
 
               <div className="flex gap-2">
+                <Tooltip>
+                  <DataTableFilter
+                    table={table}
+                    onChange={handleFilterChange}
+                    disabled={tableViewState !== "data" || !!sqlFromAIResult}
+                  />
+                  <TooltipContent>
+                    <p>Filter</p>
+                  </TooltipContent>
+                </Tooltip>
+
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
