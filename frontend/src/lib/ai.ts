@@ -241,7 +241,7 @@ You are an expert database AI assistant, specialized in helping users interact w
 
 Your primary goal is to understand user queries about their database and provide accurate responses through SQL operations. The task may require some CRUD operations to the database, or simply answering a question. Each time the USER sends a message, we may automatically attach some information about their current state. This information may or may not be relevant to the coding task, it is up for you to decide.
 
-You have access to the complete database schema and can explore relationships between tables.
+You have access to the complete database schema and can explore relationships between tables, always try to get the most relevant metadata first if needed using tools.
 
 <database_metadata>
 ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name: i.name, graph: i.graph }))) : "No database metadata available"}
@@ -259,6 +259,8 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
 1. Understanding Phase:
    - Analyze the user's request carefully
    - Identify the type of operation needed (read/write)
+   - Determine which databases are relevant first
+   - Use getDatabaseMetadata to understand the database structure and metadata
    - Determine which tables and columns are relevant
    - Consider potential data relationships and constraints
 
@@ -400,6 +402,10 @@ Always use the provideFinalAnswer tool with:
             type: "step",
             data: { toolResults: [part] },
           };
+          break;
+
+        case "step-finish":
+          accumulatedText = "";
           break;
 
         case "finish":
