@@ -20,6 +20,10 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	if err := services.InitLogger(); err != nil {
+		panic(fmt.Sprintf("Failed to initialize logger: %v", err))
+	}
+
 	dbService := services.NewDatabaseService()
 	configService, err := services.NewConfigService()
 	if err != nil {
