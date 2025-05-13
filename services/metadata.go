@@ -106,12 +106,15 @@ func (s *MetadataService) getMetadataFilePath(connectionName string) string {
 
 // ExtractMetadata extracts metadata from the database and stores it
 func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName string) (*ConnectionMetadata, error) {
+	Info("Starting metadata extraction for connection: %s", connectionName)
 	// Get connection details
 	connDetails, exists, err := s.configService.GetConnection(connectionName)
 	if err != nil {
+		Error("failed to get connection details: %v", err)
 		return nil, fmt.Errorf("failed to get connection details: %w", err)
 	}
 	if !exists {
+		Error("connection %s not found", connectionName)
 		return nil, fmt.Errorf("connection %s not found", connectionName)
 	}
 
@@ -125,11 +128,14 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName st
 	// Get all databases
 	databases, err := s.dbService.ListDatabases(ctx, connDetails)
 	if err != nil {
+		Error("failed to list databases: %v", err)
 		return nil, fmt.Errorf("failed to list databases: %w", err)
 	}
+	Info("Found %d databases for connection %s", len(databases), connectionName)
 
 	// Extract metadata for each database
 	for _, dbName := range databases {
+		Info("Extracting metadata for database: %s", dbName)
 		// Use the specified database
 		connDetails.DBName = dbName
 
@@ -159,8 +165,10 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName st
 
 		// Extract metadata for each table
 		for _, tableName := range tables {
+			Info("Extracting schema for table: %s.%s", dbName, tableName)
 			tableSchema, err := s.dbService.GetTableSchema(ctx, connDetails, dbName, tableName)
 			if err != nil {
+				Error("failed to get schema for table %s in database %s: %v", tableName, dbName, err)
 				return nil, fmt.Errorf("failed to get schema for table %s in database %s: %w", tableName, dbName, err)
 			}
 
@@ -310,25 +318,31 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName st
 
 	// Store the metadata
 	if err := s.storeMetadata(connMetadata); err != nil {
+		Error("failed to store metadata: %v", err)
 		return nil, fmt.Errorf("failed to store metadata: %w", err)
 	}
+	Info("Successfully extracted and stored metadata for connection: %s", connectionName)
 
 	return connMetadata, nil
 }
 
 // GetMetadata retrieves metadata for a connection, extracting it if necessary
 func (s *MetadataService) GetMetadata(ctx context.Context, connectionName string) (*ConnectionMetadata, error) {
+	Info("Getting metadata for connection: %s", connectionName)
 	// Try to load existing metadata first
 	connMetadata, err := s.loadMetadata(connectionName)
 	if err != nil {
+		Error("failed to load metadata: %v", err)
 		return nil, fmt.Errorf("failed to load metadata: %w", err)
 	}
 
 	if connMetadata != nil {
 		// Check if metadata is still fresh
 		if time.Since(connMetadata.LastExtracted) < StaleMetadataThreshold {
+			Info("Using cached metadata for connection: %s (age: %v)", connectionName, time.Since(connMetadata.LastExtracted))
 			return connMetadata, nil
 		}
+		Info("Metadata is stale for connection: %s (age: %v), refreshing...", connectionName, time.Since(connMetadata.LastExtracted))
 	}
 
 	// If metadata doesn't exist, is too old, or failed to load, extract it
@@ -338,36 +352,45 @@ func (s *MetadataService) GetMetadata(ctx context.Context, connectionName string
 // storeMetadata saves the metadata to a file
 func (s *MetadataService) storeMetadata(metadata *ConnectionMetadata) error {
 	filePath := s.getMetadataFilePath(metadata.ConnectionName)
+	Info("Storing metadata to file: %s", filePath)
 
 	data, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
+		Error("failed to marshal metadata: %v", err)
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
 	if err := os.WriteFile(filePath, data, 0600); err != nil {
+		Error("failed to write metadata file: %v", err)
 		return fmt.Errorf("failed to write metadata file: %w", err)
 	}
 
+	Info("Successfully stored metadata for connection: %s", metadata.ConnectionName)
 	return nil
 }
 
 // loadMetadata loads metadata from a file
 func (s *MetadataService) loadMetadata(connectionName string) (*ConnectionMetadata, error) {
 	filePath := s.getMetadataFilePath(connectionName)
+	Info("Loading metadata from file: %s", filePath)
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			Info("No existing metadata found for connection: %s", connectionName)
 			return nil, nil // File doesn't exist, return nil without error
 		}
+		Error("failed to read metadata file: %v", err)
 		return nil, fmt.Errorf("failed to read metadata file: %w", err)
 	}
 
 	var metadata ConnectionMetadata
 	if err := json.Unmarshal(data, &metadata); err != nil {
+		Error("failed to unmarshal metadata: %v", err)
 		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
 
+	Info("Successfully loaded metadata for connection: %s", connectionName)
 	return &metadata, nil
 }
 
@@ -423,11 +446,15 @@ type DescriptionTarget struct {
 }
 
 func (s *MetadataService) UpdateAIDescription(ctx context.Context, connectionName, dbName string, target DescriptionTarget, description string) error {
+	Info("Updating AI description for %s in connection: %s, database: %s", target.Type, connectionName, dbName)
+
 	connMetadata, err := s.loadMetadata(connectionName)
 	if err != nil {
+		Error("failed to load metadata: %v", err)
 		return fmt.Errorf("failed to load metadata: %w", err)
 	}
 	if connMetadata == nil {
+		Error("metadata not found for connection %s", connectionName)
 		return fmt.Errorf("metadata not found for connection %s", connectionName)
 	}
 
@@ -463,5 +490,6 @@ func (s *MetadataService) UpdateAIDescription(ctx context.Context, connectionNam
 	}
 
 	connMetadata.Databases[dbName] = dbMetadata
+	Info("Successfully updated AI description for %s in connection: %s", target.Type, connectionName)
 	return s.storeMetadata(connMetadata)
 }
