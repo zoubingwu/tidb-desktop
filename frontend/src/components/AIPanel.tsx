@@ -295,7 +295,7 @@ export const AIPanel = ({ onApplyQueryFromAI, opened }: AIPanelProps) => {
   };
 
   const renderBlockContent = (block: DisplayBlock) => {
-    const baseClasses = "rounded-md break-words text-sm w-full";
+    const baseClasses = "rounded-md break-words text-sm w-full my-2";
     switch (block.type) {
       case "user":
         return (
@@ -315,7 +315,7 @@ export const AIPanel = ({ onApplyQueryFromAI, opened }: AIPanelProps) => {
       case "ai-text":
         return (
           <div
-            className={`ai-text ${baseClasses} my-2 force-select-text markdown-body`}
+            className={`ai-text ${baseClasses} force-select-text markdown-body`}
           >
             <Markdown>{block.content as string}</Markdown>
           </div>
