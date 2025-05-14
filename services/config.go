@@ -17,7 +17,7 @@ const (
 	DefaultAnthropicModel  = "claude-3-5-sonnet-latest"
 	DefaultOpenRouterModel = "anthropic/claude-3.5-sonnet"
 	DefaultThemeMode       = "system"
-	DefaultBaseTheme       = "claude"
+	DefaultBaseTheme       = "solar-dusk"
 	DefaultAIProvider      = "openai"
 	DefaultWindowWidth     = 1024
 	DefaultWindowHeight    = 768
