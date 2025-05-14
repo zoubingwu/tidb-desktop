@@ -95,6 +95,12 @@ func (a *App) startup(ctx context.Context) {
 			runtime.EventsEmit(a.ctx, "metadata:extraction:failed", err.Error())
 		} else {
 			services.Info("Background metadata extraction completed for connection '%s'", connectionName)
+			// Save the freshly extracted/retrieved metadata to disk
+			if errSave := a.metadataService.SaveMetadata(connectionName); errSave != nil {
+				services.Error("Failed to save metadata after extraction for connection '%s': %v", connectionName, errSave)
+				// Optionally, emit a different event or append to the error message for the frontend
+				// For now, the main completion event is still emitted, but we log the save error.
+			}
 			runtime.EventsEmit(a.ctx, "metadata:extraction:completed", metadata)
 		}
 	})
