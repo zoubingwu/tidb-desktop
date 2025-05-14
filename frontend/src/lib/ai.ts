@@ -18,6 +18,33 @@ import {
 import { services } from "wailsjs/go/models";
 import { z } from "zod";
 
+export const AVAILABLE_MODELS = {
+  openai: [
+    "o1",
+    "o1-mini",
+    "gpt-4.1",
+    "gpt-4",
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-3.5-turbo",
+  ],
+  anthropic: [
+    "claude-3-5-sonnet-latest",
+    "claude-3-5-haiku-latest",
+    "claude-3-opus-latest",
+  ],
+  openrouter: [
+    "openai/gpt-4.1",
+    "gpt-4o",
+    "google/gemini-2.5-pro-preview",
+    "google/gemini-2.5-flash-preview",
+    "google/gemini-2.0-flash-001",
+    "google/gemini-pro-1.5",
+    "anthropic/claude-3.5-sonnet",
+    "anthropic/claude-3-haiku",
+  ],
+};
+
 const createModel = async (options?: ProviderConnectionOptions) => {
   const aiProviderSettings = await GetAIProviderSettings();
   const provider = options?.provider || aiProviderSettings.provider;
