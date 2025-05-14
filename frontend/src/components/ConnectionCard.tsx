@@ -65,7 +65,7 @@ export const ConnectionCard = ({
         <div className="space-y-1 min-w-0">
           <CardTitle className="text-lg break-words">{name}</CardTitle>
           {/* Optional: Add DB Type if available in details later */}
-          <CardDescription className="text-sm">TiDB / MySQL</CardDescription>
+          <CardDescription className="text-sm">TiDB/MySQL</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="flex-grow space-y-2 text-sm text-muted-foreground">
