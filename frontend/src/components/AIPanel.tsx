@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/collapsible";
 import { LoadingTypewriter } from "@/components/ui/loading-typewriter";
 import { SqlAgentResponse, generateSqlAgent } from "@/lib/ai";
+import { useMemoizedFn } from "ahooks";
 import { type CoreMessage } from "ai";
 import { EyeIcon, Loader, PlayIcon, SendHorizonal } from "lucide-react";
 import React, {
@@ -34,64 +35,35 @@ type DisplayBlock = {
   status?: "started" | "finished";
 };
 
-interface AIPanelProps {
-  onApplyQueryFromAI: (query: SqlAgentResponse) => void;
-  opened?: boolean;
-  isExecutingSQLFromAI?: boolean;
-}
-
-export const AIPanel = ({
-  onApplyQueryFromAI,
-  opened,
-  isExecutingSQLFromAI,
-}: AIPanelProps) => {
-  const [inputValue, setInputValue] = useState("");
-  const [displayBlocks, setDisplayBlocks] = useState<DisplayBlock[]>([]);
+const useGenerateSQLAgent = ({
+  onFinish,
+}: {
+  onFinish: (query: SqlAgentResponse) => void;
+}) => {
   const [isLoading, setIsLoading] = useState(false);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [displayBlocks, setDisplayBlocks] = useState<DisplayBlock[]>([]);
+  const [messages, setMessages] = useState<CoreMessage[]>([]);
   const uniqueId = useId();
-  const [maxRows, setMaxRows] = useState(2);
-  const [conversationHistory, setConversationHistory] = useState<CoreMessage[]>(
-    [],
-  );
+  const appendMessage = useMemoizedFn((message: CoreMessage) => {
+    setMessages((prev) => [...prev, message]);
+  });
+  const appendDisplayBlock = useMemoizedFn((block: DisplayBlock) => {
+    setDisplayBlocks((prev) => [...prev, block]);
+  });
 
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-      const container = scrollAreaRef.current;
-      requestAnimationFrame(() => {
-        container.scrollTop = container.scrollHeight;
-      });
-    }
-  }, [displayBlocks]);
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      setMaxRows(opened ? 10 : 2);
-    });
-  }, [opened]);
-
-  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
-    if (e) e.preventDefault();
-    if (!inputValue.trim() || isLoading) return;
-
-    const userPrompt = inputValue;
+  const handleSubmit = useMemoizedFn(async (userPrompt: string) => {
     const userBlock: DisplayBlock = {
       id: `${uniqueId}-${Date.now()}-user`,
       type: "user",
       content: userPrompt,
     };
 
-    // Add user message to history
-    setConversationHistory((prev) => [
-      ...prev,
-      {
-        role: "user",
-        content: userPrompt,
-      },
-    ]);
+    appendMessage({
+      role: "user",
+      content: userPrompt,
+    });
 
-    setDisplayBlocks((prev) => [...prev, userBlock]);
-    setInputValue("");
+    appendDisplayBlock(userBlock);
     setIsLoading(true);
 
     let currentThinkingBlockId: string | null = null;
@@ -100,7 +72,7 @@ export const AIPanel = ({
     let assistantResponse = ""; // Track full assistant response
 
     try {
-      const agentStream = generateSqlAgent(userPrompt, conversationHistory);
+      const agentStream = generateSqlAgent(userPrompt, messages);
 
       for await (const event of agentStream) {
         if (currentThinkingBlockId) {
@@ -149,51 +121,42 @@ export const AIPanel = ({
             if (toolCalls?.length) {
               toolCalls.forEach((call) => {
                 // Add tool call as assistant message
-                setConversationHistory((prev) => [
-                  ...prev,
-                  {
-                    role: "assistant",
-                    content: [
-                      {
-                        type: "tool-call",
-                        toolCallId: call.toolCallId,
-                        toolName: call.toolName,
-                        args: call.args,
-                      },
-                    ],
-                  },
-                ]);
+                appendMessage({
+                  role: "assistant",
+                  content: [
+                    {
+                      type: "tool-call",
+                      toolCallId: call.toolCallId,
+                      toolName: call.toolName,
+                      args: call.args,
+                    },
+                  ],
+                });
 
-                setDisplayBlocks((prev) => [
-                  ...prev,
-                  {
-                    id: `${uniqueId}-${call.toolCallId}-call`,
-                    type: "ai-tool-call",
-                    status: "started",
-                    content: `Tool ${call.toolName} call started`,
-                    meta: call,
-                  },
-                ]);
+                appendDisplayBlock({
+                  id: `${uniqueId}-${call.toolCallId}-call`,
+                  type: "ai-tool-call",
+                  status: "started",
+                  content: `Tool ${call.toolName} call started`,
+                  meta: call,
+                });
               });
             }
 
             if (toolResults?.length) {
               toolResults.forEach((result) => {
                 // Add tool result as tool message
-                setConversationHistory((prev) => [
-                  ...prev,
-                  {
-                    role: "tool",
-                    content: [
-                      {
-                        type: "tool-result",
-                        toolCallId: result.toolCallId,
-                        toolName: result.toolName,
-                        result: result.result,
-                      },
-                    ],
-                  },
-                ]);
+                appendMessage({
+                  role: "tool",
+                  content: [
+                    {
+                      type: "tool-result",
+                      toolCallId: result.toolCallId,
+                      toolName: result.toolName,
+                      result: result.result,
+                    },
+                  ],
+                });
 
                 setDisplayBlocks((prev) =>
                   prev.map((block) => {
@@ -222,28 +185,17 @@ export const AIPanel = ({
             if (finalResult.responseType === "SQL" && finalResult.query) {
               assistantResponse += `\n\nQuery: ${finalResult.query}`;
             }
-            setConversationHistory((prev) => [
-              ...prev,
-              {
-                role: "assistant",
-                content: assistantResponse,
-              },
-            ]);
-            setDisplayBlocks((prev) => [
-              ...prev,
-              {
-                id: `${uniqueId}-${Date.now()}-final`,
-                type: "ai-final",
-                content: finalResult.explanation,
-                meta: finalResult,
-              },
-            ]);
-            if (
-              finalResult.responseType === "SQL" &&
-              !finalResult.requiresConfirmation
-            ) {
-              onApplyQueryFromAI(finalResult);
-            }
+            appendMessage({
+              role: "assistant",
+              content: assistantResponse,
+            });
+            appendDisplayBlock({
+              id: `${uniqueId}-${Date.now()}-final`,
+              type: "ai-final",
+              content: finalResult.explanation,
+              meta: finalResult,
+            });
+            onFinish(finalResult);
             break;
         }
       }
@@ -254,14 +206,11 @@ export const AIPanel = ({
           prev.filter((b) => b.id !== currentThinkingBlockId),
         );
       }
-      setDisplayBlocks((prev) => [
-        ...prev,
-        {
-          id: `${uniqueId}-${Date.now()}-catch-error`,
-          type: "error",
-          content: `An unexpected error occurred: ${error.message || "Unknown error"}`,
-        },
-      ]);
+      appendDisplayBlock({
+        id: `${uniqueId}-${Date.now()}-catch-error`,
+        type: "error",
+        content: `An unexpected error occurred: ${error.message || "Unknown error"}`,
+      });
     } finally {
       if (currentThinkingBlockId) {
         setDisplayBlocks((prev) =>
@@ -270,30 +219,81 @@ export const AIPanel = ({
       }
       setIsLoading(false);
     }
+  });
+
+  return {
+    handleSubmit,
+    messages: displayBlocks,
+    isLoading,
+  };
+};
+
+interface AIPanelProps {
+  onApplyQueryFromAI: (query: SqlAgentResponse) => void;
+  opened?: boolean;
+  isExecutingSQLFromAI?: boolean;
+}
+
+export const AIPanel = ({
+  onApplyQueryFromAI,
+  opened,
+  isExecutingSQLFromAI,
+}: AIPanelProps) => {
+  const [inputValue, setInputValue] = useState("");
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [maxRows, setMaxRows] = useState(2);
+
+  const {
+    handleSubmit: handleSubmitPrompt,
+    messages,
+    isLoading,
+  } = useGenerateSQLAgent({
+    onFinish: onApplyQueryFromAI,
+  });
+
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      const container = scrollAreaRef.current;
+      requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+      });
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      setMaxRows(opened ? 10 : 2);
+    });
+  }, [opened]);
+
+  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
+    if (e) e.preventDefault();
+    if (!inputValue.trim() || isLoading) return;
+
+    const userPrompt = inputValue;
+    setInputValue("");
+    await handleSubmitPrompt(userPrompt);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault(); // Prevent newline
-      // We need to cast the event target or use a different approach
-      // if handleSubmit requires the form event.
-      // Since handleSubmit doesn't strictly need it here, we can call it directly.
-      handleSubmit(); // Submit form
+      handleSubmit();
     }
   };
 
-  const renderBlockContent = (block: DisplayBlock, index: number) => {
+  const renderMessage = (message: DisplayBlock, index: number) => {
     let baseClasses = "rounded-md break-words text-sm w-full";
     if (index > 0) {
       baseClasses += " my-2";
     } else {
       baseClasses += " mb-2";
     }
-    switch (block.type) {
+    switch (message.type) {
       case "user":
         return (
           <div className={`user ${baseClasses} bg-muted mb-2 p-2 select-text!`}>
-            {block.content}
+            {message.content}
           </div>
         );
       case "ai-thinking":
@@ -302,7 +302,7 @@ export const AIPanel = ({
             className={`ai-thinking ${baseClasses} text-muted-foreground italic flex gap-1 text-xs`}
           >
             <Loader className="size-3 animate-spin flex-shrink-0" />
-            <span>{block.content}</span>
+            <span>{message.content}</span>
           </div>
         );
       case "ai-text":
@@ -310,11 +310,11 @@ export const AIPanel = ({
           <div
             className={`ai-text ${baseClasses} force-select-text markdown-body`}
           >
-            <Markdown>{block.content as string}</Markdown>
+            <Markdown>{message.content as string}</Markdown>
           </div>
         );
       case "ai-tool-call":
-        const metaContent = block.meta;
+        const metaContent = message.meta;
 
         return (
           <div
@@ -324,7 +324,7 @@ export const AIPanel = ({
               <CollapsibleTrigger>
                 <div className="cursor-pointer flex items-start gap-1">
                   <EyeIcon className="size-3 flex-shrink-0 relative top-[1px]" />
-                  <p className="text-left">{block.content as string}</p>
+                  <p className="text-left">{message.content as string}</p>
                 </div>
               </CollapsibleTrigger>
               <CollapsibleContent>
@@ -339,13 +339,13 @@ export const AIPanel = ({
         return (
           <div className={`ai-final ${baseClasses} my-2 force-select-text`}>
             <div className="markdown-body">
-              <Markdown>{block.content}</Markdown>
-              {block.meta.responseType === "SQL" && block.meta.query && (
+              <Markdown>{message.content}</Markdown>
+              {message.meta.responseType === "SQL" && message.meta.query && (
                 <div className="rounded relative">
                   <pre className="whitespace-pre-wrap p-2">
-                    {block.meta.query}
+                    {message.meta.query}
                   </pre>
-                  {block.meta.requiresConfirmation && (
+                  {message.meta.requiresConfirmation && (
                     <Button
                       size="icon"
                       onClick={() => {
@@ -358,7 +358,7 @@ export const AIPanel = ({
                                 variant="destructive"
                                 className="text-xs"
                                 onClick={() => {
-                                  onApplyQueryFromAI(block.meta);
+                                  onApplyQueryFromAI(message.meta);
                                   toast.dismiss();
                                 }}
                               >
@@ -394,11 +394,11 @@ export const AIPanel = ({
       ref={scrollAreaRef}
       className="h-full flex flex-col px-4 py-2 overflow-auto bg-muted/50"
     >
-      {displayBlocks.length > 0 && (
+      {messages.length > 0 && (
         <div className="flex-1">
-          {displayBlocks.map((block, index) => (
-            <React.Fragment key={block.id}>
-              {renderBlockContent(block, index)}
+          {messages.map((message, index) => (
+            <React.Fragment key={message.id}>
+              {renderMessage(message, index)}
             </React.Fragment>
           ))}
         </div>
