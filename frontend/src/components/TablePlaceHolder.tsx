@@ -48,7 +48,7 @@ const TablePlaceholder = ({
               animate ? "animate-pulse" : ""
             } ${
               (index + (striped === "odd" ? 0 : 1)) % 2 !== 0
-                ? "bg-muted/50"
+                ? "bg-muted/25"
                 : ""
             }`}
             style={{ height: `${ROW_HEIGHT_PX}px` }}

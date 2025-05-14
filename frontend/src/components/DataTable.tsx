@@ -70,7 +70,7 @@ function DataTable<TData>({ table, height }: DataTableProps<TData>) {
               return (
                 <TableRow
                   key={row.id}
-                  className={`${virtualRow.index % 2 === 0 ? "bg-muted/50" : "bg-background"}`}
+                  className={`${virtualRow.index % 2 === 0 ? "bg-muted/25" : "bg-background"}`}
                   style={{
                     height: `${virtualRow.size}px`,
                     transform: `translateY(${
