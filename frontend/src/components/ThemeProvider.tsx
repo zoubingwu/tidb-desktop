@@ -20,6 +20,7 @@ export const availableThemes = [
   "sunset-horizon",
   "twitter",
   "bubblegum",
+  "retro-arcade",
 ];
 
 // Map theme names to their primary font families
@@ -30,6 +31,7 @@ const fontsByTheme = {
   "quantum-rose": ["Poppins", "Playfair Display", "Space Mono"],
   "solar-dusk": ["Oxanium", "Merriweather", "Fira Code"],
   twitter: ["Open Sans"],
+  "retro-arcade": ["Outfit", "Space Mono"],
 };
 
 export type ThemeMode = "light" | "dark" | "system";

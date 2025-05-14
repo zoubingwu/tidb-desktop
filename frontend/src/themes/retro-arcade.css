@@ -1,0 +1,103 @@
+:root.retro-arcade {
+  --background: rgb(253, 246, 227);
+  --foreground: rgb(7, 54, 66);
+  --card: rgb(238, 232, 213);
+  --card-foreground: rgb(7, 54, 66);
+  --popover: rgb(238, 232, 213);
+  --popover-foreground: rgb(7, 54, 66);
+  --primary: rgb(211, 54, 130);
+  --primary-foreground: rgb(255, 255, 255);
+  --secondary: rgb(42, 161, 152);
+  --secondary-foreground: rgb(255, 255, 255);
+  --muted: rgb(147, 161, 161);
+  --muted-foreground: rgb(7, 54, 66);
+  --accent: rgb(203, 75, 22);
+  --accent-foreground: rgb(255, 255, 255);
+  --destructive: rgb(220, 50, 47);
+  --destructive-foreground: rgb(255, 255, 255);
+  --border: rgb(131, 148, 150);
+  --input: rgb(131, 148, 150);
+  --ring: rgb(211, 54, 130);
+  --chart-1: rgb(38, 139, 210);
+  --chart-2: rgb(42, 161, 152);
+  --chart-3: rgb(211, 54, 130);
+  --chart-4: rgb(203, 75, 22);
+  --chart-5: rgb(220, 50, 47);
+  --sidebar: rgb(253, 246, 227);
+  --sidebar-foreground: rgb(7, 54, 66);
+  --sidebar-primary: rgb(211, 54, 130);
+  --sidebar-primary-foreground: rgb(255, 255, 255);
+  --sidebar-accent: rgb(42, 161, 152);
+  --sidebar-accent-foreground: rgb(255, 255, 255);
+  --sidebar-border: rgb(131, 148, 150);
+  --sidebar-ring: rgb(211, 54, 130);
+  --font-sans: Outfit, sans-serif;
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: Space Mono, monospace;
+  --radius: 0.25rem;
+  --shadow-2xs: 2px 2px 4px 0px hsl(196 83% 10% / 0.07);
+  --shadow-xs: 2px 2px 4px 0px hsl(196 83% 10% / 0.07);
+  --shadow-sm: 2px 2px 4px 0px hsl(196 83% 10% / 0.15), 2px 1px 2px -1px
+    hsl(196 83% 10% / 0.15);
+  --shadow: 2px 2px 4px 0px hsl(196 83% 10% / 0.15), 2px 1px 2px -1px
+    hsl(196 83% 10% / 0.15);
+  --shadow-md: 2px 2px 4px 0px hsl(196 83% 10% / 0.15), 2px 2px 4px -1px
+    hsl(196 83% 10% / 0.15);
+  --shadow-lg: 2px 2px 4px 0px hsl(196 83% 10% / 0.15), 2px 4px 6px -1px
+    hsl(196 83% 10% / 0.15);
+  --shadow-xl: 2px 2px 4px 0px hsl(196 83% 10% / 0.15), 2px 8px 10px -1px
+    hsl(196 83% 10% / 0.15);
+  --shadow-2xl: 2px 2px 4px 0px hsl(196 83% 10% / 0.38);
+}
+
+.dark.retro-arcade {
+  --background: rgb(0, 43, 54);
+  --foreground: rgb(147, 161, 161);
+  --card: rgb(7, 54, 66);
+  --card-foreground: rgb(147, 161, 161);
+  --popover: rgb(7, 54, 66);
+  --popover-foreground: rgb(147, 161, 161);
+  --primary: rgb(211, 54, 130);
+  --primary-foreground: rgb(255, 255, 255);
+  --secondary: rgb(42, 161, 152);
+  --secondary-foreground: rgb(255, 255, 255);
+  --muted: rgb(88, 110, 117);
+  --muted-foreground: rgb(147, 161, 161);
+  --accent: rgb(203, 75, 22);
+  --accent-foreground: rgb(255, 255, 255);
+  --destructive: rgb(220, 50, 47);
+  --destructive-foreground: rgb(255, 255, 255);
+  --border: rgb(88, 110, 117);
+  --input: rgb(88, 110, 117);
+  --ring: rgb(211, 54, 130);
+  --chart-1: rgb(38, 139, 210);
+  --chart-2: rgb(42, 161, 152);
+  --chart-3: rgb(211, 54, 130);
+  --chart-4: rgb(203, 75, 22);
+  --chart-5: rgb(220, 50, 47);
+  --sidebar: rgb(0, 43, 54);
+  --sidebar-foreground: rgb(147, 161, 161);
+  --sidebar-primary: rgb(211, 54, 130);
+  --sidebar-primary-foreground: rgb(255, 255, 255);
+  --sidebar-accent: rgb(42, 161, 152);
+  --sidebar-accent-foreground: rgb(255, 255, 255);
+  --sidebar-border: rgb(88, 110, 117);
+  --sidebar-ring: rgb(211, 54, 130);
+  --font-sans: Outfit, sans-serif;
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: Space Mono, monospace;
+  --radius: 0.25rem;
+  --shadow-2xs: 2px 2px 4px 0px hsl(196 83% 10% / 0.07);
+  --shadow-xs: 2px 2px 4px 0px hsl(196 83% 10% / 0.07);
+  --shadow-sm: 2px 2px 4px 0px hsl(196 83% 10% / 0.15), 2px 1px 2px -1px
+    hsl(196 83% 10% / 0.15);
+  --shadow: 2px 2px 4px 0px hsl(196 83% 10% / 0.15), 2px 1px 2px -1px
+    hsl(196 83% 10% / 0.15);
+  --shadow-md: 2px 2px 4px 0px hsl(196 83% 10% / 0.15), 2px 2px 4px -1px
+    hsl(196 83% 10% / 0.15);
+  --shadow-lg: 2px 2px 4px 0px hsl(196 83% 10% / 0.15), 2px 4px 6px -1px
+    hsl(196 83% 10% / 0.15);
+  --shadow-xl: 2px 2px 4px 0px hsl(196 83% 10% / 0.15), 2px 8px 10px -1px
+    hsl(196 83% 10% / 0.15);
+  --shadow-2xl: 2px 2px 4px 0px hsl(196 83% 10% / 0.38);
+}
