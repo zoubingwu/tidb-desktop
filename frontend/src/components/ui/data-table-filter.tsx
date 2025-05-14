@@ -15,7 +15,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TooltipTrigger } from "@/components/ui/tooltip";
@@ -423,10 +422,10 @@ function ActiveFilterDisplay<TData, T extends ColumnDataType>({
   return (
     <div
       key={`filter-${filter.columnId}`}
-      className="flex h-6 items-center rounded-2xl border border-border bg-background shadow-xs text-xs"
+      className="flex items-center text-xs"
     >
       <FilterSubject meta={meta} />
-      <Separator orientation="vertical" />
+      {/* <Separator orientation="vertical" /> */}
       <FilterOperator
         column={column}
         columnMeta={meta}
@@ -434,7 +433,7 @@ function ActiveFilterDisplay<TData, T extends ColumnDataType>({
         table={table}
         // No onChange needed
       />
-      <Separator orientation="vertical" />
+      {/* <Separator orientation="vertical" /> */}
       <FilterValue
         id={filter.columnId} // Pass columnId
         column={column}
@@ -442,13 +441,14 @@ function ActiveFilterDisplay<TData, T extends ColumnDataType>({
         table={table}
         // No onChange needed
       />
-      <Separator orientation="vertical" />
+      {/* <Separator orientation="vertical" /> */}
       <Button
         variant="ghost"
-        className="rounded-none rounded-r-2xl text-xs w-7 h-full"
+        size="icon"
+        className=" text-xs"
         onClick={handleRemoveFilter} // Use context remove function
       >
-        <X className="size-4 -translate-x-0.5" />
+        <X className="size-3" />
       </Button>
     </div>
   );
