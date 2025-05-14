@@ -459,6 +459,10 @@ const MainDataView = ({
   const handleApplyAIGeneratedQuery = async (result: SqlAgentResponse) => {
     if (!result.success || !result.query) return;
 
+    if (result.responseType !== "SQL" || result.requiresConfirmation) {
+      return;
+    }
+
     const sqlQuery = result.query;
     const upperSqlQuery = sqlQuery.toUpperCase();
     const tableModifyingKeywords = [
