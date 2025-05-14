@@ -534,54 +534,6 @@ func (s *MetadataService) loadMetadata(connectionName string) (*ConnectionMetada
 	return &metadata, nil
 }
 
-// GenerateSimplifiedDDL generates a simplified DDL for a table
-func (s *MetadataService) GenerateSimplifiedDDL(table Table) string {
-	var ddl strings.Builder
-	ddl.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", table.Name))
-
-	for i, col := range table.Columns {
-		ddl.WriteString(fmt.Sprintf("  %s %s", col.Name, col.DataType))
-		if !col.IsNullable {
-			ddl.WriteString(" NOT NULL")
-		}
-		if col.AutoIncrement {
-			ddl.WriteString(" AUTO_INCREMENT")
-		}
-		if col.DefaultValue != nil {
-			if strVal, ok := col.DefaultValue.(string); ok {
-				ddl.WriteString(fmt.Sprintf(" DEFAULT '%s'", strings.ReplaceAll(strVal, "'", "''")))
-			} else {
-				ddl.WriteString(fmt.Sprintf(" DEFAULT %v", col.DefaultValue))
-			}
-		}
-		if col.DBComment != "" {
-			ddl.WriteString(fmt.Sprintf(" COMMENT '%s'", strings.ReplaceAll(col.DBComment, "'", "''")))
-		}
-		if i < len(table.Columns)-1 {
-			ddl.WriteString(",\n")
-		} else {
-			ddl.WriteString("\n") // Newline after the last column definition
-		}
-	}
-
-	var pkColumns []string
-	for _, col := range table.Columns {
-		if col.IsPrimaryKey {
-			pkColumns = append(pkColumns, col.Name)
-		}
-	}
-	if len(pkColumns) > 0 {
-		ddl.WriteString(fmt.Sprintf(",\n  PRIMARY KEY (%s)\n", strings.Join(pkColumns, ", ")))
-	}
-
-	ddl.WriteString(")")
-	if table.DBComment != "" {
-		ddl.WriteString(fmt.Sprintf(" COMMENT='%s'", strings.ReplaceAll(table.DBComment, "'", "''")))
-	}
-	ddl.WriteString(";")
-	return ddl.String()
-}
-
 // UpdateAIDescription updates the AI-generated description for a database component
 type DescriptionTarget struct {
 	Type       string `json:"type"`       // "database", "table", or "column"
