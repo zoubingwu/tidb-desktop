@@ -598,6 +598,7 @@ const MainDataView = ({
                 table={table}
                 totalRowCount={totalRowCount}
                 disabled={tableViewState !== "data"}
+                loading={tableViewState === "loading"}
               />
             )}
 

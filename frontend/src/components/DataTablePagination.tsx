@@ -12,12 +12,14 @@ interface DataTablePaginationProps<TData> {
   table: Table<TData>;
   totalRowCount?: number | null; // Pass total rows if available
   disabled?: boolean;
+  loading?: boolean;
 }
 
 export function DataTablePagination<TData>({
   table,
   totalRowCount,
   disabled,
+  loading,
 }: DataTablePaginationProps<TData>) {
   const { pageIndex, pageSize } = table.getState().pagination;
 
@@ -36,11 +38,13 @@ export function DataTablePagination<TData>({
   return (
     <div className="flex items-center space-x-2">
       {/* Row range display */}
-      <div className="flex items-center justify-center text-xs font-medium whitespace-nowrap select-text!">
-        {totalRowCount != null && totalRowCount > 0 // Check if totalRowCount is known and > 0
-          ? `${firstRowIndex} - ${lastRowIndex} of ${totalRowCount}`
-          : `${table.getRowCount()} rows`}
-      </div>
+      {!loading && (
+        <div className="flex items-center justify-center text-xs font-medium whitespace-nowrap select-text!">
+          {totalRowCount != null && totalRowCount > 0 // Check if totalRowCount is known and > 0
+            ? `${firstRowIndex} - ${lastRowIndex} of ${totalRowCount}`
+            : `${table.getRowCount()} rows`}
+        </div>
+      )}
 
       {/* Navigation buttons */}
       <div className="flex items-center space-x-2">
