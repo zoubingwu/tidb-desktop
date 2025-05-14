@@ -131,7 +131,7 @@ function SettingsModal({ children }: SettingsModalProps) {
     });
     setIsTestingConnection(false);
     if (result.success) {
-      toast.success("Connection successful", { description: result.message });
+      toast.success("Connection succeeded", { description: result.message });
     } else {
       toast.error("Connection failed", { description: result.error });
     }
