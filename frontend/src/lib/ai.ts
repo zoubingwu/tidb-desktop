@@ -22,30 +22,56 @@ const createModel = async (options?: ProviderConnectionOptions) => {
   const aiProviderSettings = await GetAIProviderSettings();
   const provider = options?.provider || aiProviderSettings.provider;
 
+  if (!provider) {
+    throw new Error(
+      "AI provider is not configured. Please select a provider and add the API key in Preferences.",
+    );
+  }
+
   if (provider === "openai") {
+    const apiKey = options?.apiKey || aiProviderSettings.openai?.apiKey;
+    if (!apiKey) {
+      throw new Error(
+        "OpenAI API key is missing. Please add it in Preferences.",
+      );
+    }
     const openai = createOpenAI({
-      apiKey: options?.apiKey || aiProviderSettings.openai?.apiKey,
+      apiKey,
       baseURL: options?.baseURL || aiProviderSettings.openai?.baseURL,
     });
     return openai.chat("gpt-4o");
   }
 
   if (provider === "anthropic") {
+    const apiKey = options?.apiKey || aiProviderSettings.anthropic?.apiKey;
+    if (!apiKey) {
+      throw new Error(
+        "Anthropic API key is missing. Please add it in Preferences.",
+      );
+    }
     const anthropic = createAnthropic({
-      apiKey: options?.apiKey || aiProviderSettings.anthropic?.apiKey,
+      apiKey,
       baseURL: options?.baseURL || aiProviderSettings.anthropic?.baseURL,
     });
     return anthropic.languageModel("claude-3-5-sonnet-latest");
   }
 
   if (provider === "openrouter") {
+    const apiKey = options?.apiKey || aiProviderSettings.openrouter?.apiKey;
+    if (!apiKey) {
+      throw new Error(
+        "OpenRouter API key is missing. Please add it in Preferences.",
+      );
+    }
     const openrouter = createOpenRouter({
-      apiKey: options?.apiKey || aiProviderSettings.openrouter?.apiKey,
+      apiKey,
     });
     return openrouter.chat("anthropic/claude-3.5-sonnet");
   }
 
-  throw new Error("No AI provider selected");
+  throw new Error(
+    "No AI provider selected or the selected provider is not supported. Please check your Preferences.",
+  );
 };
 
 type ProviderConnectionOptions = {
