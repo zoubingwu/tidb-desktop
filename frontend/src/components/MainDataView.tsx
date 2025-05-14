@@ -593,16 +593,18 @@ const MainDataView = ({
                     : "Ready"}
                 </span>
               </TooltipTrigger>
-              <TooltipContent className="max-h-60 w-auto max-w-lg overflow-y-auto rounded-md p-2 text-xs">
-                {activityLog.length > 0 ? (
-                  activityLog.map((log, index) => (
-                    <p key={index} className="whitespace-pre-wrap">
-                      {log}
-                    </p>
-                  ))
-                ) : (
-                  <p className="text-muted-foreground">No activity yet.</p>
-                )}
+              <TooltipContent>
+                <div className="max-h-60 w-auto max-w-lg overflow-y-auto rounded-md text-xs force-select-text">
+                  {activityLog.length > 0 ? (
+                    activityLog.map((log, index) => (
+                      <p key={index} className="whitespace-pre-wrap">
+                        {log}
+                      </p>
+                    ))
+                  ) : (
+                    <p>No activity yet.</p>
+                  )}
+                </div>
               </TooltipContent>
             </Tooltip>
           </div>
