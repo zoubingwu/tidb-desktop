@@ -15,6 +15,12 @@ const (
 	MetadataDirName = "metadata"
 )
 
+const (
+	DefaultOpenAIModel     = "gpt-4o"
+	DefaultAnthropicModel  = "claude-3-5-sonnet-latest"
+	DefaultOpenRouterModel = "anthropic/claude-3.5-sonnet"
+)
+
 // ThemeSettings holds theme preferences
 type ThemeSettings struct {
 	Mode      string `json:"mode"`      // e.g., "light", "dark", "system"
@@ -25,17 +31,20 @@ type ThemeSettings struct {
 type OpenAISettings struct {
 	APIKey  string `json:"apiKey,omitempty"`
 	BaseURL string `json:"baseURL,omitempty"` // Default: https://api.openai.com/v1
+	Model   string `json:"model,omitempty"`   // e.g., "gpt-4", "gpt-3.5-turbo"
 }
 
 // AnthropicSettings holds settings specific to Anthropic provider
 type AnthropicSettings struct {
 	APIKey  string `json:"apiKey,omitempty"`
 	BaseURL string `json:"baseURL,omitempty"` // Default: https://api.anthropic.com/v1
+	Model   string `json:"model,omitempty"`   // e.g., "claude-2", "claude-instant-1"
 }
 
 // OpenRouterSettings holds settings specific to OpenRouter provider
 type OpenRouterSettings struct {
 	APIKey string `json:"apiKey,omitempty"`
+	Model  string `json:"model,omitempty"` // e.g., "openrouter/auto"
 }
 
 // WindowSettings holds window geometry preferences
@@ -89,9 +98,9 @@ func NewConfigService() (*ConfigService, error) {
 			ThemeSettings: &ThemeSettings{Mode: "system", BaseTheme: "claude"}, // Default theme settings
 			AIProviderSettings: &AIProviderSettings{ // Initialize AI settings struct
 				CurrentProvider: "openai", // Default provider
-				OpenAI:          &OpenAISettings{},
-				Anthropic:       &AnthropicSettings{},
-				OpenRouter:      &OpenRouterSettings{},
+				OpenAI:          &OpenAISettings{Model: DefaultOpenAIModel},
+				Anthropic:       &AnthropicSettings{Model: DefaultAnthropicModel},
+				OpenRouter:      &OpenRouterSettings{Model: DefaultOpenRouterModel},
 			},
 			WindowSettings: &WindowSettings{Width: 1024, Height: 768, X: -1, Y: -1, IsMaximized: false}, // Default window settings (-1 for X/Y means center)
 		},
@@ -107,9 +116,9 @@ func NewConfigService() (*ConfigService, error) {
 				ThemeSettings: &ThemeSettings{Mode: "system", BaseTheme: "claude"},
 				AIProviderSettings: &AIProviderSettings{
 					CurrentProvider: "openai",
-					OpenAI:          &OpenAISettings{},
-					Anthropic:       &AnthropicSettings{},
-					OpenRouter:      &OpenRouterSettings{},
+					OpenAI:          &OpenAISettings{Model: DefaultOpenAIModel},
+					Anthropic:       &AnthropicSettings{Model: DefaultAnthropicModel},
+					OpenRouter:      &OpenRouterSettings{Model: DefaultOpenRouterModel},
 				},
 				WindowSettings: &WindowSettings{Width: 1024, Height: 768, X: -1, Y: -1, IsMaximized: false},
 			}
@@ -125,22 +134,28 @@ func NewConfigService() (*ConfigService, error) {
 		if service.config.AIProviderSettings == nil {
 			service.config.AIProviderSettings = &AIProviderSettings{
 				CurrentProvider: "openai", // Default provider
-				OpenAI:          &OpenAISettings{},
-				Anthropic:       &AnthropicSettings{},
-				OpenRouter:      &OpenRouterSettings{},
+				OpenAI:          &OpenAISettings{Model: DefaultOpenAIModel},
+				Anthropic:       &AnthropicSettings{Model: DefaultAnthropicModel},
+				OpenRouter:      &OpenRouterSettings{Model: DefaultOpenRouterModel},
 			}
 		} else {
 			if service.config.AIProviderSettings.CurrentProvider == "" { // Ensure default if loaded empty
 				service.config.AIProviderSettings.CurrentProvider = "openai"
 			}
 			if service.config.AIProviderSettings.OpenAI == nil {
-				service.config.AIProviderSettings.OpenAI = &OpenAISettings{}
+				service.config.AIProviderSettings.OpenAI = &OpenAISettings{Model: DefaultOpenAIModel}
+			} else if service.config.AIProviderSettings.OpenAI.Model == "" {
+				service.config.AIProviderSettings.OpenAI.Model = DefaultOpenAIModel // Default if model is empty
 			}
 			if service.config.AIProviderSettings.Anthropic == nil {
-				service.config.AIProviderSettings.Anthropic = &AnthropicSettings{}
+				service.config.AIProviderSettings.Anthropic = &AnthropicSettings{Model: DefaultAnthropicModel}
+			} else if service.config.AIProviderSettings.Anthropic.Model == "" {
+				service.config.AIProviderSettings.Anthropic.Model = DefaultAnthropicModel
 			}
 			if service.config.AIProviderSettings.OpenRouter == nil {
-				service.config.AIProviderSettings.OpenRouter = &OpenRouterSettings{}
+				service.config.AIProviderSettings.OpenRouter = &OpenRouterSettings{Model: DefaultOpenRouterModel}
+			} else if service.config.AIProviderSettings.OpenRouter.Model == "" {
+				service.config.AIProviderSettings.OpenRouter.Model = DefaultOpenRouterModel
 			}
 		}
 		// Ensure WindowSettings is initialized if it was missing
@@ -161,22 +176,28 @@ func NewConfigService() (*ConfigService, error) {
 		if service.config.AIProviderSettings == nil {
 			service.config.AIProviderSettings = &AIProviderSettings{
 				CurrentProvider: "openai", // Default provider
-				OpenAI:          &OpenAISettings{},
-				Anthropic:       &AnthropicSettings{},
-				OpenRouter:      &OpenRouterSettings{},
+				OpenAI:          &OpenAISettings{Model: DefaultOpenAIModel},
+				Anthropic:       &AnthropicSettings{Model: DefaultAnthropicModel},
+				OpenRouter:      &OpenRouterSettings{Model: DefaultOpenRouterModel},
 			}
 		} else {
 			if service.config.AIProviderSettings.CurrentProvider == "" { // Ensure default if loaded empty
 				service.config.AIProviderSettings.CurrentProvider = "openai"
 			}
 			if service.config.AIProviderSettings.OpenAI == nil {
-				service.config.AIProviderSettings.OpenAI = &OpenAISettings{}
+				service.config.AIProviderSettings.OpenAI = &OpenAISettings{Model: DefaultOpenAIModel}
+			} else if service.config.AIProviderSettings.OpenAI.Model == "" {
+				service.config.AIProviderSettings.OpenAI.Model = DefaultOpenAIModel // Default if model is empty
 			}
 			if service.config.AIProviderSettings.Anthropic == nil {
-				service.config.AIProviderSettings.Anthropic = &AnthropicSettings{}
+				service.config.AIProviderSettings.Anthropic = &AnthropicSettings{Model: DefaultAnthropicModel}
+			} else if service.config.AIProviderSettings.Anthropic.Model == "" {
+				service.config.AIProviderSettings.Anthropic.Model = DefaultAnthropicModel
 			}
 			if service.config.AIProviderSettings.OpenRouter == nil {
-				service.config.AIProviderSettings.OpenRouter = &OpenRouterSettings{}
+				service.config.AIProviderSettings.OpenRouter = &OpenRouterSettings{Model: DefaultOpenRouterModel}
+			} else if service.config.AIProviderSettings.OpenRouter.Model == "" {
+				service.config.AIProviderSettings.OpenRouter.Model = DefaultOpenRouterModel
 			}
 		}
 		// Ensure WindowSettings is initialized if it was missing in the loaded file
@@ -236,22 +257,28 @@ func (s *ConfigService) loadConfig() error {
 	if s.config.AIProviderSettings == nil {
 		s.config.AIProviderSettings = &AIProviderSettings{
 			CurrentProvider: "openai", // Default provider
-			OpenAI:          &OpenAISettings{},
-			Anthropic:       &AnthropicSettings{},
-			OpenRouter:      &OpenRouterSettings{},
+			OpenAI:          &OpenAISettings{Model: DefaultOpenAIModel},
+			Anthropic:       &AnthropicSettings{Model: DefaultAnthropicModel},
+			OpenRouter:      &OpenRouterSettings{Model: DefaultOpenRouterModel},
 		}
 	} else {
 		if s.config.AIProviderSettings.CurrentProvider == "" { // Ensure default if loaded empty
 			s.config.AIProviderSettings.CurrentProvider = "openai"
 		}
 		if s.config.AIProviderSettings.OpenAI == nil {
-			s.config.AIProviderSettings.OpenAI = &OpenAISettings{}
+			s.config.AIProviderSettings.OpenAI = &OpenAISettings{Model: DefaultOpenAIModel}
+		} else if s.config.AIProviderSettings.OpenAI.Model == "" {
+			s.config.AIProviderSettings.OpenAI.Model = DefaultOpenAIModel // Default if model is empty
 		}
 		if s.config.AIProviderSettings.Anthropic == nil {
-			s.config.AIProviderSettings.Anthropic = &AnthropicSettings{}
+			s.config.AIProviderSettings.Anthropic = &AnthropicSettings{Model: DefaultAnthropicModel}
+		} else if s.config.AIProviderSettings.Anthropic.Model == "" {
+			s.config.AIProviderSettings.Anthropic.Model = DefaultAnthropicModel
 		}
 		if s.config.AIProviderSettings.OpenRouter == nil {
-			s.config.AIProviderSettings.OpenRouter = &OpenRouterSettings{}
+			s.config.AIProviderSettings.OpenRouter = &OpenRouterSettings{Model: DefaultOpenRouterModel}
+		} else if s.config.AIProviderSettings.OpenRouter.Model == "" {
+			s.config.AIProviderSettings.OpenRouter.Model = DefaultOpenRouterModel
 		}
 	}
 	// Ensure WindowSettings is non-nil
@@ -415,9 +442,9 @@ func (s *ConfigService) GetAIProviderSettings() (*AIProviderSettings, error) {
 		// Should not happen due to initialization, but return default if it does
 		return &AIProviderSettings{
 			CurrentProvider: "openai", // Default provider
-			OpenAI:          &OpenAISettings{},
-			Anthropic:       &AnthropicSettings{},
-			OpenRouter:      &OpenRouterSettings{},
+			OpenAI:          &OpenAISettings{Model: DefaultOpenAIModel},
+			Anthropic:       &AnthropicSettings{Model: DefaultAnthropicModel},
+			OpenRouter:      &OpenRouterSettings{Model: DefaultOpenRouterModel},
 		}, nil
 	}
 	// Return a copy to prevent modification of internal state
@@ -426,13 +453,13 @@ func (s *ConfigService) GetAIProviderSettings() (*AIProviderSettings, error) {
 		settingsCopy.CurrentProvider = "openai" // Ensure CurrentProvider has a default if empty
 	}
 	if settingsCopy.OpenAI == nil {
-		settingsCopy.OpenAI = &OpenAISettings{}
+		settingsCopy.OpenAI = &OpenAISettings{Model: DefaultOpenAIModel}
 	} // Ensure nested are non-nil
 	if settingsCopy.Anthropic == nil {
-		settingsCopy.Anthropic = &AnthropicSettings{}
+		settingsCopy.Anthropic = &AnthropicSettings{Model: DefaultAnthropicModel}
 	}
 	if settingsCopy.OpenRouter == nil {
-		settingsCopy.OpenRouter = &OpenRouterSettings{}
+		settingsCopy.OpenRouter = &OpenRouterSettings{Model: DefaultOpenRouterModel}
 	}
 
 	return &settingsCopy, nil
@@ -460,13 +487,19 @@ func (s *ConfigService) SaveAIProviderSettings(settings AIProviderSettings) erro
 	// Ensure nested pointers are handled correctly before saving
 	// Check and initialize AI provider specific settings if they are nil
 	if settings.OpenAI == nil {
-		settings.OpenAI = &OpenAISettings{}
+		settings.OpenAI = &OpenAISettings{Model: DefaultOpenAIModel}
+	} else if settings.OpenAI.Model == "" {
+		settings.OpenAI.Model = DefaultOpenAIModel // Default if model is empty
 	}
 	if settings.Anthropic == nil {
-		settings.Anthropic = &AnthropicSettings{}
+		settings.Anthropic = &AnthropicSettings{Model: DefaultAnthropicModel}
+	} else if settings.Anthropic.Model == "" {
+		settings.Anthropic.Model = DefaultAnthropicModel // Default if model is empty
 	}
 	if settings.OpenRouter == nil {
-		settings.OpenRouter = &OpenRouterSettings{}
+		settings.OpenRouter = &OpenRouterSettings{Model: DefaultOpenRouterModel}
+	} else if settings.OpenRouter.Model == "" {
+		settings.OpenRouter.Model = DefaultOpenRouterModel // Default if model is empty
 	}
 
 	s.config.AIProviderSettings = &settings // Update the internal config
