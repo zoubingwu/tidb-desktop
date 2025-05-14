@@ -18,7 +18,7 @@ import {
 import { services } from "wailsjs/go/models";
 import { z } from "zod";
 
-const createModel = async (options?: TestProviderConnectionOptions) => {
+const createModel = async (options?: ProviderConnectionOptions) => {
   const aiProviderSettings = await GetAIProviderSettings();
   const provider = options?.provider || aiProviderSettings.provider;
 
@@ -48,14 +48,14 @@ const createModel = async (options?: TestProviderConnectionOptions) => {
   throw new Error("No AI provider selected");
 };
 
-type TestProviderConnectionOptions = {
+type ProviderConnectionOptions = {
   provider?: services.AIProviderSettings["provider"];
   apiKey?: string;
   baseURL?: string;
 };
 
 export const testProviderConnection = async (
-  options?: TestProviderConnectionOptions,
+  options?: ProviderConnectionOptions,
 ) => {
   const model = await createModel(options);
   try {
