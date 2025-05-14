@@ -8,7 +8,12 @@ import { LoadingTypewriter } from "@/components/ui/loading-typewriter";
 import { SqlAgentResponse, generateSqlAgent } from "@/lib/ai";
 import { useMemoizedFn } from "ahooks";
 import { type CoreMessage } from "ai";
-import { EyeIcon, Loader, PlayIcon, SendHorizonal } from "lucide-react";
+import {
+  CheckCircle2Icon,
+  Loader,
+  PlayIcon,
+  SendHorizonal,
+} from "lucide-react";
 import React, {
   useState,
   useRef,
@@ -323,7 +328,14 @@ export const AIPanel = ({
             <Collapsible>
               <CollapsibleTrigger>
                 <div className="cursor-pointer flex items-start gap-1">
-                  <EyeIcon className="size-3 flex-shrink-0 relative top-[1px]" />
+                  {message.status === "started" && (
+                    <Loader className="size-3 flex-shrink-0 animate-spin relative top-[1px]" />
+                  )}
+
+                  {message.status === "finished" && (
+                    <CheckCircle2Icon className="size-3 flex-shrink-0 relative top-[2px] text-green-600" />
+                  )}
+
                   <p className="text-left">{message.content as string}</p>
                 </div>
               </CollapsibleTrigger>
