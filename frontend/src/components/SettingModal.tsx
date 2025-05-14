@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { TooltipTrigger } from "@/components/ui/tooltip";
 import { testProviderConnection } from "@/lib/ai";
+import { AVAILABLE_MODELS } from "@/lib/ai";
 import { capitalize } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Loader } from "lucide-react";
@@ -38,19 +39,21 @@ import {
 import { services } from "wailsjs/go/models";
 
 // Local types mirroring the *data structure* of Go types, excluding methods
-interface LocalOpenAISettings {
-  apiKey?: string;
-  baseURL?: string;
-}
-interface LocalAnthropicSettings {
-  apiKey?: string;
-  baseURL?: string;
-}
-interface LocalOpenRouterSettings {
-  apiKey?: string;
-}
+type LocalOpenAISettings = Pick<
+  services.OpenAISettings,
+  "apiKey" | "baseURL" | "model"
+>;
+type LocalAnthropicSettings = Pick<
+  services.AnthropicSettings,
+  "apiKey" | "baseURL" | "model"
+>;
+type LocalOpenRouterSettings = Pick<
+  services.OpenRouterSettings,
+  "apiKey" | "model"
+>;
+
 interface LocalAIProviderSettings {
-  provider?: AIProvider;
+  provider: AIProvider;
   openai?: LocalOpenAISettings;
   anthropic?: LocalAnthropicSettings;
   openrouter?: LocalOpenRouterSettings;
@@ -68,9 +71,9 @@ function SettingsModal({ children }: SettingsModalProps) {
   const { baseTheme, mode, setBaseTheme, setMode } = useTheme();
   const [aiSettings, setAiSettings] = useImmer<LocalAIProviderSettings>({
     provider: "openai",
-    openai: { apiKey: "", baseURL: "" },
-    anthropic: { apiKey: "", baseURL: "" },
-    openrouter: { apiKey: "" },
+    openai: { apiKey: "", baseURL: "", model: "" },
+    anthropic: { apiKey: "", baseURL: "", model: "" },
+    openrouter: { apiKey: "", model: "" },
   });
 
   const [isTestingConnection, setIsTestingConnection] = useState(false);
@@ -79,8 +82,9 @@ function SettingsModal({ children }: SettingsModalProps) {
     useQuery({
       queryKey: ["aiSettings"],
       queryFn: async () => {
-        const settingsFromBackend: services.AIProviderSettings =
-          await GetAIProviderSettings();
+        const settingsFromBackend = await GetAIProviderSettings();
+
+        // copy the settings from the backend to the local state
         setAiSettings({
           provider: settingsFromBackend.provider as AIProvider,
           openai: { ...settingsFromBackend.openai },
@@ -121,7 +125,6 @@ function SettingsModal({ children }: SettingsModalProps) {
     setIsTestingConnection(true);
     const result = await testProviderConnection({
       provider: aiSettings.provider,
-      // @ts-ignore
       apiKey: aiSettings[aiSettings.provider]?.apiKey,
       // @ts-ignore
       baseURL: aiSettings[aiSettings.provider]?.baseURL,
@@ -174,7 +177,7 @@ function SettingsModal({ children }: SettingsModalProps) {
                 placeholder="sk-..."
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            {/* <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="openai-baseurl" className="text-right">
                 Base URL
               </Label>
@@ -187,7 +190,7 @@ function SettingsModal({ children }: SettingsModalProps) {
                 className="col-span-3"
                 placeholder="Optional, default: https://api.openai.com/v1"
               />
-            </div>
+            </div> */}
           </>
         );
       case "anthropic":
@@ -208,7 +211,7 @@ function SettingsModal({ children }: SettingsModalProps) {
                 placeholder="sk-ant-..."
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            {/* <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="anthropic-baseurl" className="text-right">
                 Base URL
               </Label>
@@ -221,7 +224,7 @@ function SettingsModal({ children }: SettingsModalProps) {
                 className="col-span-3"
                 placeholder="Optional, default: https://api.anthropic.com/v1"
               />
-            </div>
+            </div> */}
           </>
         );
       case "openrouter":
@@ -331,6 +334,53 @@ function SettingsModal({ children }: SettingsModalProps) {
         </fieldset>
 
         {renderAIProviderFields()}
+
+        {aiSettings.provider && (
+          <fieldset className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="ai-model" className="text-right">
+              Model
+            </Label>
+            <Select
+              value={aiSettings[aiSettings.provider]?.model ?? ""}
+              onValueChange={(value) => {
+                if (aiSettings.provider) {
+                  handleAISettingChange(aiSettings.provider, "model", value);
+                }
+              }}
+              disabled={!aiSettings.provider || isLoadingAISettings}
+            >
+              <SelectTrigger
+                className="col-span-3 shadow-none font-medium"
+                id="ai-model"
+              >
+                <SelectValue placeholder="Select a model" />
+              </SelectTrigger>
+              <SelectContent>
+                {isLoadingAISettings ? (
+                  <SelectItem value="loading" disabled>
+                    Loading...
+                  </SelectItem>
+                ) : aiSettings.provider &&
+                  AVAILABLE_MODELS[aiSettings.provider] &&
+                  AVAILABLE_MODELS[aiSettings.provider]!.length > 0 ? (
+                  AVAILABLE_MODELS[aiSettings.provider]!.map(
+                    (modelName: string) => (
+                      <SelectItem key={modelName} value={modelName}>
+                        {modelName}
+                      </SelectItem>
+                    ),
+                  )
+                ) : (
+                  <SelectItem value="no-models" disabled>
+                    {aiSettings.provider
+                      ? "No models available"
+                      : "Select a provider first"}
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </fieldset>
+        )}
 
         <DialogFooter className="mt-4 pt-4">
           <Button
