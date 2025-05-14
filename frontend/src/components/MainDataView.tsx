@@ -34,7 +34,7 @@ import {
 import { useLocalStorageState, useMemoizedFn } from "ahooks";
 import { Allotment as ReactSplitView } from "allotment";
 import { Loader, SettingsIcon, SparkleIcon, UnplugIcon } from "lucide-react";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useImmer } from "use-immer";
 import {
@@ -83,7 +83,7 @@ const MainDataView = ({
   onClose: () => void;
   connectionDetails: services.ConnectionDetails | null;
 }) => {
-  const [status, setStatus] = useState("");
+  const [activityLog, setActivityLog] = useState<string[]>([]);
   const [databaseTree, setDatabaseTree] = useImmer<DatabaseTreeData>([]);
   const [tableDataPrameters, setTableDataPrameters] = useImmer<{
     dbName: string;
@@ -100,6 +100,10 @@ const MainDataView = ({
 
   const resetTableDataPrameters = useMemoizedFn(() => {
     setTableDataPrameters(defaultTableDataParameters);
+  });
+
+  const appendActivityLog = useMemoizedFn((log: string) => {
+    setActivityLog((prev) => [...prev, log]);
   });
 
   const [sqlFromAI, setSqlFromAI] = useState<string>("");
@@ -184,17 +188,31 @@ const MainDataView = ({
     }
   }, [databases]);
 
+  const indexStartedRef = useRef(false);
+  const triggerIndexer = useMemoizedFn((force: boolean, dbName?: string) => {
+    if (indexStartedRef.current && !force) {
+      return;
+    }
+    indexStartedRef.current = true;
+
+    appendActivityLog("Indexing database...");
+    EventsEmit(
+      "metadata:extraction:start",
+      connectionDetails?.name!,
+      force,
+      dbName ?? "",
+    );
+  });
+
   useEffect(() => {
     const cleanup1 = EventsOn("metadata:extraction:failed", (error: string) => {
-      console.log("metadata extraction failed received", error);
-      setStatus("Index database failed");
+      appendActivityLog(`Indexing database failed: ${error}`);
     });
 
     const cleanup2 = EventsOn(
       "metadata:extraction:completed",
       (metadata: services.ConnectionMetadata) => {
-        console.log("metadata extraction completed received", metadata);
-        setStatus("");
+        appendActivityLog("Indexing database completed.");
         mergeDatabaseTree(
           Object.keys(metadata.databases).map((dbName) => ({
             dbName,
@@ -207,13 +225,7 @@ const MainDataView = ({
       },
     );
 
-    setStatus("Indexing database...");
-    EventsEmit(
-      "metadata:extraction:start",
-      connectionDetails?.name!,
-      false,
-      "",
-    );
+    triggerIndexer(false);
 
     return () => {
       cleanup1();
@@ -262,7 +274,7 @@ const MainDataView = ({
         : "SQL Query Result";
 
       try {
-        setStatus(`Fetching data from ${titleTarget}...`);
+        appendActivityLog(`Fetching data from ${titleTarget}...`);
         const res = await GetTableData(
           dbName,
           tableName,
@@ -270,11 +282,13 @@ const MainDataView = ({
           currentPageIndex * currentPageSize,
           filterObject,
         );
-        setStatus(`Fetched data from ${dbName}.${tableName}`);
+        appendActivityLog(`Fetched data from ${dbName}.${tableName}`);
 
         return res;
       } catch (error: any) {
-        setStatus(`Error fetching ${titleTarget}: ${error}`);
+        appendActivityLog(
+          `Error fetching ${titleTarget}: ${error?.message || String(error)}`,
+        );
         toast.error("Error fetching table data", {
           description: error,
         });
@@ -292,22 +306,20 @@ const MainDataView = ({
   } = useMutation<services.SQLResult, Error, string>({
     mutationFn: async (sqlToExecute: string) => {
       try {
-        setStatus("Executing SQL...");
+        appendActivityLog("Executing SQL...");
         const res = await ExecuteSQL(sqlToExecute);
 
         if (res.rowsAffected && res.rowsAffected > 0) {
-          setStatus(
-            `SQL executed successfully, ${res.rowsAffected} row${
-              res.rowsAffected === 1 ? "" : "s"
-            } affected`,
+          appendActivityLog(
+            `SQL executed successfully, ${res.rowsAffected} row${res.rowsAffected === 1 ? "" : "s"} affected`,
           );
         } else {
-          setStatus("SQL executed successfully");
+          appendActivityLog("SQL executed successfully");
         }
         return res;
       } catch (error: any) {
         const errorMessage = error?.message || String(error);
-        setStatus(errorMessage);
+        appendActivityLog(`SQL execution error: ${errorMessage}`);
         toast.error("Error executing SQL", { description: errorMessage });
         throw error;
       }
@@ -441,7 +453,6 @@ const MainDataView = ({
   );
 
   const handleClose = useMemoizedFn(() => {
-    setStatus("");
     onClose();
   });
 
@@ -469,13 +480,7 @@ const MainDataView = ({
         fetchTables(result.dbName);
       }
 
-      setStatus("Indexing database...");
-      EventsEmit(
-        "metadata:extraction:start",
-        connectionDetails?.name!,
-        true,
-        result.dbName,
-      );
+      triggerIndexer(true, result.dbName);
     }
   };
 
@@ -569,25 +574,31 @@ const MainDataView = ({
 
       <TooltipProvider delayDuration={0}>
         <div className="flex items-center justify-between px-2 py-0 bg-[var(--card)] gap-2 border-t border-[var(--muted)]/10">
-          <div className="flex text-xs gap-1 items-center flex-1">
+          <div className="flex text-xs gap-1 items-center flex-1 min-w-0">
             {tableViewState === "loading" && (
-              <Loader className="size-3 animate-spin" />
+              <Loader className="size-3 animate-spin mr-1" />
             )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
-                  className="relative top-[1px] truncate"
-                  style={{
-                    maxWidth: window.innerWidth - dbTreeWidth! - aiPanelWidth!,
-                  }}
+                  className="relative top-[1px] truncate block"
+                  style={{ maxWidth: "100%" }}
                 >
-                  {status}
+                  {activityLog.length > 0
+                    ? activityLog[activityLog.length - 1]
+                    : "Ready"}
                 </span>
               </TooltipTrigger>
-              <TooltipContent>
-                <p style={{ maxWidth: "var(--radix-tooltip-trigger-width)" }}>
-                  {status}
-                </p>
+              <TooltipContent className="max-h-60 w-auto max-w-lg overflow-y-auto rounded-md p-2 text-xs">
+                {activityLog.length > 0 ? (
+                  activityLog.map((log, index) => (
+                    <p key={index} className="whitespace-pre-wrap">
+                      {log}
+                    </p>
+                  ))
+                ) : (
+                  <p className="text-muted-foreground">No activity yet.</p>
+                )}
               </TooltipContent>
             </Tooltip>
           </div>
