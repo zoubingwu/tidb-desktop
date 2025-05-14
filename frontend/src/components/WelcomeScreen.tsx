@@ -102,7 +102,7 @@ const WelcomeScreen = () => {
             Welcome to TiDB Desktop
           </h1>
           <p className="text-muted-foreground">
-            Connect and manage your TiDB database connections
+            Connect and manage your TiDB/MySQL database connections
           </p>
         </div>
 
