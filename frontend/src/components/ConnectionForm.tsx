@@ -189,7 +189,13 @@ export function ConnectionFormDialog({
       }
 
       const inferredDetails = await inferConnectionDetails(textFromClipboard);
-      if (inferredDetails) {
+      if (
+        inferredDetails &&
+        inferredDetails.host &&
+        inferredDetails.port &&
+        inferredDetails.user &&
+        inferredDetails.password
+      ) {
         setFormState((prev) => {
           return { ...prev, ...inferredDetails };
         });
@@ -197,21 +203,23 @@ export function ConnectionFormDialog({
           const suggestedName = `${inferredDetails.user || "user"}@${inferredDetails.host.split(".")[0]}`;
           setConnectionName(suggestedName);
         }
-        toast.success("Details Inferred", {
+        toast.success("Details Loaded from Clipboard", {
           description:
             "Form updated from clipboard. Please verify and name the connection.",
         });
       } else {
-        toast.error("Inference Failed", {
-          description: "Could not infer details from clipboard content.",
+        toast.error("Could Not Extract Details", {
+          description:
+            "Could not extract all required connection details from the clipboard content.",
         });
       }
     } catch (error: any) {
-      toast.error("Clipboard Inference Error", {
+      toast.error("Error Reading Clipboard", {
         description:
           typeof error === "string"
             ? error
-            : error?.message || "Could not read or infer from clipboard.",
+            : error?.message ||
+              "Could not read or extract details from clipboard.",
       });
     } finally {
       setIsInferring(false);
@@ -235,7 +243,7 @@ export function ConnectionFormDialog({
             {/* Connection Name Input */}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="connectionName" className="text-right">
-                Name <span className="text-destructive">*</span>
+                Name
               </Label>
               <Input
                 id="connectionName"
@@ -351,7 +359,7 @@ export function ConnectionFormDialog({
               disabled={isTesting || isSaving || isInferring}
             >
               {isInferring && <Loader className="h-4 w-4 animate-spin" />}
-              {isInferring ? "Inferring..." : "Read from Clipboard"}
+              {isInferring ? "Reading Clipboard..." : "Read from Clipboard"}
             </Button>
             <div className="flex gap-2">
               <DialogClose asChild>
