@@ -265,6 +265,11 @@ export const AIPanel = ({
     }
   }, [messages]);
 
+  // Set maxRows for the TextareaAutosize component.
+  // When the panel is opened, maxRows is initially set to 2.
+  // Then, using requestAnimationFrame, it's updated to 10 after the initial render.
+  // This prevents the textarea from immediately rendering at its maximum height (10 rows)
+  // upon opening the panel, providing a smoother visual expansion.
   useEffect(() => {
     requestAnimationFrame(() => {
       setMaxRows(opened ? 10 : 2);
