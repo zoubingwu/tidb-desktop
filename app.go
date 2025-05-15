@@ -50,7 +50,7 @@ func (a *App) startup(ctx context.Context) {
 	// Load window settings
 	settings, err := a.configService.GetWindowSettings()
 	if err != nil {
-		services.Info("Warning: Failed to get window settings: %v. Using defaults.", err)
+		services.LogInfo("Warning: Failed to get window settings: %v. Using defaults.", err)
 		// Use Wails default (centered) or define fallback defaults here
 		runtime.WindowCenter(a.ctx)
 	} else {
@@ -75,7 +75,7 @@ func (a *App) startup(ctx context.Context) {
 		force := optionalData[1].(bool)
 		dbName := optionalData[2].(string)
 
-		services.Info("Metadata extraction started for connection '%s' and force extraction: %v", connectionName, force)
+		services.LogInfo("Metadata extraction started for connection '%s' and force extraction: %v", connectionName, force)
 
 		if connectionName == "" {
 			connectionName = a.activeConnection.Name
@@ -91,13 +91,13 @@ func (a *App) startup(ctx context.Context) {
 		}
 
 		if err != nil {
-			services.Error("Background metadata extraction failed for connection '%s': %v", connectionName, err)
+			services.LogError("Background metadata extraction failed for connection '%s': %v", connectionName, err)
 			runtime.EventsEmit(a.ctx, "metadata:extraction:failed", err.Error())
 		} else {
-			services.Info("Background metadata extraction completed for connection '%s'", connectionName)
+			services.LogInfo("Background metadata extraction completed for connection '%s'", connectionName)
 			// Save the freshly extracted/retrieved metadata to disk
 			if errSave := a.metadataService.SaveMetadata(connectionName); errSave != nil {
-				services.Error("Failed to save metadata after extraction for connection '%s': %v", connectionName, errSave)
+				services.LogError("Failed to save metadata after extraction for connection '%s': %v", connectionName, errSave)
 				// Optionally, emit a different event or append to the error message for the frontend
 				// For now, the main completion event is still emitted, but we log the save error.
 			}
@@ -122,9 +122,9 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 
 	if err := a.configService.SaveWindowSettings(settings); err != nil {
-		services.Info("Error saving window settings on shutdown: %v", err)
+		services.LogInfo("Error saving window settings on shutdown: %v", err)
 	} else {
-		services.Info("Window settings saved on shutdown: %+v", settings)
+		services.LogInfo("Window settings saved on shutdown: %+v", settings)
 	}
 
 	// Perform other cleanup here if needed
@@ -148,7 +148,7 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 	if a.ctx == nil {
 		return nil, fmt.Errorf("app context not initialized")
 	}
-	services.Info("Attempting to connect using saved connection: %s", name)
+	services.LogInfo("Attempting to connect using saved connection: %s", name)
 	details, found, err := a.configService.GetConnection(name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve saved connection '%s': %w", name, err)
@@ -168,12 +168,12 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 
 	// Store as the *active* connection for this session
 	a.activeConnection = &details
-	services.Info("Connection '%s' activated successfully", name)
+	services.LogInfo("Connection '%s' activated successfully", name)
 
 	// Record usage timestamp in config
 	if err := a.configService.RecordConnectionUsage(name); err != nil {
 		// Log the error but don't fail the connection for this
-		services.Info("Warning: Failed to record usage for connection '%s': %v", name, err)
+		services.LogInfo("Warning: Failed to record usage for connection '%s': %v", name, err)
 	}
 
 	// Emit event to notify frontend the active session is ready
@@ -184,7 +184,7 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 
 // Disconnect clears the active connection details for the current session.
 func (a *App) Disconnect() {
-	services.Info("Disconnecting session...")
+	services.LogInfo("Disconnecting session...")
 	a.activeConnection = nil
 	// Optionally emit an event if the frontend needs to react specifically
 	runtime.EventsEmit(a.ctx, "connection:disconnected") // Notify frontend
@@ -207,13 +207,13 @@ func (a *App) SaveConnection(name string, details services.ConnectionDetails) er
 	if name == "" {
 		return fmt.Errorf("connection name cannot be empty")
 	}
-	services.Info("Saving connection details for: %s", name)
+	services.LogInfo("Saving connection details for: %s", name)
 	err := a.configService.AddOrUpdateConnection(name, details)
 	if err != nil {
-		services.Info("Failed to save connection '%s': %v", name, err)
+		services.LogInfo("Failed to save connection '%s': %v", name, err)
 		return err
 	}
-	services.Info("Connection '%s' saved successfully", name)
+	services.LogInfo("Connection '%s' saved successfully", name)
 	return nil
 }
 
@@ -222,7 +222,7 @@ func (a *App) DeleteSavedConnection(name string) error {
 	if name == "" {
 		return fmt.Errorf("connection name cannot be empty")
 	}
-	services.Info("Deleting saved connection '%s'\n", name)
+	services.LogInfo("Deleting saved connection '%s'\n", name)
 	err := a.configService.DeleteConnection(name)
 	if err != nil {
 		return err
@@ -246,7 +246,7 @@ func (a *App) DeleteSavedConnection(name string) error {
 
 // ExecuteSQL uses the *active session connection* details to execute a query.
 func (a *App) ExecuteSQL(query string) (*services.SQLResult, error) {
-	services.Info("Executing SQL with active connection: %s", query)
+	services.LogInfo("Executing SQL with active connection: %s", query)
 	if a.ctx == nil {
 		return nil, fmt.Errorf("app context not initialized")
 	}
@@ -255,10 +255,10 @@ func (a *App) ExecuteSQL(query string) (*services.SQLResult, error) {
 	}
 	result, err := a.dbService.ExecuteSQL(a.ctx, *a.activeConnection, query)
 	if err != nil {
-		services.Info("SQL execution failed: %v", err)
+		services.LogInfo("SQL execution failed: %v", err)
 		return nil, err
 	}
-	services.Info("SQL execution completed successfully")
+	services.LogInfo("SQL execution completed successfully")
 	return result, nil
 }
 
@@ -328,7 +328,7 @@ func (a *App) GetThemeSettings() (*services.ThemeSettings, error) {
 
 // SaveThemeSettings saves the provided theme settings to the config file.
 func (a *App) SaveThemeSettings(settings services.ThemeSettings) error {
-	services.Info("Saving theme settings: %+v\n", settings)
+	services.LogInfo("Saving theme settings: %+v\n", settings)
 	if a.configService == nil {
 		return fmt.Errorf("config service not initialized")
 	}
@@ -347,7 +347,7 @@ func (a *App) GetAIProviderSettings() (*services.AIProviderSettings, error) {
 
 // SaveAIProviderSettings saves the provided AI provider settings to the config file.
 func (a *App) SaveAIProviderSettings(settings services.AIProviderSettings) error {
-	services.Info("Saving AI provider settings")
+	services.LogInfo("Saving AI provider settings")
 	if a.configService == nil {
 		return fmt.Errorf("config service not initialized")
 	}

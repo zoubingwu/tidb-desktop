@@ -131,7 +131,7 @@ func NewConfigService() (*ConfigService, error) {
 
 	// Attempt to load existing config, potentially overwriting defaults
 	if err := service.loadConfig(); err != nil {
-		Info("Warning: Failed to load config file %s: %v. Starting with default config.", configFilePath, err)
+		LogInfo("Warning: Failed to load config file %s: %v. Starting with default config.", configFilePath, err)
 		// Defaults are already set, ensure map is initialized if somehow config became nil (unlikely here)
 		if service.config == nil { // Defensive check
 			service.config = &ConfigData{
@@ -158,7 +158,7 @@ func NewConfigService() (*ConfigService, error) {
 			}
 		}
 	} else {
-		Info("Config loaded successfully from %s", configFilePath)
+		LogInfo("Config loaded successfully from %s", configFilePath)
 		// Ensure all parts of the config are present and have defaults if missing from the loaded file.
 		// loadConfig itself handles most of this, but we can double-check top-level structs here.
 		if service.config.ThemeSettings == nil {
@@ -209,7 +209,7 @@ func (s *ConfigService) loadConfig() error {
 	defer s.mu.Unlock()
 
 	if _, err := os.Stat(s.configPath); os.IsNotExist(err) {
-		Info("Config file %s does not exist. Using defaults set in NewConfigService.", s.configPath)
+		LogInfo("Config file %s does not exist. Using defaults set in NewConfigService.", s.configPath)
 		// Defaults are already set in NewConfigService, no need to re-initialize here.
 		// s.config should already have default values.
 		return nil
@@ -221,7 +221,7 @@ func (s *ConfigService) loadConfig() error {
 	}
 
 	if len(data) == 0 {
-		Info("Config file %s is empty. Using defaults set in NewConfigService.", s.configPath)
+		LogInfo("Config file %s is empty. Using defaults set in NewConfigService.", s.configPath)
 		// Defaults are already set in NewConfigService.
 		return nil
 	}
@@ -270,7 +270,7 @@ func (s *ConfigService) saveConfig() error {
 	if err := os.WriteFile(s.configPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file %s: %w", s.configPath, err)
 	}
-	Info("Config saved successfully to %s", s.configPath)
+	LogInfo("Config saved successfully to %s", s.configPath)
 	return nil
 }
 
@@ -346,12 +346,12 @@ func (s *ConfigService) RecordConnectionUsage(name string) error {
 	defer s.mu.Unlock()
 
 	if s.config == nil || s.config.Connections == nil {
-		Info("Warning: Attempted to record usage for connection '%s' but config or connections map is nil", name)
+		LogInfo("Warning: Attempted to record usage for connection '%s' but config or connections map is nil", name)
 		return nil
 	}
 	details, found := s.config.Connections[name]
 	if !found {
-		Info("Warning: Attempted to record usage for non-existent connection '%s'", name)
+		LogInfo("Warning: Attempted to record usage for non-existent connection '%s'", name)
 		return nil
 	}
 
@@ -367,7 +367,7 @@ func (s *ConfigService) GetThemeSettings() (*ThemeSettings, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.config == nil || s.config.ThemeSettings == nil {
-		Info("ThemeSettings were nil in config, returning defaults.")
+		LogInfo("ThemeSettings were nil in config, returning defaults.")
 		return newDefaultThemeSettings(), nil
 	}
 	settingsCopy := *s.config.ThemeSettings // Return a copy
@@ -399,7 +399,7 @@ func (s *ConfigService) GetAIProviderSettings() (*AIProviderSettings, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.config == nil || s.config.AIProviderSettings == nil {
-		Info("AIProviderSettings were nil in config, returning defaults.")
+		LogInfo("AIProviderSettings were nil in config, returning defaults.")
 		return newDefaultAIProviderSettings(), nil
 	}
 	// Return a copy and ensure sub-settings are valid
@@ -422,7 +422,7 @@ func (s *ConfigService) SaveAIProviderSettings(settings AIProviderSettings) erro
 		}
 	}
 	if !isValidProvider {
-		Info("Warning: Invalid CurrentProvider '%s'. Defaulting to '%s'.", settings.CurrentProvider, DefaultAIProvider)
+		LogInfo("Warning: Invalid CurrentProvider '%s'. Defaulting to '%s'.", settings.CurrentProvider, DefaultAIProvider)
 		settings.CurrentProvider = DefaultAIProvider
 	}
 
@@ -443,7 +443,7 @@ func (s *ConfigService) GetWindowSettings() (*WindowSettings, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.config == nil || s.config.WindowSettings == nil {
-		Info("WindowSettings were nil in config, returning defaults.")
+		LogInfo("WindowSettings were nil in config, returning defaults.")
 		return newDefaultWindowSettings(), nil
 	}
 	settingsCopy := *s.config.WindowSettings // Return a copy
@@ -467,6 +467,6 @@ func (s *ConfigService) SaveWindowSettings(settings WindowSettings) error {
 		s.config = &ConfigData{}
 	}
 	s.config.WindowSettings = &settings
-	Info("Saving window settings: %+v", settings)
+	LogInfo("Saving window settings: %+v", settings)
 	return s.saveConfig()
 }

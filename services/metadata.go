@@ -131,14 +131,14 @@ func (s *MetadataService) deepCopyConnectionMetadata(original *ConnectionMetadat
 	}
 	bytes, err := json.Marshal(original)
 	if err != nil {
-		Error("deepCopyConnectionMetadata: Failed to marshal: %v", err)
+		LogError("deepCopyConnectionMetadata: Failed to marshal: %v", err)
 		// Depending on how critical, might panic or return nil/error
 		return nil // Or a new empty one
 	}
 	var copy ConnectionMetadata
 	err = json.Unmarshal(bytes, &copy)
 	if err != nil {
-		Error("deepCopyConnectionMetadata: Failed to unmarshal: %v", err)
+		LogError("deepCopyConnectionMetadata: Failed to unmarshal: %v", err)
 		return nil // Or a new empty one
 	}
 	return &copy
@@ -154,15 +154,15 @@ type DescriptionTarget struct {
 // performExtractionAndCacheUpdate_UNLOCKED assumes caller holds the write lock on s.mu.
 // This is the core extraction logic that fetches data from the DB and updates the cache.
 func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.Context, connectionName string, optionalDbName ...string) (*ConnectionMetadata, error) {
-	Info("performExtractionAndCacheUpdate_UNLOCKED: Starting for connection: %s, Optional DBs: %v", connectionName, optionalDbName)
+	LogInfo("performExtractionAndCacheUpdate_UNLOCKED: Starting for connection: %s, Optional DBs: %v", connectionName, optionalDbName)
 
 	connDetails, existsP, errP := s.configService.GetConnection(connectionName)
 	if errP != nil {
-		Error("performExtractionAndCacheUpdate_UNLOCKED: Failed to get conn details for %s: %v", connectionName, errP)
+		LogError("performExtractionAndCacheUpdate_UNLOCKED: Failed to get conn details for %s: %v", connectionName, errP)
 		return nil, fmt.Errorf("failed to get connection details for %s: %w", connectionName, errP)
 	}
 	if !existsP {
-		Error("performExtractionAndCacheUpdate_UNLOCKED: Connection %s not found", connectionName)
+		LogError("performExtractionAndCacheUpdate_UNLOCKED: Connection %s not found", connectionName)
 		return nil, fmt.Errorf("connection %s not found", connectionName)
 	}
 
@@ -174,29 +174,29 @@ func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.C
 	}
 
 	if isPartialExtraction {
-		Info("performExtractionAndCacheUpdate_UNLOCKED: Partial mode for connection '%s', database '%s'", connectionName, targetDbName)
+		LogInfo("performExtractionAndCacheUpdate_UNLOCKED: Partial mode for connection '%s', database '%s'", connectionName, targetDbName)
 		existingMetaInCache, foundInCache := s.cachedMetadata[connectionName]
 		if foundInCache {
-			Info("performExtractionAndCacheUpdate_UNLOCKED: Using existing metadata from cache for merge: %s", connectionName)
+			LogInfo("performExtractionAndCacheUpdate_UNLOCKED: Using existing metadata from cache for merge: %s", connectionName)
 			currentConnMetadataToBuildUpon = s.deepCopyConnectionMetadata(existingMetaInCache)
 		} else {
 			loadedFromFile, loadErr := s.loadMetadataFromFile(connectionName) // loadMetadataFromFile does not use cache
 			if loadErr != nil {
-				Error("performExtractionAndCacheUpdate_UNLOCKED: Failed to load existing metadata from file for %s to merge: %v. Proceeding as if new.", connectionName, loadErr)
+				LogError("performExtractionAndCacheUpdate_UNLOCKED: Failed to load existing metadata from file for %s to merge: %v. Proceeding as if new.", connectionName, loadErr)
 			} else if loadedFromFile != nil {
-				Info("performExtractionAndCacheUpdate_UNLOCKED: Loaded existing metadata from file for %s to merge.", connectionName)
+				LogInfo("performExtractionAndCacheUpdate_UNLOCKED: Loaded existing metadata from file for %s to merge.", connectionName)
 				currentConnMetadataToBuildUpon = loadedFromFile
 			}
 		}
 		if currentConnMetadataToBuildUpon == nil {
-			Info("performExtractionAndCacheUpdate_UNLOCKED: No existing metadata for partial update on %s. Creating new structure.", connectionName)
+			LogInfo("performExtractionAndCacheUpdate_UNLOCKED: No existing metadata for partial update on %s. Creating new structure.", connectionName)
 			currentConnMetadataToBuildUpon = &ConnectionMetadata{
 				ConnectionName: connectionName,
 				Databases:      make(map[string]DatabaseMetadata),
 			}
 		}
 	} else {
-		Info("performExtractionAndCacheUpdate_UNLOCKED: Full mode for connection '%s'.", connectionName)
+		LogInfo("performExtractionAndCacheUpdate_UNLOCKED: Full mode for connection '%s'.", connectionName)
 		currentConnMetadataToBuildUpon = &ConnectionMetadata{
 			ConnectionName: connectionName,
 			Databases:      make(map[string]DatabaseMetadata),
@@ -206,14 +206,14 @@ func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.C
 	var userDatabasesToProcess []string
 	if isPartialExtraction {
 		if targetDbName == "" {
-			Error("performExtractionAndCacheUpdate_UNLOCKED: Partial extraction for %s but targetDbName is empty.", connectionName)
+			LogError("performExtractionAndCacheUpdate_UNLOCKED: Partial extraction for %s but targetDbName is empty.", connectionName)
 			return nil, fmt.Errorf("internal error: partial extraction for %s with empty target DB", connectionName)
 		}
 		userDatabasesToProcess = []string{targetDbName}
 	} else {
 		allDatabases, errDbList := s.dbService.ListDatabases(ctx, connDetails)
 		if errDbList != nil {
-			Error("performExtractionAndCacheUpdate_UNLOCKED: Failed to list databases for %s: %v", connectionName, errDbList)
+			LogError("performExtractionAndCacheUpdate_UNLOCKED: Failed to list databases for %s: %v", connectionName, errDbList)
 			return nil, fmt.Errorf("failed to list databases for %s: %w", connectionName, errDbList)
 		}
 		userDatabasesToProcess = make([]string, 0, len(allDatabases))
@@ -223,14 +223,14 @@ func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.C
 			}
 		}
 		if len(userDatabasesToProcess) == 0 {
-			Info("performExtractionAndCacheUpdate_UNLOCKED: No user databases for full extraction on '%s'. Caching empty metadata.", connectionName)
+			LogInfo("performExtractionAndCacheUpdate_UNLOCKED: No user databases for full extraction on '%s'. Caching empty metadata.", connectionName)
 			currentConnMetadataToBuildUpon.LastExtracted = time.Now()
 			s.cachedMetadata[connectionName] = currentConnMetadataToBuildUpon
 			return currentConnMetadataToBuildUpon, nil
 		}
 	}
 
-	Info("performExtractionAndCacheUpdate_UNLOCKED: Processing %d database(s) for connection '%s': %v", len(userDatabasesToProcess), connectionName, userDatabasesToProcess)
+	LogInfo("performExtractionAndCacheUpdate_UNLOCKED: Processing %d database(s) for connection '%s': %v", len(userDatabasesToProcess), connectionName, userDatabasesToProcess)
 
 	type dbResult struct {
 		dbName   string
@@ -241,7 +241,7 @@ func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.C
 
 	for _, dbNameToProcess := range userDatabasesToProcess {
 		go func(currentDbName string) {
-			Info("performExtractionAndCacheUpdate_UNLOCKED: Goroutine started for database: %s (Connection: %s)", currentDbName, connectionName)
+			LogInfo("performExtractionAndCacheUpdate_UNLOCKED: Goroutine started for database: %s (Connection: %s)", currentDbName, connectionName)
 			connDetailsCopy := connDetails // Copy base connection details from outer scope
 			connDetailsCopy.DBName = currentDbName
 
@@ -252,7 +252,7 @@ func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.C
 			}
 
 			if len(tables) == 0 {
-				Info("performExtractionAndCacheUpdate_UNLOCKED: No tables found in database: %s, creating empty metadata entry.", currentDbName)
+				LogInfo("performExtractionAndCacheUpdate_UNLOCKED: No tables found in database: %s, creating empty metadata entry.", currentDbName)
 				dbResultsChan <- dbResult{dbName: currentDbName, metadata: DatabaseMetadata{
 					Name:   currentDbName,
 					Tables: []Table{},
@@ -286,7 +286,7 @@ func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.C
 
 			for _, tableName := range tables {
 				go func(currentTableName string) {
-					Info("performExtractionAndCacheUpdate_UNLOCKED: Goroutine started for table: %s.%s", currentDbName, currentTableName)
+					LogInfo("performExtractionAndCacheUpdate_UNLOCKED: Goroutine started for table: %s.%s", currentDbName, currentTableName)
 					table := Table{
 						Name:        currentTableName,
 						Columns:     make([]Column, 0),
@@ -423,7 +423,7 @@ func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.C
 				result := <-tableResultsChan
 				if result.err != nil {
 					errMsg := result.err
-					Error("performExtractionAndCacheUpdate_UNLOCKED: Error processing table for database '%s': %v", currentDbName, errMsg)
+					LogError("performExtractionAndCacheUpdate_UNLOCKED: Error processing table for database '%s': %v", currentDbName, errMsg)
 					// Propagate the first error encountered for a table within this DB's processing
 					if firstTableError == nil {
 						firstTableError = errMsg
@@ -448,7 +448,7 @@ func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.C
 					// This case should ideally not happen if all tables processed successfully without error above
 					// and no error was reported. If a table is missing, it implies an issue.
 					errMissingTable := fmt.Errorf("internal logic error: table '%s' not found in processed map for db '%s'", tableNameFromList, currentDbName)
-					Error("performExtractionAndCacheUpdate_UNLOCKED: %v", errMissingTable)
+					LogError("performExtractionAndCacheUpdate_UNLOCKED: %v", errMissingTable)
 					dbResultsChan <- dbResult{dbName: currentDbName, err: errMissingTable}
 					return
 				}
@@ -476,7 +476,7 @@ func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.C
 	for i := 0; i < len(userDatabasesToProcess); i++ {
 		result := <-dbResultsChan
 		if result.err != nil {
-			Error("performExtractionAndCacheUpdate_UNLOCKED: Error processing database %s: %v", result.dbName, result.err)
+			LogError("performExtractionAndCacheUpdate_UNLOCKED: Error processing database %s: %v", result.dbName, result.err)
 			if firstOverallExtractionError == nil {
 				firstOverallExtractionError = result.err
 			}
@@ -488,7 +488,7 @@ func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.C
 	}
 
 	if firstOverallExtractionError != nil {
-		Error("performExtractionAndCacheUpdate_UNLOCKED: Failed overall for connection '%s' due to first error: %v. Cache NOT updated with partial/failed results.", connectionName, firstOverallExtractionError)
+		LogError("performExtractionAndCacheUpdate_UNLOCKED: Failed overall for connection '%s' due to first error: %v. Cache NOT updated with partial/failed results.", connectionName, firstOverallExtractionError)
 		return nil, firstOverallExtractionError
 	}
 
@@ -503,9 +503,9 @@ func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.C
 	s.cachedMetadata[connectionName] = currentConnMetadataToBuildUpon // Update cache
 
 	if isPartialExtraction {
-		Info("performExtractionAndCacheUpdate_UNLOCKED: Successfully refreshed in-memory metadata for database '%s' in connection '%s'.", targetDbName, connectionName)
+		LogInfo("performExtractionAndCacheUpdate_UNLOCKED: Successfully refreshed in-memory metadata for database '%s' in connection '%s'.", targetDbName, connectionName)
 	} else {
-		Info("performExtractionAndCacheUpdate_UNLOCKED: Successfully performed full extraction and updated in-memory metadata for connection '%s'. Processed %d database(s).", connectionName, len(userDatabasesToProcess))
+		LogInfo("performExtractionAndCacheUpdate_UNLOCKED: Successfully performed full extraction and updated in-memory metadata for connection '%s'. Processed %d database(s).", connectionName, len(userDatabasesToProcess))
 	}
 	return currentConnMetadataToBuildUpon, nil
 }
@@ -513,7 +513,7 @@ func (s *MetadataService) performExtractionAndCacheUpdate_UNLOCKED(ctx context.C
 // ExtractMetadata (Public API) refreshes the cache for one or all DBs of a connection.
 // It handles locking and calls the internal unlocked extraction function.
 func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName string, optionalDbName ...string) (*ConnectionMetadata, error) {
-	Info("ExtractMetadata (Public): Request to refresh metadata for connection: %s, Optional DBs: %v", connectionName, optionalDbName)
+	LogInfo("ExtractMetadata (Public): Request to refresh metadata for connection: %s, Optional DBs: %v", connectionName, optionalDbName)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -522,14 +522,14 @@ func (s *MetadataService) ExtractMetadata(ctx context.Context, connectionName st
 		// Error already logged by performExtractionAndCacheUpdate_UNLOCKED
 		return nil, err
 	}
-	Info("ExtractMetadata (Public): In-memory metadata updated for %s. Call SaveMetadata to persist.", connectionName)
+	LogInfo("ExtractMetadata (Public): In-memory metadata updated for %s. Call SaveMetadata to persist.", connectionName)
 	return newOrUpdatedMeta, nil
 }
 
 // GetMetadata retrieves metadata for a connection.
 // It loads from file or extracts if not in cache or stale.
 func (s *MetadataService) GetMetadata(ctx context.Context, connectionName string) (*ConnectionMetadata, error) {
-	Info("GetMetadata: Request for connection: %s", connectionName)
+	LogInfo("GetMetadata: Request for connection: %s", connectionName)
 
 	s.mu.RLock()
 	cachedMeta, foundInCache := s.cachedMetadata[connectionName]
@@ -537,7 +537,7 @@ func (s *MetadataService) GetMetadata(ctx context.Context, connectionName string
 	s.mu.RUnlock()
 
 	if isFresh {
-		Info("GetMetadata: Using fresh metadata from cache for connection: %s (age: %v)", connectionName, time.Since(cachedMeta.LastExtracted))
+		LogInfo("GetMetadata: Using fresh metadata from cache for connection: %s (age: %v)", connectionName, time.Since(cachedMeta.LastExtracted))
 		return cachedMeta, nil
 	}
 
@@ -547,42 +547,42 @@ func (s *MetadataService) GetMetadata(ctx context.Context, connectionName string
 	// Double-check cache after acquiring write lock
 	cachedMeta, foundInCache = s.cachedMetadata[connectionName]
 	if foundInCache && time.Since(cachedMeta.LastExtracted) < StaleMetadataThreshold {
-		Info("GetMetadata: Fresh metadata found in cache (after lock) for connection: %s", connectionName)
+		LogInfo("GetMetadata: Fresh metadata found in cache (after lock) for connection: %s", connectionName)
 		return cachedMeta, nil
 	}
 
 	if foundInCache {
-		Info("GetMetadata: Cached metadata for %s is stale (age: %v). Will attempt load/extract.", connectionName, time.Since(cachedMeta.LastExtracted))
+		LogInfo("GetMetadata: Cached metadata for %s is stale (age: %v). Will attempt load/extract.", connectionName, time.Since(cachedMeta.LastExtracted))
 	} else {
-		Info("GetMetadata: Metadata for %s not in cache. Will attempt load/extract.", connectionName)
+		LogInfo("GetMetadata: Metadata for %s not in cache. Will attempt load/extract.", connectionName)
 	}
 
 	loadedFromFile, loadErr := s.loadMetadataFromFile(connectionName)
 	if loadErr != nil {
-		Error("GetMetadata: Error loading metadata from file for %s: %v. Will proceed to extraction.", connectionName, loadErr)
+		LogError("Error loading metadata from file for %s: %v. Will proceed to extraction.", connectionName, loadErr)
 	} else if loadedFromFile != nil {
 		if time.Since(loadedFromFile.LastExtracted) < StaleMetadataThreshold {
-			Info("GetMetadata: Loaded fresh metadata from file for %s. Updating cache.", connectionName)
+			LogInfo("GetMetadata: Loaded fresh metadata from file for %s. Updating cache.", connectionName)
 			s.cachedMetadata[connectionName] = loadedFromFile
 			return loadedFromFile, nil
 		}
-		Info("GetMetadata: Metadata from file for %s is stale (%v old). Will proceed to extraction.", connectionName, time.Since(loadedFromFile.LastExtracted))
+		LogInfo("GetMetadata: Metadata from file for %s is stale (%v old). Will proceed to extraction.", connectionName, time.Since(loadedFromFile.LastExtracted))
 	} else {
-		Info("GetMetadata: No metadata file found for %s. Will proceed to extraction.", connectionName)
+		LogInfo("GetMetadata: No metadata file found for %s. Will proceed to extraction.", connectionName)
 	}
 
-	Info("GetMetadata: Proceeding to extract/refresh metadata for connection %s (will update cache).", connectionName)
+	LogInfo("GetMetadata: Proceeding to extract/refresh metadata for connection %s (will update cache).", connectionName)
 	// Calls the UNLOCKED version as we already hold the lock.
 	// Passing no arguments for optionalDbName means full extraction for this connection.
 	extractedMeta, extractErr := s.performExtractionAndCacheUpdate_UNLOCKED(ctx, connectionName)
 	if extractErr != nil {
-		Error("GetMetadata: Failed to extract/refresh metadata for %s: %v", connectionName, extractErr)
+		LogError("Failed to extract/refresh metadata for %s: %v", connectionName, extractErr)
 		// Consider returning stale data if available and extraction fails?
 		// For now, an error means we couldn't get fresh data.
 		return nil, fmt.Errorf("failed to extract/refresh metadata for %s: %w", connectionName, extractErr)
 	}
 
-	Info("GetMetadata: Successfully extracted/refreshed metadata for %s, now in cache.", connectionName)
+	LogInfo("GetMetadata: Successfully extracted/refreshed metadata for %s, now in cache.", connectionName)
 	return extractedMeta, nil // This is the newly extracted and cached metadata
 }
 
@@ -590,20 +590,18 @@ func (s *MetadataService) GetMetadata(ctx context.Context, connectionName string
 // This function does NOT interact with the cache.
 func (s *MetadataService) storeMetadataToFile(metadata *ConnectionMetadata) error {
 	filePath := s.getMetadataFilePath(metadata.ConnectionName)
-	Info("Storing metadata to file: %s", filePath)
+	LogInfo("Storing metadata to file: %s", filePath)
 
 	data, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
-		Error("failed to marshal metadata: %v", err)
-		return fmt.Errorf("failed to marshal metadata: %w", err)
+		return LogError("Failed to marshal metadata: %v", err)
 	}
 
 	if err := os.WriteFile(filePath, data, 0600); err != nil {
-		Error("failed to write metadata file: %v", err)
-		return fmt.Errorf("failed to write metadata file: %w", err)
+		return LogError("Failed to write metadata file: %v", err)
 	}
 
-	Info("Successfully stored metadata to file for connection: %s", metadata.ConnectionName)
+	LogInfo("Successfully stored metadata to file for connection: %s", metadata.ConnectionName)
 	return nil
 }
 
@@ -611,30 +609,28 @@ func (s *MetadataService) storeMetadataToFile(metadata *ConnectionMetadata) erro
 // This function does NOT interact with the cache.
 func (s *MetadataService) loadMetadataFromFile(connectionName string) (*ConnectionMetadata, error) {
 	filePath := s.getMetadataFilePath(connectionName)
-	Info("Loading metadata from file: %s", filePath)
+	LogInfo("Loading metadata from file: %s", filePath)
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			Info("No existing metadata file found for connection: %s at %s", connectionName, filePath)
+			LogInfo("No existing metadata file found for connection: %s at %s", connectionName, filePath)
 			return nil, nil // File doesn't exist, return nil without error
 		}
-		Error("failed to read metadata file %s: %v", filePath, err)
-		return nil, fmt.Errorf("failed to read metadata file %s: %w", filePath, err)
+		return nil, LogError("Failed to read metadata file %s: %v", filePath, err)
 	}
 
 	if len(data) == 0 { // Handle empty file case
-		Info("Metadata file %s is empty for connection: %s", filePath, connectionName)
+		LogInfo("Metadata file %s is empty for connection: %s", filePath, connectionName)
 		return nil, nil // Treat as if not found or corrupted
 	}
 
 	var metadata ConnectionMetadata
 	if err := json.Unmarshal(data, &metadata); err != nil {
-		Error("failed to unmarshal metadata from file %s: %v", filePath, err)
-		return nil, fmt.Errorf("failed to unmarshal metadata from %s: %w", filePath, err)
+		return nil, LogError("Failed to unmarshal metadata from file %s: %v", filePath, err)
 	}
 
-	Info("Successfully loaded metadata from file for connection: %s", metadata.ConnectionName)
+	LogInfo("Successfully loaded metadata from file for connection: %s", metadata.ConnectionName)
 	return &metadata, nil
 }
 
@@ -645,7 +641,7 @@ func (s *MetadataService) SaveMetadata(connectionName string) error {
 	s.mu.RUnlock()
 
 	if !exists {
-		Info("SaveMetadata: Metadata for connection %s not found in cache, cannot save.", connectionName)
+		LogInfo("SaveMetadata: Metadata for connection %s not found in cache, cannot save.", connectionName)
 		return fmt.Errorf("metadata for connection %s not found in cache", connectionName)
 	}
 
@@ -658,14 +654,14 @@ func (s *MetadataService) SaveMetadata(connectionName string) error {
 	// metaCopyForSave := s.deepCopyConnectionMetadata(metadataToSave)
 	// return s.storeMetadataToFile(metaCopyForSave)
 
-	Info("SaveMetadata: Attempting to save metadata for connection %s to disk.", connectionName)
+	LogInfo("SaveMetadata: Attempting to save metadata for connection %s to disk.", connectionName)
 	return s.storeMetadataToFile(metadataToSave)
 }
 
 // UpdateAIDescription updates the AI-generated description for a database component in the cache.
 // Call SaveMetadata to persist changes.
 func (s *MetadataService) UpdateAIDescription(ctx context.Context, connectionName, dbName string, target DescriptionTarget, description string) error {
-	Info("UpdateAIDescription: Request for %s in connection: %s, database: %s", target.Type, connectionName, dbName)
+	LogInfo("UpdateAIDescription: Request for %s in connection: %s, database: %s", target.Type, connectionName, dbName)
 
 	s.mu.Lock() // Lock for modifying cache
 	defer s.mu.Unlock()
@@ -674,26 +670,26 @@ func (s *MetadataService) UpdateAIDescription(ctx context.Context, connectionNam
 	if !existsInCache {
 		// If not in cache, load it. UpdateAIDescription should operate on existing data.
 		// If no data file exists, this implies metadata hasn't been extracted yet.
-		Info("UpdateAIDescription: Metadata for %s not in cache. Attempting to load from file.", connectionName)
+		LogInfo("UpdateAIDescription: Metadata for %s not in cache. Attempting to load from file.", connectionName)
 		loadedMeta, err := s.loadMetadataFromFile(connectionName)
 		if err != nil {
-			Error("UpdateAIDescription: Failed to load metadata file for %s to update AI desc: %v", connectionName, err)
+			LogError("UpdateAIDescription: Failed to load metadata file for %s to update AI desc: %v", connectionName, err)
 			return fmt.Errorf("failed to load metadata for %s to update description: %w", connectionName, err)
 		}
 		if loadedMeta == nil {
-			Error("UpdateAIDescription: Metadata file not found for %s. Cannot update AI desc. Extract metadata first.", connectionName)
+			LogError("UpdateAIDescription: Metadata file not found for %s. Cannot update AI desc. Extract metadata first.", connectionName)
 			return fmt.Errorf("metadata not found for connection %s (file missing), extract first", connectionName)
 		}
 		s.cachedMetadata[connectionName] = loadedMeta // Add to cache
 		connMetadata = loadedMeta
-		Info("UpdateAIDescription: Loaded metadata for %s into cache.", connectionName)
+		LogInfo("UpdateAIDescription: Loaded metadata for %s into cache.", connectionName)
 	}
 
 	// Work on a copy of the specific database metadata to avoid complex partial updates on the shared cached object.
 	// Then, replace the database metadata in the main connection metadata.
 	dbMeta, dbExists := connMetadata.Databases[dbName]
 	if !dbExists {
-		Error("UpdateAIDescription: Database %s not found in connection %s", dbName, connectionName)
+		LogError("UpdateAIDescription: Database %s not found in connection %s", dbName, connectionName)
 		return fmt.Errorf("database %s not found in connection %s", dbName, connectionName)
 	}
 
@@ -718,7 +714,7 @@ func (s *MetadataService) UpdateAIDescription(ctx context.Context, connectionNam
 			}
 		}
 		if !found {
-			Error("UpdateAIDescription: Table %s not found in DB %s for connection %s", target.TableName, dbName, connectionName)
+			LogError("UpdateAIDescription: Table %s not found in DB %s for connection %s", target.TableName, dbName, connectionName)
 			return fmt.Errorf("table %s not found in database %s", target.TableName, dbName)
 		}
 	case "column":
@@ -730,7 +726,7 @@ func (s *MetadataService) UpdateAIDescription(ctx context.Context, connectionNam
 			}
 		}
 		if tableIdx == -1 {
-			Error("UpdateAIDescription: Table %s not found for column update in DB %s, conn %s", target.TableName, dbName, connectionName)
+			LogError("UpdateAIDescription: Table %s not found for column update in DB %s, conn %s", target.TableName, dbName, connectionName)
 			return fmt.Errorf("table %s not found in database %s for column update", target.TableName, dbName)
 		}
 
@@ -747,11 +743,11 @@ func (s *MetadataService) UpdateAIDescription(ctx context.Context, connectionNam
 		if found {
 			dbMetaCopy.Tables[tableIdx] = tableCopy // Put modified table copy back
 		} else {
-			Error("UpdateAIDescription: Column %s not found in table %s, DB %s, conn %s", target.ColumnName, target.TableName, dbName, connectionName)
+			LogError("UpdateAIDescription: Column %s not found in table %s, DB %s, conn %s", target.ColumnName, target.TableName, dbName, connectionName)
 			return fmt.Errorf("column %s not found in table %s", target.ColumnName, target.TableName)
 		}
 	default:
-		Error("UpdateAIDescription: Invalid target type: %s", target.Type)
+		LogError("UpdateAIDescription: Invalid target type: %s", target.Type)
 		return fmt.Errorf("invalid target type: %s", target.Type)
 	}
 
@@ -759,7 +755,7 @@ func (s *MetadataService) UpdateAIDescription(ctx context.Context, connectionNam
 	connMetadata.LastExtracted = time.Now() // Mark that the connection metadata has been updated
 
 	// The main connMetadata object in the cache (s.cachedMetadata[connectionName]) has been updated.
-	Info("UpdateAIDescription: Successfully updated in-memory AI description for %s. Call SaveMetadata to persist.", target.Type)
+	LogInfo("UpdateAIDescription: Successfully updated in-memory AI description for %s. Call SaveMetadata to persist.", target.Type)
 	return nil
 }
 
@@ -771,16 +767,15 @@ func (s *MetadataService) DeleteConnectionMetadataFile(connectionName string) er
 	s.mu.Unlock()
 
 	filePath := s.getMetadataFilePath(connectionName)
-	Info("Deleting metadata file: %s", filePath)
+	LogInfo("Deleting metadata file: %s", filePath)
 	err := os.Remove(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			Info("Metadata file %s not found, nothing to delete.", filePath)
+			LogInfo("Metadata file %s not found, nothing to delete.", filePath)
 			return nil // Not an error if it doesn't exist
 		}
-		Error("Failed to delete metadata file %s: %v", filePath, err)
-		return fmt.Errorf("failed to delete metadata file %s: %w", filePath, err)
+		return LogError("Failed to delete metadata file %s: %v", filePath, err)
 	}
-	Info("Successfully deleted metadata file %s.", filePath)
+	LogInfo("Successfully deleted metadata file %s.", filePath)
 	return nil
 }
