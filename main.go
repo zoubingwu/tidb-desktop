@@ -10,6 +10,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/zoubingwu/tidb-desktop/services"
 )
 
 //go:embed all:frontend/dist
@@ -41,6 +42,7 @@ func main() {
 		},
 		Menu:             appMenu,
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 0},
+		Logger:           services.GlobalLogger,
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
 		Bind: []any{
