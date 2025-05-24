@@ -60,7 +60,7 @@ interface LocalAIProviderSettings {
 }
 
 // Define available providers
-const aiProviders = ["openai", "anthropic", "openrouter"] as const;
+const aiProviders = ["openai", "openrouter"] as const;
 type AIProvider = (typeof aiProviders)[number];
 
 interface SettingsModalProps {
@@ -193,40 +193,40 @@ function SettingsModal({ children }: SettingsModalProps) {
             </div> */}
           </>
         );
-      case "anthropic":
-        return (
-          <>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="anthropic-apikey" className="text-right">
-                API Key
-              </Label>
-              <Input
-                id="anthropic-apikey"
-                type="password"
-                value={aiSettings.anthropic?.apiKey ?? ""}
-                onChange={(e) =>
-                  handleAISettingChange("anthropic", "apiKey", e.target.value)
-                }
-                className="col-span-3"
-                placeholder="sk-ant-..."
-              />
-            </div>
-            {/* <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="anthropic-baseurl" className="text-right">
-                Base URL
-              </Label>
-              <Input
-                id="anthropic-baseurl"
-                value={aiSettings.anthropic?.baseURL ?? ""}
-                onChange={(e) =>
-                  handleAISettingChange("anthropic", "baseURL", e.target.value)
-                }
-                className="col-span-3"
-                placeholder="Optional, default: https://api.anthropic.com/v1"
-              />
-            </div> */}
-          </>
-        );
+      // case "anthropic":
+      //   return (
+      //     <>
+      //       <div className="grid grid-cols-4 items-center gap-4">
+      //         <Label htmlFor="anthropic-apikey" className="text-right">
+      //           API Key
+      //         </Label>
+      //         <Input
+      //           id="anthropic-apikey"
+      //           type="password"
+      //           value={aiSettings.anthropic?.apiKey ?? ""}
+      //           onChange={(e) =>
+      //             handleAISettingChange("anthropic", "apiKey", e.target.value)
+      //           }
+      //           className="col-span-3"
+      //           placeholder="sk-ant-..."
+      //         />
+      //       </div>
+      //       <div className="grid grid-cols-4 items-center gap-4">
+      //         <Label htmlFor="anthropic-baseurl" className="text-right">
+      //           Base URL
+      //         </Label>
+      //         <Input
+      //           id="anthropic-baseurl"
+      //           value={aiSettings.anthropic?.baseURL ?? ""}
+      //           onChange={(e) =>
+      //             handleAISettingChange("anthropic", "baseURL", e.target.value)
+      //           }
+      //           className="col-span-3"
+      //           placeholder="Optional, default: https://api.anthropic.com/v1"
+      //         />
+      //       </div>
+      //     </>
+      //   );
       case "openrouter":
         return (
           <div className="grid grid-cols-4 items-center gap-4">
