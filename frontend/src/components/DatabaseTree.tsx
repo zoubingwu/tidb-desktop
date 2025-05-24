@@ -1,5 +1,6 @@
 import { File, Folder, Tree } from "@/components/ui/file-tree";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Table2Icon } from "lucide-react";
 import { memo } from "react";
 
@@ -32,12 +33,15 @@ export const DatabaseTree = memo(
     return (
       <ScrollArea className="h-full bg-muted/50">
         {isLoadingDatabases ? (
-          <div className="p-4 text-center text-muted-foreground">
-            Loading Databases...
+          <div className="p-2 space-y-2">
+            <Skeleton className="h-4 rounded-2xl" />
+            <Skeleton className="h-4 rounded-2xl" />
+            <Skeleton className="h-4 rounded-2xl" />
+            <Skeleton className="h-4 rounded-2xl w-3/5" />
           </div>
         ) : databasesError ? (
-          <div className="p-4 text-center text-destructive">
-            Error loading Databases
+          <div className="p-2 text-center text-destructive">
+            Error loading Databases: {databasesError.message}
           </div>
         ) : (
           <Tree className="p-2">
