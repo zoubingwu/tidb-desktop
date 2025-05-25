@@ -1,4 +1,3 @@
-import "allotment/dist/style.css"; // for 3 column split view
 import { AIPanel } from "@/components/AIPanel";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import { DatabaseTree, DatabaseTreeItem } from "@/components/DatabaseTree";
@@ -13,7 +12,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { SqlAgentResponse } from "@/lib/ai";
 import { filterFn } from "@/lib/filters";
 import {
   ColumnDataTypeIcons,
@@ -32,7 +30,9 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { useLocalStorageState, useMemoizedFn } from "ahooks";
+import { tool } from "ai";
 import { Allotment as ReactSplitView } from "allotment";
+import "allotment/dist/style.css"; // for 3 column split view
 import { Loader, SettingsIcon, SparkleIcon, UnplugIcon } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -45,6 +45,7 @@ import {
 } from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
 import { EventsEmit, EventsOn } from "wailsjs/runtime";
+import { z } from "zod";
 import DataTable from "./DataTable";
 import SettingsModal from "./SettingModal";
 import TablePlaceholder from "./TablePlaceHolder";
@@ -282,6 +283,7 @@ const MainDataView = ({
           currentPageIndex * currentPageSize,
           filterObject,
         );
+        console.log("tableData", res);
         appendActivityLog(`Fetched data from ${dbName}.${tableName}`);
 
         return res;
@@ -409,10 +411,7 @@ const MainDataView = ({
     }
 
     if (
-      (currentDb &&
-        currentTable &&
-        tableData?.rows?.length &&
-        tableData?.columns?.length) ||
+      (currentDb && currentTable && tableData?.columns?.length) ||
       sqlFromAIResult
     ) {
       return "data";
@@ -456,14 +455,8 @@ const MainDataView = ({
     onClose();
   });
 
-  const handleApplyAIGeneratedQuery = async (result: SqlAgentResponse) => {
-    if (!result.success || !result.query) return;
-
-    if (result.responseType !== "SQL" || result.requiresConfirmation) {
-      return;
-    }
-
-    const sqlQuery = result.query;
+  const handleApplyAIGeneratedQuery = async (query: string, dbName: string) => {
+    const sqlQuery = query;
     const upperSqlQuery = sqlQuery.toUpperCase();
     const tableModifyingKeywords = [
       "CREATE TABLE",
@@ -476,16 +469,126 @@ const MainDataView = ({
     );
 
     resetTableDataPrameters();
-    await executeSql(sqlQuery);
+    const result = await executeSql(sqlQuery);
     setSqlFromAI(sqlQuery);
 
     if (isModifyingQuery) {
-      if (result.dbName) {
-        fetchTables(result.dbName);
-      }
-
-      triggerIndexer(true, result.dbName);
+      fetchTables(dbName);
+      triggerIndexer(true, dbName);
     }
+
+    return result;
+  };
+
+  const tools = {
+    executeSql: tool({
+      description:
+        "Executes SQL queries. For read-only queries (SELECT), executes immediately. For write operations (INSERT, UPDATE, DELETE, etc.), requires user confirmation through the UI.",
+      parameters: z.object({
+        query: z
+          .string()
+          .describe(
+            "The SQL query string to execute (e.g., `SELECT * FROM users LIMIT 3`, `INSERT INTO users (name) VALUES ('John')`).",
+          ),
+        dbName: z
+          .string()
+          .describe("The name of the database the query was executed on."),
+        requiresConfirmation: z
+          .boolean()
+          .optional()
+          .describe(
+            "Set to true for non-read-only operations that require user confirmation. Should be true for INSERT, UPDATE, DELETE, ALTER, DROP, etc.",
+          ),
+      }),
+      execute: ({
+        query,
+        requiresConfirmation = false,
+        dbName,
+      }): Promise<{
+        success: boolean;
+        result?: services.SQLResult;
+        error?: string;
+      }> => {
+        console.log(
+          `Tool Call: executeSql (Query: ${query}, dbName: ${dbName})`,
+        );
+
+        return new Promise((resolve) => {
+          const trimmedQuery = query.trim().toUpperCase();
+          const isReadOnly =
+            trimmedQuery.startsWith("SELECT") ||
+            trimmedQuery.startsWith("SHOW") ||
+            trimmedQuery.startsWith("DESCRIBE") ||
+            trimmedQuery.startsWith("EXPLAIN");
+
+          // Auto-detect if confirmation is needed for non-read-only queries
+          const needsConfirmation = requiresConfirmation || !isReadOnly;
+
+          const run = () => {
+            if (needsConfirmation) {
+              toast.dismiss();
+            }
+            return handleApplyAIGeneratedQuery(query, dbName)
+              .then((res) => {
+                console.log("Tool Result: executeSql ->", res);
+                return resolve({
+                  success: true,
+                  result: res,
+                });
+              })
+              .catch((err) => {
+                console.log("Tool Error: executeSql ->", err);
+                return resolve({
+                  success: false,
+                  error: err,
+                });
+              });
+          };
+
+          const cancel = () => {
+            if (needsConfirmation) {
+              toast.dismiss();
+            }
+            return resolve({
+              success: false,
+              error: "User denied execution",
+            });
+          };
+
+          if (needsConfirmation) {
+            console.log(
+              `Tool Call: executeSql (Query requires confirmation: ${query})`,
+            );
+
+            toast("Please confirm to run query", {
+              action: (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="text-xs"
+                  onClick={run}
+                >
+                  Confirm
+                </Button>
+              ),
+              cancel: (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  onClick={cancel}
+                >
+                  Cancel
+                </Button>
+              ),
+              duration: Infinity,
+            });
+          } else {
+            return run();
+          }
+        });
+      },
+    }),
   };
 
   const table: ReactTable<TableRowData> = useReactTable({
@@ -570,6 +673,7 @@ const MainDataView = ({
                 onApplyQueryFromAI={handleApplyAIGeneratedQuery}
                 opened={showAIPanel}
                 isExecutingSQLFromAI={isExecutingSQLFromAI}
+                tools={tools}
               />
             </ReactSplitView.Pane>
           </ReactSplitView>

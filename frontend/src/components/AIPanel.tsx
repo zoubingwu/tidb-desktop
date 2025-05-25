@@ -5,9 +5,9 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { LoadingTypewriter } from "@/components/ui/loading-typewriter";
-import { SqlAgentResponse, generateSqlAgent } from "@/lib/ai";
+import { generateSqlAgent } from "@/lib/ai";
 import { useMemoizedFn } from "ahooks";
-import { type CoreMessage } from "ai";
+import { type CoreMessage, type Tool } from "ai";
 import {
   CheckCircle2Icon,
   Loader,
@@ -15,11 +15,11 @@ import {
   SendHorizonal,
 } from "lucide-react";
 import React, {
-  useState,
-  useRef,
+  KeyboardEvent,
   useEffect,
   useId,
-  KeyboardEvent,
+  useRef,
+  useState,
 } from "react";
 import Markdown from "react-markdown";
 import TextareaAutosize from "react-textarea-autosize";
@@ -28,23 +28,13 @@ import { toast } from "sonner";
 // Expanded message type to better represent stream states
 type DisplayBlock = {
   id: string;
-  type:
-    | "user"
-    | "ai-thinking"
-    | "ai-text"
-    | "ai-tool-call"
-    | "ai-final"
-    | "error";
+  type: "user" | "ai-thinking" | "ai-text" | "ai-tool-call" | "error" | "sql";
   content: string;
   meta?: any;
   status?: "started" | "finished";
 };
 
-const useGenerateSQLAgent = ({
-  onFinish,
-}: {
-  onFinish: (query: SqlAgentResponse) => void;
-}) => {
+const useGenerateSQLAgent = (tools: Record<string, Tool>) => {
   const [isLoading, setIsLoading] = useState(false);
   const [displayBlocks, setDisplayBlocks] = useState<DisplayBlock[]>([]);
   const [messages, setMessages] = useState<CoreMessage[]>([]);
@@ -74,10 +64,9 @@ const useGenerateSQLAgent = ({
     let currentThinkingBlockId: string | null = null;
     let currentTextBlockId: string | null = null;
     let accumulatedText = "";
-    let assistantResponse = ""; // Track full assistant response
 
     try {
-      const agentStream = generateSqlAgent(userPrompt, messages);
+      const agentStream = generateSqlAgent(userPrompt, messages, tools);
 
       for await (const event of agentStream) {
         if (currentThinkingBlockId) {
@@ -145,6 +134,18 @@ const useGenerateSQLAgent = ({
                   content: `Tool ${call.toolName} call started`,
                   meta: call,
                 });
+
+                // display sql query
+                if (call.toolName === "executeSql") {
+                  appendDisplayBlock({
+                    id: `${uniqueId}-${call.toolCallId}-sql`,
+                    type: "sql",
+                    content: (call.args as any).query,
+                    meta: {
+                      ...(call.args as any),
+                    },
+                  });
+                }
               });
             }
 
@@ -183,25 +184,6 @@ const useGenerateSQLAgent = ({
               });
             }
             break;
-
-          case "final":
-            const finalResult = event.data;
-            assistantResponse = finalResult.explanation;
-            if (finalResult.responseType === "SQL" && finalResult.query) {
-              assistantResponse += `\n\nQuery: ${finalResult.query}`;
-            }
-            appendMessage({
-              role: "assistant",
-              content: assistantResponse,
-            });
-            appendDisplayBlock({
-              id: `${uniqueId}-${Date.now()}-final`,
-              type: "ai-final",
-              content: finalResult.explanation,
-              meta: finalResult,
-            });
-            onFinish(finalResult);
-            break;
         }
       }
     } catch (error: any) {
@@ -234,15 +216,17 @@ const useGenerateSQLAgent = ({
 };
 
 interface AIPanelProps {
-  onApplyQueryFromAI: (query: SqlAgentResponse) => void;
+  onApplyQueryFromAI: (query: string, dbName: string) => void;
   opened?: boolean;
   isExecutingSQLFromAI?: boolean;
+  tools: Record<string, Tool>;
 }
 
 export const AIPanel = ({
   onApplyQueryFromAI,
   opened,
   isExecutingSQLFromAI,
+  tools,
 }: AIPanelProps) => {
   const [inputValue, setInputValue] = useState("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -252,9 +236,7 @@ export const AIPanel = ({
     handleSubmit: handleSubmitPrompt,
     messages,
     isLoading,
-  } = useGenerateSQLAgent({
-    onFinish: onApplyQueryFromAI,
-  });
+  } = useGenerateSQLAgent(tools);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -352,55 +334,56 @@ export const AIPanel = ({
             </Collapsible>
           </div>
         );
-      case "ai-final":
+      case "error":
         return (
-          <div className={`ai-final ${baseClasses} my-2 force-select-text`}>
+          <div className={`error ${baseClasses} my-2 text-red-600`}>
+            <Markdown>{message.content}</Markdown>
+          </div>
+        );
+      case "sql":
+        return (
+          <div className={`sql ${baseClasses} my-2 force-select-text`}>
             <div className="markdown-body">
-              <Markdown>{message.content}</Markdown>
-              {message.meta.responseType === "SQL" && message.meta.query && (
-                <div className="rounded relative">
-                  <pre className="whitespace-pre-wrap p-2">
-                    {message.meta.query}
-                  </pre>
-                  {message.meta.requiresConfirmation && (
-                    <Button
-                      size="icon"
-                      onClick={() => {
-                        toast(
-                          "This action is irreversible, are you really sure you want to execute this query?",
-                          {
-                            action: (
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                className="text-xs"
-                                onClick={() => {
-                                  onApplyQueryFromAI(message.meta);
-                                  toast.dismiss();
-                                }}
-                              >
-                                Confirm
-                              </Button>
-                            ),
-                          },
-                        );
-                      }}
-                      className="absolute bottom-2 right-2 size-5"
-                      disabled={isExecutingSQLFromAI}
-                    >
-                      {isExecutingSQLFromAI ? (
-                        <Loader className="size-3 animate-spin" />
-                      ) : (
-                        <PlayIcon className="size-3" />
-                      )}
-                    </Button>
+              <div className="rounded relative">
+                <pre className="whitespace-pre-wrap p-2">{message.content}</pre>
+                <Button
+                  size="icon"
+                  onClick={() => {
+                    toast(
+                      "This action is irreversible, are you really sure you want to execute this query?",
+                      {
+                        action: (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="text-xs"
+                            onClick={() => {
+                              onApplyQueryFromAI(
+                                message.meta.result.query,
+                                message.meta.result.dbName,
+                              );
+                              toast.dismiss();
+                            }}
+                          >
+                            Confirm
+                          </Button>
+                        ),
+                      },
+                    );
+                  }}
+                  className="absolute bottom-2 right-2 size-5"
+                  disabled={isExecutingSQLFromAI}
+                >
+                  {isExecutingSQLFromAI ? (
+                    <Loader className="size-3 animate-spin" />
+                  ) : (
+                    <PlayIcon className="size-3" />
                   )}
-                </div>
-              )}
+                </Button>
+              </div>
             </div>
           </div>
         );
-
       default:
         return null;
     }

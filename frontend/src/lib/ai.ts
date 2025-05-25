@@ -3,6 +3,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import {
   type CoreMessage,
+  type Tool,
   type ToolCallPart,
   type ToolResultPart,
   generateObject,
@@ -11,7 +12,6 @@ import {
   tool,
 } from "ai";
 import {
-  ExecuteSQL,
   GetAIProviderSettings,
   GetDatabaseMetadata,
 } from "wailsjs/go/main/App";
@@ -172,76 +172,7 @@ const dbTools = {
       }
     },
   }),
-  executeSql: tool({
-    description:
-      "Executes a *read-only* SQL query (primarily SELECT) to fetch sample data or check existence, helping to understand data patterns or confirm assumptions before generating the final query. Use LIMIT clauses (e.g., LIMIT 5) to keep results small. **DO NOT use this for INSERT, UPDATE, DELETE, or other modifying operations.**",
-    parameters: z.object({
-      query: z
-        .string()
-        .describe(
-          "The *safe*, *read-only* SQL SELECT query string to execute (e.g., `SELECT * FROM users LIMIT 3`).",
-        ),
-    }),
-    execute: async ({ query }) => {
-      // Add extra safety check here
-      if (!query.trim().toUpperCase().startsWith("SELECT")) {
-        console.warn(
-          `Tool Call Refused: executeSql called with non-SELECT query: ${query}`,
-        );
-        return {
-          success: false,
-          error: "This tool can only execute SELECT queries.",
-        };
-      }
-      try {
-        console.log(`Tool Call: executeSql (Query: ${query})`);
-        const result = await ExecuteSQL(query);
-        console.log("Tool Result: executeSql ->", result);
-        // Potentially truncate large results before returning to LLM
-        const previewResult = JSON.stringify(result).slice(0, 1000); // Limit context size
-        return { success: true, resultPreview: previewResult };
-      } catch (error: any) {
-        console.error(`Error executing safe SQL query "${query}":`, error);
-        const errorMessage = error.message || "Unknown execution error";
-        return { success: false, error: errorMessage };
-      }
-    },
-  }),
 };
-
-// --- Zod Schema for the Agent's Final Answer ---
-const sqlAgentResponseSchema = z.object({
-  responseType: z
-    .enum(["SQL", "TEXT"])
-    .describe("Whether this is a SQL query response or just text"),
-  dbName: z
-    .string()
-    .optional()
-    .describe("The name of the database the query was executed on."),
-  query: z
-    .string()
-    .optional()
-    .describe(
-      "The generated SQL query. Optional - only present for SQL responses.",
-    ),
-  explanation: z
-    .string()
-    .describe(
-      "A brief explanation of the response - either explaining the SQL query or providing a direct text answer.",
-    ),
-  requiresConfirmation: z
-    .boolean()
-    .optional()
-    .describe(
-      "Set to true if the generated query performs potentially destructive actions (UPDATE, DELETE, INSERT, ALTER, DROP) or complex SELECTs that might have unintended consequences. Always true for non-SELECT queries. Only present for SQL responses",
-    ),
-  success: z
-    .boolean()
-    .describe("True if the response was generated successfully."),
-});
-
-// --- Define the return type based on the Zod schema ---
-export type SqlAgentResponse = z.infer<typeof sqlAgentResponseSchema>;
 
 // --- Define the type for yielded events from the generator ---
 export type AgentStreamEvent =
@@ -254,36 +185,28 @@ export type AgentStreamEvent =
         finishReason?: string; // Reason the step finished
       };
     }
-  | { type: "final"; data: SqlAgentResponse } // The final structured answer
   | { type: "error"; error: string }; // An error occurred
-
-// --- The "Answer" Tool ---
-const finalAnswerTool = tool({
-  description:
-    "Use this tool *only* as the final step to provide the generated SQL query and related information.",
-  parameters: sqlAgentResponseSchema,
-  // No execute function means calling this tool terminates the agent's run.
-});
 
 // --- The New Agent Generator Function ---
 export async function* generateSqlAgent(
   userPrompt: string,
   conversationHistory: CoreMessage[] = [],
+  tools: Record<string, Tool> = {},
 ): AsyncGenerator<AgentStreamEvent, void, unknown> {
   const model = await createModel();
   const metadata = await GetDatabaseMetadata();
 
   const agentTools = {
     ...dbTools,
-    provideFinalAnswer: finalAnswerTool,
+    ...tools,
   };
 
   const systemPrompt = `
 You are an expert database AI assistant, specialized in helping users interact with their database through natural language.
 
-Your primary goal is to understand user queries about their database and provide accurate responses through SQL operations. The task may require some CRUD operations to the database, or simply answering a question. Each time the USER sends a message, we may automatically attach some information about their current state. This information may or may not be relevant to the coding task, it is up for you to decide.
+Your primary goal is to understand user queries about their database and provide accurate responses through SQL operations. You can perform CRUD operations on the database or simply answer questions about the database structure and data.
 
-You have access to the complete database schema and can explore relationships between tables, always try to get the most relevant metadata first if needed using tools.
+You have access to the complete database schema and can explore relationships between tables. Always try to get the most relevant metadata first if needed using tools.
 
 <database_metadata>
 ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name: i.name, graph: i.graph }))) : "No database metadata available"}
@@ -308,7 +231,8 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
 
 2. Information Gathering:
    - Use getDatabaseMetadata to understand the database structure and metadata
-   - Use executeSql with SELECT queries to validate assumptions
+   - Use executeSql with SELECT queries to validate assumptions and explore data
+   - For write operations (INSERT, UPDATE, DELETE), use executeSql with requiresConfirmation: true
 
 3. Query Generation & Execution:
    **Critical SQL Formatting Rule:** All table names in generated SQL queries MUST be explicitly qualified with their database name (e.g., \`database_name\`.\`table_name\`). For instance, use \`FROM main_db.users\` instead of \`FROM users\`. Refer to the provided \`<database_metadata>\` to identify the correct database names. If the database name is ambiguous or not specified, you should first try to infer it or ask the user for clarification if multiple databases contain similarly named tables.
@@ -316,17 +240,17 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
    For READ operations (SELECT):
    - Generate efficient queries with appropriate JOINs and WHERE clauses
    - Use LIMIT when returning large datasets
-   - Execute directly if safe
+   - Execute directly using executeSql tool
 
    For WRITE operations (INSERT/UPDATE/DELETE):
-   - Always set requiresConfirmation to true
+   - Use executeSql with requiresConfirmation: true
    - Include clear WHERE clauses for UPDATE/DELETE
    - Provide detailed explanation of the changes
-   - Wait for user confirmation before execution
+   - The tool will handle user confirmation through the UI
 </operation_guidelines>
 
 <safety_protocols>
-1. Never execute destructive operations without confirmation
+1. Never execute destructive operations without confirmation (handled by executeSql tool)
 2. Validate inputs and handle edge cases
 3. Use appropriate quoting for identifiers (\`) and strings ('')
 4. Include WHERE clauses in UPDATE/DELETE operations
@@ -339,45 +263,13 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
 - If request is invalid: Explain why and suggest corrections
 </error_handling>
 
-<response_format>
-Your response must include:
-1. Clear explanation of what you're doing
-2. For SQL queries:
-   - Generated SQL query
-   - Expected impact of the operation
-   - Any potential risks or considerations
-   - Results or confirmation requirements
-3. For text-only responses:
-   - Direct answer to the question
-   - Any relevant context or explanations
-
-Always use the provideFinalAnswer tool with:
-- responseType: "SQL" for database operations, "TEXT" for informational responses
-- query: The SQL query (only for SQL responses)
-- explanation: Clear description of the operation/answer
-- requiresConfirmation: Boolean (true for all write operations)
-- type: The type of SQL operation (only for SQL responses)
-- success: Whether the response successfully addresses the user's request
-</response_format>
-
-<examples>
-1. User: "Show me all users from the 'sales' database who joined this month"
-   Response: {
-     responseType: "SQL",
-     query: "SELECT * FROM \`sales\`.\`users\` WHERE MONTH(signup_date) = MONTH(CURRENT_DATE()) AND YEAR(signup_date) = YEAR(CURRENT_DATE())",
-     explanation: "This query retrieves all users from the 'sales.users' table who signed up in the current month.",
-     requiresConfirmation: false,
-     success: true
-   }
-
-2. User: "What tables are available in the database?"
-   Response: {
-     responseType: "TEXT",
-     explanation: "The database contains the following tables:\n- users: Stores user information\n- orders: Contains order details\n- products: Lists available products",
-     requiresConfirmation: false,
-     success: true
-   }
-</examples>
+<response_style>
+- Provide clear, conversational explanations of what you're doing
+- When executing SQL queries, explain the purpose and expected results
+- For complex operations, break down the steps
+- Always explain any potential risks or important considerations
+- Use natural language - you don't need to use any special formatting or tools for your final response
+</response_style>
 
 <best_practices>
 1. Always validate table and column existence before generating queries
@@ -385,12 +277,11 @@ Always use the provideFinalAnswer tool with:
 3. Consider performance implications for large datasets
 4. Provide clear explanations for all operations
 5. Prioritize data safety and integrity
+6. Use tools to gather information and execute queries, then provide natural language explanations
 </best_practices>
 `.trim();
 
   let accumulatedText = ""; // To accumulate text deltas if needed
-  let finalCallArgs: any = null; // To store the args for the final answer tool
-  let finalAnswerYielded = false; // Flag to ensure final answer is yielded only once
 
   try {
     // --- Stream the Agent's Response ---
@@ -426,17 +317,11 @@ Always use the provideFinalAnswer tool with:
           break;
 
         case "tool-call":
-          // Check if it's the final answer tool
-          if (part.toolName === "provideFinalAnswer") {
-            finalCallArgs = part.args; // Store args for final processing
-            // Don't yield yet, wait for stream end or explicit finish
-          } else {
-            // Yield the request for other tools
-            yield {
-              type: "step",
-              data: { toolCalls: [part] },
-            };
-          }
+          // Yield the request for other tools
+          yield {
+            type: "step",
+            data: { toolCalls: [part] },
+          };
           break;
 
         case "tool-result":
@@ -455,8 +340,8 @@ Always use the provideFinalAnswer tool with:
           // Handle the finish event - might contain the final text if no tool was called last
           console.log("Stream Finished. Reason:", part.finishReason);
           console.log("Usage:", part.usage);
-          // If there was remaining text and no final tool call args captured, yield it
-          if (accumulatedText && !finalCallArgs && !finalAnswerYielded) {
+          // If there was remaining text, yield it
+          if (accumulatedText) {
             yield {
               type: "step",
               data: { text: accumulatedText, finishReason: part.finishReason },
@@ -468,87 +353,17 @@ Always use the provideFinalAnswer tool with:
           // Handle stream-level errors
           console.error("Stream Error:", part.error);
           yield { type: "error", error: `Stream error: ${part.error}` };
-          finalAnswerYielded = true; // Prevent yielding fallback final answer later
           break;
 
         default:
           // Handle other potential part types if the API evolves
           console.warn("Unhandled stream part type:", (part as any).type);
       }
-
-      // If we have the final call arguments, process and yield the final answer
-      if (finalCallArgs && !finalAnswerYielded) {
-        const validationResult =
-          sqlAgentResponseSchema.safeParse(finalCallArgs);
-        if (validationResult.success) {
-          console.log("Final Answer Parsed:", validationResult.data);
-          yield { type: "final", data: validationResult.data };
-        } else {
-          console.error(
-            "Agent Error: Final answer tool arguments failed validation:",
-            validationResult.error,
-          );
-          const errorMsg =
-            "Error: AI agent failed to provide a valid final answer structure. Validation failed: " +
-            validationResult.error.message;
-          yield { type: "error", error: errorMsg };
-          // Optionally yield a fallback final structure
-          yield {
-            type: "final",
-            data: {
-              query: "",
-              explanation: errorMsg,
-              requiresConfirmation: true,
-              success: false,
-              responseType: "TEXT",
-            },
-          };
-        }
-        finalAnswerYielded = true; // Mark as yielded
-        finalCallArgs = null; // Clear args
-      }
     }
-
-    // Fallback if the stream finishes without a proper final tool call yield
-    // if (!finalAnswerYielded) {
-    //   console.error(
-    //     "Agent Warning: Stream finished, but 'provideFinalAnswer' tool call was not processed or yielded.",
-    //   );
-    //   const fallbackExplanation =
-    //     "Error: AI agent did not conclude with the expected final answer structure.";
-    //   const errorMsg = accumulatedText
-    //     ? `${fallbackExplanation}\nAgent final text output: ${accumulatedText}`
-    //     : fallbackExplanation;
-    //   yield { type: "error", error: errorMsg };
-    //   yield {
-    //     type: "final",
-    //     data: {
-    //       query: "",
-    //       explanation: errorMsg,
-    //       requiresConfirmation: true,
-    //       type: "NONE",
-    //       success: false,
-    //       responseType: "TEXT",
-    //     },
-    //   };
-    // }
   } catch (error: any) {
     console.error("Error during generateSqlAgent stream processing:", error);
     const errorMsg = `An unexpected error occurred: ${error.message}`;
-    if (!finalAnswerYielded) {
-      // Avoid double error/final yield
-      yield { type: "error", error: errorMsg };
-      yield {
-        type: "final",
-        data: {
-          query: "",
-          explanation: errorMsg,
-          requiresConfirmation: true,
-          success: false,
-          responseType: "TEXT",
-        },
-      };
-    }
+    yield { type: "error", error: errorMsg };
   }
 }
 
