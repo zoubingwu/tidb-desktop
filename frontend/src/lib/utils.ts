@@ -93,6 +93,7 @@ export function isSystemDatabase(dbName: string): boolean {
     "performance_schema",
     "metrics_schema",
     "sys",
+    "lightning_task_info",
   ];
   return systemDatabases.includes(dbName.toLowerCase());
 }

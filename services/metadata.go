@@ -112,11 +112,12 @@ func (s *MetadataService) getMetadataFilePath(connectionName string) string {
 // isSystemDatabase returns true if the given database name is a system database
 func isSystemDatabase(dbName string) bool {
 	systemDBs := map[string]bool{
-		"information_schema": true,
-		"performance_schema": true,
-		"metrics_schema":     true, // TiDB specific
-		"mysql":              true,
-		"sys":                true,
+		"information_schema":  true,
+		"performance_schema":  true,
+		"metrics_schema":      true, // TiDB specific
+		"lightning_task_info": true, // TiDB specific
+		"mysql":               true,
+		"sys":                 true,
 	}
 
 	// Convert to lowercase for case-insensitive comparison
