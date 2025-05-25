@@ -12,6 +12,7 @@ import {
   tool,
 } from "ai";
 import {
+  ExecuteSQL,
   GetAIProviderSettings,
   GetDatabaseMetadata,
   UpdateAIDescription,
@@ -174,6 +175,38 @@ const dbTools = {
     },
   }),
 
+  getSampleData: tool({
+    description:
+      "Get sample data from database tables to understand their structure and content. This tool is specifically for data exploration and analysis - it automatically uses LIMIT to get manageable sample sizes. Use this when you need to understand what kind of data a table contains.",
+    parameters: z.object({
+      dbName: z.string().describe("The name of the database"),
+      tableName: z.string().describe("The name of the table to sample"),
+      limit: z
+        .number()
+        .optional()
+        .default(5)
+        .describe("Number of sample rows to retrieve (default: 5, max: 20)"),
+    }),
+    execute: async ({ dbName, tableName, limit = 5 }) => {
+      try {
+        // Ensure limit is reasonable
+        const safeLimit = Math.min(Math.max(limit, 1), 20);
+        const query = `SELECT * FROM \`${dbName}\`.\`${tableName}\` LIMIT ${safeLimit}`;
+
+        console.log(
+          `Tool Call: getSampleData (dbName: ${dbName}, tableName: ${tableName}, limit: ${safeLimit})`,
+        );
+
+        const result = await ExecuteSQL(query);
+        console.log("Tool Result: getSampleData ->", result);
+        return { success: true, result, query };
+      } catch (error: any) {
+        console.error(`Error getting sample data:`, error);
+        return { success: false, error: error.message };
+      }
+    },
+  }),
+
   updateAIDescription: tool({
     description:
       "Update AI-generated descriptions for database components (database, table, or column) based on learned information from user interactions. Use this to capture and store insights about the purpose, business logic, or important characteristics of database elements.",
@@ -284,8 +317,10 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
 
 2. Information Gathering:
    - Use getDatabaseMetadata to understand the database structure and metadata
-   - Use executeSql with SELECT queries to validate assumptions and explore data
-   - For write operations (INSERT, UPDATE, DELETE), use executeSql with requiresConfirmation: true
+   - When metadata lacks sufficient context or descriptions are missing, use getSampleData to query sample data
+   - getSampleData automatically uses appropriate LIMIT values to get representative examples
+   - Analyze sample data to infer table/column purposes, data patterns, and business logic
+   - Use getSampleData to validate assumptions and explore table contents
 
 3. Query Generation & Execution:
    **Critical SQL Formatting Rule:** All table names in generated SQL queries MUST be explicitly qualified with their database name (e.g., \`database_name\`.\`table_name\`). For instance, use \`FROM main_db.users\` instead of \`FROM users\`. Refer to the provided \`<database_metadata>\` to identify the correct database names. If the database name is ambiguous or not specified, you should first try to infer it or ask the user for clarification if multiple databases contain similarly named tables.
@@ -303,9 +338,26 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
 
 4. Learning and Knowledge Storage:
    - When users provide insights about database components (purpose, business logic, constraints, etc.), use updateAIDescription to store this knowledge
+   - When metadata is insufficient, proactively query sample data to understand table/column purposes
+   - Analyze sample data patterns to infer:
+     * Table purpose (e.g., "user accounts", "order history", "product catalog")
+     * Column meanings (e.g., "user_id: unique identifier for users", "created_at: timestamp when record was created")
+     * Data patterns and constraints (e.g., "email format validation", "status enum values")
+     * Business logic insights (e.g., "soft delete using deleted_at column")
+   - Use updateAIDescription to store these inferred insights for future reference
    - Update descriptions for databases, tables, or columns based on learned information
    - This helps build a knowledge base for future interactions
    - Always summarize and store meaningful insights that could help understand the database better
+
+5. Sample Data Analysis Workflow:
+   - When encountering tables without AI descriptions, use getSampleData to retrieve sample rows
+   - Examine the sample data to understand:
+     * What type of entities the table stores
+     * The purpose and format of each column
+     * Relationships between columns
+     * Common patterns or business rules
+   - Generate concise, informative descriptions based on the analysis
+   - Store the inferred descriptions using updateAIDescription for future reference
 </operation_guidelines>
 
 <safety_protocols>
@@ -339,6 +391,8 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
 6. Use tools to gather information and execute queries, then provide natural language explanations
 7. Actively learn from user interactions and store insights using updateAIDescription
 8. When users explain business logic, constraints, or purposes, capture this knowledge for future reference
+9. When encountering tables/columns without descriptions, use getSampleData to infer their purpose
+10. Proactively analyze sample data to build comprehensive knowledge about database components
 </best_practices>
 `.trim();
 
