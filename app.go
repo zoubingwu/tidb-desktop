@@ -399,3 +399,32 @@ func (a *App) ExtractDatabaseMetadata() (*services.ConnectionMetadata, error) {
 
 	return a.metadataService.ExtractMetadata(a.ctx, a.activeConnection.Name)
 }
+
+// UpdateAIDescription updates the AI-generated description for a database component
+func (a *App) UpdateAIDescription(dbName string, targetType string, tableName string, columnName string, description string) error {
+	if a.ctx == nil {
+		return fmt.Errorf("app context not initialized")
+	}
+	if a.activeConnection == nil {
+		return fmt.Errorf("no active connection")
+	}
+
+	target := services.DescriptionTarget{
+		Type:       targetType,
+		TableName:  tableName,
+		ColumnName: columnName,
+	}
+
+	err := a.metadataService.UpdateAIDescription(a.ctx, a.activeConnection.Name, dbName, target, description)
+	if err != nil {
+		return fmt.Errorf("failed to update AI description: %w", err)
+	}
+
+	// Save the updated metadata to disk
+	if saveErr := a.metadataService.SaveMetadata(a.activeConnection.Name); saveErr != nil {
+		services.LogError("Failed to save metadata after AI description update: %v", saveErr)
+		// Don't fail the operation, just log the error
+	}
+
+	return nil
+}

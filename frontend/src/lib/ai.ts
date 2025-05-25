@@ -14,6 +14,7 @@ import {
 import {
   GetAIProviderSettings,
   GetDatabaseMetadata,
+  UpdateAIDescription,
 } from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
 import { z } from "zod";
@@ -172,6 +173,57 @@ const dbTools = {
       }
     },
   }),
+
+  updateAIDescription: tool({
+    description:
+      "Update AI-generated descriptions for database components (database, table, or column) based on learned information from user interactions. Use this to capture and store insights about the purpose, business logic, or important characteristics of database elements.",
+    parameters: z.object({
+      dbName: z.string().describe("The name of the database"),
+      targetType: z
+        .enum(["database", "table", "column"])
+        .describe("The type of component to update description for"),
+      tableName: z
+        .string()
+        .optional()
+        .describe("Required for table and column types"),
+      columnName: z.string().optional().describe("Required for column type"),
+      description: z
+        .string()
+        .describe(
+          "The AI-generated description summarizing learned information about this component",
+        ),
+    }),
+    execute: async ({
+      dbName,
+      targetType,
+      tableName = "",
+      columnName = "",
+      description,
+    }) => {
+      try {
+        console.log(
+          `Tool Call: updateAIDescription (dbName: ${dbName}, targetType: ${targetType}, tableName: ${tableName}, columnName: ${columnName})`,
+        );
+        await UpdateAIDescription(
+          dbName,
+          targetType,
+          tableName,
+          columnName,
+          description,
+        );
+        console.log("Tool Result: updateAIDescription -> success");
+        return {
+          success: true,
+          message: `Successfully updated AI description for ${targetType}${
+            tableName ? ` ${tableName}` : ""
+          }${columnName ? `.${columnName}` : ""}`,
+        };
+      } catch (error: any) {
+        console.error(`Error updating AI description:`, error);
+        return { success: false, error: error.message };
+      }
+    },
+  }),
 };
 
 // --- Define the type for yielded events from the generator ---
@@ -217,7 +269,8 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
 2. Explain database structure and relationships
 3. Analyze data patterns and provide insights
 4. Assist with database operations (SELECT, INSERT, UPDATE, DELETE)
-5. Ensure data safety and validate operations
+5. Learn and store insights about database components through AI descriptions
+6. Ensure data safety and validate operations
 </capabilities>
 
 <operation_guidelines>
@@ -247,6 +300,12 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
    - Include clear WHERE clauses for UPDATE/DELETE
    - Provide detailed explanation of the changes
    - The tool will handle user confirmation through the UI
+
+4. Learning and Knowledge Storage:
+   - When users provide insights about database components (purpose, business logic, constraints, etc.), use updateAIDescription to store this knowledge
+   - Update descriptions for databases, tables, or columns based on learned information
+   - This helps build a knowledge base for future interactions
+   - Always summarize and store meaningful insights that could help understand the database better
 </operation_guidelines>
 
 <safety_protocols>
@@ -278,6 +337,8 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
 4. Provide clear explanations for all operations
 5. Prioritize data safety and integrity
 6. Use tools to gather information and execute queries, then provide natural language explanations
+7. Actively learn from user interactions and store insights using updateAIDescription
+8. When users explain business logic, constraints, or purposes, capture this knowledge for future reference
 </best_practices>
 `.trim();
 
