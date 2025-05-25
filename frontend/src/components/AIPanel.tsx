@@ -13,6 +13,7 @@ import {
   Loader,
   PlayIcon,
   SendHorizonal,
+  XIcon,
 } from "lucide-react";
 import React, {
   KeyboardEvent,
@@ -31,7 +32,7 @@ type DisplayBlock = {
   type: "user" | "ai-thinking" | "ai-text" | "ai-tool-call" | "error" | "sql";
   content: string;
   meta?: any;
-  status?: "started" | "finished";
+  status?: "started" | "finished" | "error";
 };
 
 const useGenerateSQLAgent = (tools: Record<string, Tool>) => {
@@ -173,7 +174,9 @@ const useGenerateSQLAgent = (tools: Record<string, Tool>) => {
                     ) {
                       return {
                         ...block,
-                        status: "finished",
+                        status: (result.result as any).success
+                          ? "finished"
+                          : "error",
                         content: `Tool ${result.toolName} call finished`,
                         meta: result,
                       };
@@ -321,6 +324,10 @@ export const AIPanel = ({
 
                   {message.status === "finished" && (
                     <CheckCircle2Icon className="size-3 flex-shrink-0 relative top-[2px] text-green-600" />
+                  )}
+
+                  {message.status === "error" && (
+                    <XIcon className="size-3 flex-shrink-0 relative top-[2px] text-red-600" />
                   )}
 
                   <p className="text-left">{message.content as string}</p>
