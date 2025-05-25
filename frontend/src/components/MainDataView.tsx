@@ -166,7 +166,7 @@ const MainDataView = ({
     });
   };
 
-  // --- Databases Query (keeps automatic fetching for initial page load) ---
+  // --- List Databases Query (keeps automatic fetching for initial page load) ---
   const {
     data: databases = [],
     isLoading: isLoadingDatabases,
@@ -252,6 +252,7 @@ const MainDataView = ({
     },
   });
 
+  // fetch from a specific table
   const { data: tableData, isFetching: isFetchingTableData } = useQuery({
     enabled: !!currentDb && !!currentTable,
     queryKey: [
