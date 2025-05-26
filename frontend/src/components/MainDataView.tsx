@@ -372,7 +372,7 @@ const MainDataView = ({
         return <span className="text-muted-foreground italic">EMPTY</span>;
       }
       // Render other values as strings
-      return String(value);
+      return String(value).slice(0, 10000);
     };
 
     if (sqlFromAI && sqlFromAIResult?.columns?.length) {
@@ -616,10 +616,16 @@ const MainDataView = ({
     }),
   };
 
+  const data = useMemo(() => {
+    if (sqlFromAI && sqlFromAIResult) {
+      return sqlFromAIResult.rows ?? [];
+    }
+
+    return tableData?.rows ?? [];
+  }, [sqlFromAI, sqlFromAIResult, tableData]);
+
   const table: ReactTable<TableRowData> = useReactTable({
-    data:
-      (sqlFromAI && sqlFromAIResult ? sqlFromAIResult.rows : tableData?.rows) ||
-      [],
+    data,
     columns,
     state: {
       pagination,
