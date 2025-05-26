@@ -16,7 +16,7 @@ function TitleBar({ title }: { title: string }) {
   return (
     <div
       onDoubleClick={onDoubleClick}
-      className="h-[28px] bg-[var(--card)] text-[var(--card-foreground)] flex justify-center items-center select-none text-xs border-b border-[var(--muted)] flex-shrink-0"
+      className="h-[28px] bg-[var(--card)] text-[var(--card-foreground)] flex justify-center items-center select-none text-xs border-b border-[var(--muted)]/30 flex-shrink-0"
       style={{ "--wails-draggable": "drag" } as React.CSSProperties}
     >
       <div className="flex items-center gap-2">
