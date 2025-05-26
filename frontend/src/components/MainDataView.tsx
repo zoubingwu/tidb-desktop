@@ -39,6 +39,7 @@ import { toast } from "sonner";
 import { useImmer } from "use-immer";
 import {
   ExecuteSQL,
+  GetDatabaseMetadata,
   GetTableData,
   ListDatabases,
   ListTables,
@@ -181,11 +182,34 @@ const MainDataView = ({
   useEffect(() => {
     if (databases?.length) {
       console.log("databases fetched", databases);
-      mergeDatabaseTree(
-        databases
-          .filter((i) => (SHOW_SYSTEM_DATABASES ? true : !isSystemDatabase(i)))
-          .map((dbName) => ({ dbName })),
+
+      const filteredDatabases = databases.filter((i) =>
+        SHOW_SYSTEM_DATABASES ? true : !isSystemDatabase(i),
       );
+
+      mergeDatabaseTree(filteredDatabases.map((dbName) => ({ dbName })));
+
+      // Check if databases exist in metadata, trigger indexer if not
+      const checkMetadataAndTriggerIndexer = async () => {
+        try {
+          const metadata = await GetDatabaseMetadata();
+          const metadataDbs = Object.keys(metadata?.databases || {});
+
+          const missingDbs = filteredDatabases.filter(
+            (dbName) => !metadataDbs.includes(dbName),
+          );
+
+          if (missingDbs.length > 0) {
+            console.log("Databases missing from metadata:", missingDbs);
+            missingDbs.forEach((dbName) => triggerIndexer(true, dbName));
+          }
+        } catch (error) {
+          console.log("Error checking metadata, triggering indexer:", error);
+          triggerIndexer(true);
+        }
+      };
+
+      checkMetadataAndTriggerIndexer();
     }
   }, [databases]);
 
