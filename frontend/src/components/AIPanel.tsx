@@ -540,64 +540,67 @@ export const AIPanel = ({
   };
 
   return (
-    <div
-      ref={scrollAreaRef}
-      className="h-full flex flex-col px-4 py-2 overflow-auto bg-muted/50"
-    >
-      {messages.length > 0 && (
-        <div className="flex-1">
-          {messages.map((message, index) => (
-            <React.Fragment key={message.id}>
-              {renderMessage(message, index)}
-            </React.Fragment>
-          ))}
-        </div>
-      )}
+    <div className="h-full flex flex-col bg-muted/50">
+      {/* Messages container - scrollable */}
+      <div ref={scrollAreaRef} className="flex-1 overflow-auto px-4 py-2">
+        {messages.length > 0 && (
+          <div>
+            {messages.map((message, index) => (
+              <React.Fragment key={message.id}>
+                {renderMessage(message, index)}
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+      </div>
 
-      <div className="bg-background rounded-md overflow-hidden text-sm flex-shrink-0">
-        <TextareaAutosize
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder="e.g., list users created last month in db.users"
-          disabled={isLoading}
-          className="w-full resize-none p-2 outline-0 placeholder:text-neutral-400"
-          autoComplete="off"
-          autoCorrect="off"
-          minRows={2}
-          maxRows={maxRows}
-          onKeyDown={handleKeyDown}
-          autoFocus
-        />
-        <div className="flex justify-between border-t border-muted p-2">
-          {isLoading ? (
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <LoadingTypewriter className="text-xs">
-                Generating
-              </LoadingTypewriter>
-            </div>
-          ) : (
-            <div />
-          )}
-
-          <Button
-            type="submit"
-            size="icon"
-            disabled={!isLoading && !inputValue.trim()}
-            aria-label="Send message"
-            onClick={() => {
-              if (isLoading) {
-                abortController.current?.abort();
-              } else {
-                handleSubmit();
-              }
-            }}
-          >
+      {/* Input container - fixed at bottom */}
+      <div className="px-4 pb-2 flex-shrink-0">
+        <div className="bg-background rounded-md overflow-hidden text-sm">
+          <TextareaAutosize
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder="e.g., list users created last month in db.users"
+            disabled={isLoading}
+            className="w-full resize-none p-2 outline-0 placeholder:text-neutral-400"
+            autoComplete="off"
+            autoCorrect="off"
+            minRows={2}
+            maxRows={maxRows}
+            onKeyDown={handleKeyDown}
+            autoFocus
+          />
+          <div className="flex justify-between border-t border-muted p-2">
             {isLoading ? (
-              <StopCircleIcon className="size-3" />
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <LoadingTypewriter className="text-xs">
+                  Generating
+                </LoadingTypewriter>
+              </div>
             ) : (
-              <SendHorizonal className="size-3" />
+              <div />
             )}
-          </Button>
+
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!isLoading && !inputValue.trim()}
+              aria-label="Send message"
+              onClick={() => {
+                if (isLoading) {
+                  abortController.current?.abort();
+                } else {
+                  handleSubmit();
+                }
+              }}
+            >
+              {isLoading ? (
+                <StopCircleIcon className="size-3" />
+              ) : (
+                <SendHorizonal className="size-3" />
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
