@@ -344,21 +344,14 @@ const MainDataView = ({
   } = useMutation<services.SQLResult, Error, string>({
     mutationFn: async (sqlToExecute: string) => {
       try {
-        appendActivityLog("Executing SQL...");
+        appendActivityLog("Running query...");
         const res = await ExecuteSQL(sqlToExecute);
+        appendActivityLog(`Query OK`);
 
-        if (res.rowsAffected && res.rowsAffected > 0) {
-          appendActivityLog(
-            `SQL executed successfully, ${res.rowsAffected} row${res.rowsAffected === 1 ? "" : "s"} affected`,
-          );
-        } else {
-          appendActivityLog("SQL executed successfully");
-        }
         return res;
       } catch (error: any) {
         const errorMessage = error?.message || String(error);
-        appendActivityLog(`SQL execution error: ${errorMessage}`);
-        toast.error("Error executing SQL", { description: errorMessage });
+        appendActivityLog(`Query failed: ${errorMessage}`);
         throw error;
       }
     },
