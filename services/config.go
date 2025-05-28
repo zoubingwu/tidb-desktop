@@ -33,11 +33,6 @@ type ThemeSettings struct {
 	BaseTheme string `json:"baseTheme"` // e.g., "claude", "nature"
 }
 
-// newDefaultThemeSettings creates ThemeSettings with default values.
-func newDefaultThemeSettings() *ThemeSettings {
-	return &ThemeSettings{Mode: DefaultThemeMode, BaseTheme: DefaultBaseTheme}
-}
-
 // OpenAISettings holds settings specific to OpenAI provider
 type OpenAISettings struct {
 	APIKey  string `json:"apiKey,omitempty"`
@@ -67,33 +62,12 @@ type WindowSettings struct {
 	IsMaximized bool `json:"isMaximized,omitempty"`
 }
 
-// newDefaultWindowSettings creates WindowSettings with default values.
-func newDefaultWindowSettings() *WindowSettings {
-	return &WindowSettings{
-		Width:       DefaultWindowWidth,
-		Height:      DefaultWindowHeight,
-		X:           DefaultWindowX,
-		Y:           DefaultWindowY,
-		IsMaximized: false,
-	}
-}
-
 // AIProviderSettings holds API keys and settings for different AI providers
 type AIProviderSettings struct {
 	CurrentProvider string              `json:"provider,omitempty"` // 'openai', 'anthropic', 'openrouter'
 	OpenAI          *OpenAISettings     `json:"openai,omitempty"`
 	Anthropic       *AnthropicSettings  `json:"anthropic,omitempty"`
 	OpenRouter      *OpenRouterSettings `json:"openrouter,omitempty"`
-}
-
-// newDefaultAIProviderSettings creates AIProviderSettings with default values.
-func newDefaultAIProviderSettings() *AIProviderSettings {
-	return &AIProviderSettings{
-		CurrentProvider: DefaultAIProvider,
-		OpenAI:          &OpenAISettings{Model: DefaultOpenAIModel},
-		Anthropic:       &AnthropicSettings{Model: DefaultAnthropicModel},
-		OpenRouter:      &OpenRouterSettings{Model: DefaultOpenRouterModel},
-	}
 }
 
 // generateConnectionID creates a random 8-character hex string for connection ID
@@ -105,7 +79,7 @@ func generateConnectionID() string {
 
 // ConfigData defines the structure of the entire configuration file.
 type ConfigData struct {
-	Connections        map[string]ConnectionDetails `json:"connections"` // key is now connection ID, not name
+	Connections        map[string]ConnectionDetails `json:"connections"` // key is connection ID
 	ThemeSettings      *ThemeSettings               `json:"appearance,omitempty"`
 	AIProviderSettings *AIProviderSettings          `json:"ai,omitempty"`
 	WindowSettings     *WindowSettings              `json:"window,omitempty"`
@@ -130,86 +104,31 @@ func NewConfigService() (*ConfigService, error) {
 
 	service := &ConfigService{
 		configPath: configFilePath,
-		config: &ConfigData{ // Initialize with defaults
-			Connections:        make(map[string]ConnectionDetails),
-			ThemeSettings:      newDefaultThemeSettings(),
-			AIProviderSettings: newDefaultAIProviderSettings(),
-			WindowSettings:     newDefaultWindowSettings(),
+		config: &ConfigData{
+			Connections:   make(map[string]ConnectionDetails),
+			ThemeSettings: &ThemeSettings{Mode: DefaultThemeMode, BaseTheme: DefaultBaseTheme},
+			AIProviderSettings: &AIProviderSettings{
+				CurrentProvider: DefaultAIProvider,
+				OpenAI:          &OpenAISettings{Model: DefaultOpenAIModel},
+				Anthropic:       &AnthropicSettings{Model: DefaultAnthropicModel},
+				OpenRouter:      &OpenRouterSettings{Model: DefaultOpenRouterModel},
+			},
+			WindowSettings: &WindowSettings{
+				Width:       DefaultWindowWidth,
+				Height:      DefaultWindowHeight,
+				X:           DefaultWindowX,
+				Y:           DefaultWindowY,
+				IsMaximized: false,
+			},
 		},
 	}
 
-	// Attempt to load existing config, potentially overwriting defaults
+	// Try to load existing config
 	if err := service.loadConfig(); err != nil {
-		LogInfo("Warning: Failed to load config file %s: %v. Starting with default config.", configFilePath, err)
-		// Defaults are already set, ensure map is initialized if somehow config became nil (unlikely here)
-		if service.config == nil { // Defensive check
-			service.config = &ConfigData{
-				Connections:        make(map[string]ConnectionDetails),
-				ThemeSettings:      newDefaultThemeSettings(),
-				AIProviderSettings: newDefaultAIProviderSettings(),
-				WindowSettings:     newDefaultWindowSettings(),
-			}
-		} else { // Ensure sub-fields are at least their defaults if loadConfig partially failed or cleared them
-			if service.config.Connections == nil {
-				service.config.Connections = make(map[string]ConnectionDetails)
-			}
-			if service.config.ThemeSettings == nil {
-				service.config.ThemeSettings = newDefaultThemeSettings()
-			}
-			if service.config.AIProviderSettings == nil {
-				service.config.AIProviderSettings = newDefaultAIProviderSettings()
-			}
-			// Further ensure nested AI settings if AIProviderSettings was not nil but its fields were
-			ensureAIProviderSubSettings(service.config.AIProviderSettings)
-
-			if service.config.WindowSettings == nil {
-				service.config.WindowSettings = newDefaultWindowSettings()
-			}
-		}
-	} else {
-		LogInfo("Config loaded successfully from %s", configFilePath)
-		// Ensure all parts of the config are present and have defaults if missing from the loaded file.
-		// loadConfig itself handles most of this, but we can double-check top-level structs here.
-		if service.config.ThemeSettings == nil {
-			service.config.ThemeSettings = newDefaultThemeSettings()
-			// Optionally save immediately, though loadConfig should handle this.
-		}
-		if service.config.AIProviderSettings == nil {
-			service.config.AIProviderSettings = newDefaultAIProviderSettings()
-		}
-		// ensureAIProviderSubSettings is called within loadConfig, so it should be fine.
-		if service.config.WindowSettings == nil {
-			service.config.WindowSettings = newDefaultWindowSettings()
-		}
+		LogInfo("Warning: Failed to load config file: %v. Using defaults.", err)
 	}
 
 	return service, nil
-}
-
-// ensureAIProviderSubSettings ensures that the AIProviderSettings and its nested structs are initialized.
-// It also ensures that model fields have default values if they are empty.
-func ensureAIProviderSubSettings(settings *AIProviderSettings) {
-	if settings == nil {
-		return // Should be handled by caller by assigning newDefaultAIProviderSettings
-	}
-	if settings.CurrentProvider == "" {
-		settings.CurrentProvider = DefaultAIProvider
-	}
-	if settings.OpenAI == nil {
-		settings.OpenAI = &OpenAISettings{Model: DefaultOpenAIModel}
-	} else if settings.OpenAI.Model == "" {
-		settings.OpenAI.Model = DefaultOpenAIModel
-	}
-	if settings.Anthropic == nil {
-		settings.Anthropic = &AnthropicSettings{Model: DefaultAnthropicModel}
-	} else if settings.Anthropic.Model == "" {
-		settings.Anthropic.Model = DefaultAnthropicModel
-	}
-	if settings.OpenRouter == nil {
-		settings.OpenRouter = &OpenRouterSettings{Model: DefaultOpenRouterModel}
-	} else if settings.OpenRouter.Model == "" {
-		settings.OpenRouter.Model = DefaultOpenRouterModel
-	}
 }
 
 // loadConfig reads the config file from disk.
@@ -217,69 +136,56 @@ func (s *ConfigService) loadConfig() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, err := os.Stat(s.configPath); os.IsNotExist(err) {
-		LogInfo("Config file %s does not exist. Using defaults set in NewConfigService.", s.configPath)
-		// Defaults are already set in NewConfigService, no need to re-initialize here.
-		// s.config should already have default values.
-		return nil
-	}
-
 	data, err := os.ReadFile(s.configPath)
 	if err != nil {
-		return fmt.Errorf("failed to read config file %s: %w", s.configPath, err)
+		if os.IsNotExist(err) {
+			return nil // File doesn't exist, use defaults
+		}
+		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	if len(data) == 0 {
-		LogInfo("Config file %s is empty. Using defaults set in NewConfigService.", s.configPath)
-		// Defaults are already set in NewConfigService.
-		return nil
+		return nil // Empty file, use defaults
 	}
 
 	var loadedConfig ConfigData
 	if err := json.Unmarshal(data, &loadedConfig); err != nil {
-		return fmt.Errorf("failed to unmarshal config data from %s: %w", s.configPath, err)
+		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// Assign loaded data to the service config, potentially overwriting initial defaults
-	s.config = &loadedConfig
-
-	// Ensure primary nested structures are initialized if they were null/missing in the JSON
-	if s.config.Connections == nil {
-		s.config.Connections = make(map[string]ConnectionDetails)
+	// Merge loaded config with defaults
+	if loadedConfig.Connections != nil {
+		s.config.Connections = loadedConfig.Connections
 	}
-	if s.config.ThemeSettings == nil {
-		s.config.ThemeSettings = newDefaultThemeSettings()
+	if loadedConfig.ThemeSettings != nil {
+		s.config.ThemeSettings = loadedConfig.ThemeSettings
 	}
-	if s.config.AIProviderSettings == nil {
-		s.config.AIProviderSettings = newDefaultAIProviderSettings()
-	} else {
-		// If AIProviderSettings was loaded, ensure its sub-settings and model defaults
-		ensureAIProviderSubSettings(s.config.AIProviderSettings)
+	if loadedConfig.AIProviderSettings != nil {
+		s.config.AIProviderSettings = loadedConfig.AIProviderSettings
 	}
-	if s.config.WindowSettings == nil {
-		s.config.WindowSettings = newDefaultWindowSettings()
+	if loadedConfig.WindowSettings != nil {
+		s.config.WindowSettings = loadedConfig.WindowSettings
 	}
 
 	return nil
 }
 
-// saveConfig is an internal helper that writes the current config data to disk.
-// It assumes the caller holds the necessary lock.
+// saveConfig writes the current config data to disk.
 func (s *ConfigService) saveConfig() error {
 	configDir := filepath.Dir(s.configPath)
 	if err := os.MkdirAll(configDir, 0750); err != nil {
-		return fmt.Errorf("failed to create config directory %s: %w", configDir, err)
+		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	data, err := json.MarshalIndent(s.config, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal config data: %w", err)
+		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
 	if err := os.WriteFile(s.configPath, data, 0600); err != nil {
-		return fmt.Errorf("failed to write config file %s: %w", s.configPath, err)
+		return fmt.Errorf("failed to write config file: %w", err)
 	}
-	LogInfo("Config saved successfully to %s", s.configPath)
+
 	return nil
 }
 
@@ -291,17 +197,14 @@ func (s *ConfigService) GetAllConnections() (map[string]ConnectionDetails, error
 	defer s.mu.RUnlock()
 
 	connectionsCopy := make(map[string]ConnectionDetails)
-	if s.config != nil && s.config.Connections != nil {
-		for id, details := range s.config.Connections {
-			details.ID = id // Ensure ID field is set
-			connectionsCopy[id] = details
-		}
+	for id, details := range s.config.Connections {
+		details.ID = id
+		connectionsCopy[id] = details
 	}
 	return connectionsCopy, nil
 }
 
 // AddOrUpdateConnection adds a new connection or updates an existing one.
-// If the connection has no ID, a new random ID will be generated.
 // Returns the connection ID.
 func (s *ConfigService) AddOrUpdateConnection(details ConnectionDetails) (string, error) {
 	if details.Name == "" {
@@ -310,13 +213,6 @@ func (s *ConfigService) AddOrUpdateConnection(details ConnectionDetails) (string
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	if s.config == nil {
-		s.config = &ConfigData{}
-	}
-	if s.config.Connections == nil {
-		s.config.Connections = make(map[string]ConnectionDetails)
-	}
 
 	// Generate ID if not provided (new connection)
 	if details.ID == "" {
@@ -328,7 +224,7 @@ func (s *ConfigService) AddOrUpdateConnection(details ConnectionDetails) (string
 		}
 		details.ID = generateConnectionID()
 	} else {
-		// Updating existing connection - check for name conflicts with other connections
+		// Updating existing connection - check for name conflicts
 		for id, existing := range s.config.Connections {
 			if id != details.ID && existing.Name == details.Name {
 				return "", fmt.Errorf("connection name '%s' already exists", details.Name)
@@ -346,9 +242,6 @@ func (s *ConfigService) DeleteConnection(connectionID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.config == nil || s.config.Connections == nil {
-		return fmt.Errorf("connection '%s' not found (config or connections map is nil)", connectionID)
-	}
 	if _, exists := s.config.Connections[connectionID]; !exists {
 		return fmt.Errorf("connection '%s' not found", connectionID)
 	}
@@ -362,32 +255,11 @@ func (s *ConfigService) GetConnection(connectionID string) (ConnectionDetails, b
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.config == nil || s.config.Connections == nil {
-		return ConnectionDetails{}, false, nil
-	}
 	details, found := s.config.Connections[connectionID]
 	if found {
-		details.ID = connectionID // Ensure ID field is set
+		details.ID = connectionID
 	}
 	return details, found, nil
-}
-
-// GetConnectionByName retrieves a specific connection by name (for backward compatibility).
-func (s *ConfigService) GetConnectionByName(name string) (ConnectionDetails, bool, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.config == nil || s.config.Connections == nil {
-		return ConnectionDetails{}, false, nil
-	}
-
-	for id, details := range s.config.Connections {
-		if details.Name == name {
-			details.ID = id // Ensure ID field is set
-			return details, true, nil
-		}
-	}
-	return ConnectionDetails{}, false, nil
 }
 
 // RecordConnectionUsage updates the LastUsed timestamp for a connection by ID.
@@ -395,14 +267,9 @@ func (s *ConfigService) RecordConnectionUsage(connectionID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.config == nil || s.config.Connections == nil {
-		LogInfo("Warning: Attempted to record usage for connection '%s' but config or connections map is nil", connectionID)
-		return nil
-	}
 	details, found := s.config.Connections[connectionID]
 	if !found {
-		LogInfo("Warning: Attempted to record usage for non-existent connection '%s'", connectionID)
-		return nil
+		return nil // Connection not found, ignore
 	}
 
 	details.LastUsed = time.Now().Format(time.RFC3339)
@@ -416,12 +283,8 @@ func (s *ConfigService) RecordConnectionUsage(connectionID string) error {
 func (s *ConfigService) GetThemeSettings() (*ThemeSettings, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.config == nil || s.config.ThemeSettings == nil {
-		LogInfo("ThemeSettings were nil in config, returning defaults.")
-		return newDefaultThemeSettings(), nil
-	}
-	settingsCopy := *s.config.ThemeSettings // Return a copy
-	return &settingsCopy, nil
+
+	return s.config.ThemeSettings, nil
 }
 
 // SaveThemeSettings updates and saves the theme settings.
@@ -429,15 +292,6 @@ func (s *ConfigService) SaveThemeSettings(settings ThemeSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if settings.Mode == "" {
-		settings.Mode = DefaultThemeMode
-	}
-	if settings.BaseTheme == "" {
-		settings.BaseTheme = DefaultBaseTheme
-	}
-	if s.config == nil { // Should not happen
-		s.config = &ConfigData{}
-	}
 	s.config.ThemeSettings = &settings
 	return s.saveConfig()
 }
@@ -448,14 +302,8 @@ func (s *ConfigService) SaveThemeSettings(settings ThemeSettings) error {
 func (s *ConfigService) GetAIProviderSettings() (*AIProviderSettings, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.config == nil || s.config.AIProviderSettings == nil {
-		LogInfo("AIProviderSettings were nil in config, returning defaults.")
-		return newDefaultAIProviderSettings(), nil
-	}
-	// Return a copy and ensure sub-settings are valid
-	settingsCopy := *s.config.AIProviderSettings
-	ensureAIProviderSubSettings(&settingsCopy) // Ensure copy has valid sub-settings and model defaults
-	return &settingsCopy, nil
+
+	return s.config.AIProviderSettings, nil
 }
 
 // SaveAIProviderSettings updates and saves the AI provider settings.
@@ -463,25 +311,6 @@ func (s *ConfigService) SaveAIProviderSettings(settings AIProviderSettings) erro
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	isValidProvider := false
-	validProviders := []string{"openai", "anthropic", "openrouter"}
-	for _, p := range validProviders {
-		if settings.CurrentProvider == p {
-			isValidProvider = true
-			break
-		}
-	}
-	if !isValidProvider {
-		LogInfo("Warning: Invalid CurrentProvider '%s'. Defaulting to '%s'.", settings.CurrentProvider, DefaultAIProvider)
-		settings.CurrentProvider = DefaultAIProvider
-	}
-
-	// Ensure nested structs and their model fields have defaults before saving
-	ensureAIProviderSubSettings(&settings)
-
-	if s.config == nil { // Should not happen
-		s.config = &ConfigData{}
-	}
 	s.config.AIProviderSettings = &settings
 	return s.saveConfig()
 }
@@ -492,12 +321,8 @@ func (s *ConfigService) SaveAIProviderSettings(settings AIProviderSettings) erro
 func (s *ConfigService) GetWindowSettings() (*WindowSettings, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.config == nil || s.config.WindowSettings == nil {
-		LogInfo("WindowSettings were nil in config, returning defaults.")
-		return newDefaultWindowSettings(), nil
-	}
-	settingsCopy := *s.config.WindowSettings // Return a copy
-	return &settingsCopy, nil
+
+	return s.config.WindowSettings, nil
 }
 
 // SaveWindowSettings updates and saves the window settings.
@@ -505,18 +330,6 @@ func (s *ConfigService) SaveWindowSettings(settings WindowSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if settings.Width <= 0 {
-		settings.Width = DefaultWindowWidth
-	}
-	if settings.Height <= 0 {
-		settings.Height = DefaultWindowHeight
-	}
-	// X and Y can be negative; -1 is our convention for center.
-
-	if s.config == nil { // Should not happen
-		s.config = &ConfigData{}
-	}
 	s.config.WindowSettings = &settings
-	LogInfo("Saving window settings: %+v", settings)
 	return s.saveConfig()
 }
