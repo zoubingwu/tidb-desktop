@@ -490,8 +490,8 @@ export const AIPanel = ({
                               variant="destructive"
                               onClick={() => {
                                 onApplyQueryFromAI(
-                                  message.meta.result.query,
-                                  message.meta.result.dbName,
+                                  message.meta.query,
+                                  message.meta.dbName,
                                 );
                                 toast.dismiss();
                               }}
