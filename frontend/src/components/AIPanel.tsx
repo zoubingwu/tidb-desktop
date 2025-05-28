@@ -7,9 +7,10 @@ import {
 import { LoadingTypewriter } from "@/components/ui/loading-typewriter";
 import { generateSqlAgent } from "@/lib/ai";
 import { useMemoizedFn } from "ahooks";
-import { type CoreMessage, type Tool } from "ai";
+import { type CoreMessage, type Tool, tool } from "ai";
 import {
   CheckCircle2Icon,
+  CheckIcon,
   Loader,
   PlayIcon,
   SendHorizonal,
@@ -25,6 +26,8 @@ import React, {
 import Markdown from "react-markdown";
 import TextareaAutosize from "react-textarea-autosize";
 import { toast } from "sonner";
+import { services } from "wailsjs/go/models";
+import { z } from "zod";
 
 // Expanded message type to better represent stream states
 type DisplayBlock = {
@@ -219,21 +222,133 @@ const useGenerateSQLAgent = (tools: Record<string, Tool>) => {
 };
 
 interface AIPanelProps {
-  onApplyQueryFromAI: (query: string, dbName: string) => void;
+  onApplyQueryFromAI: (
+    query: string,
+    dbName: string,
+  ) => Promise<services.SQLResult>;
   opened?: boolean;
   isExecutingSQLFromAI?: boolean;
-  tools: Record<string, Tool>;
 }
 
 export const AIPanel = ({
   onApplyQueryFromAI,
   opened,
   isExecutingSQLFromAI,
-  tools,
 }: AIPanelProps) => {
   const [inputValue, setInputValue] = useState("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [maxRows, setMaxRows] = useState(2);
+
+  const tools = {
+    executeSql: tool({
+      description:
+        "Executes SQL queries. For read-only queries (SELECT), executes immediately. For write operations (INSERT, UPDATE, DELETE, etc.), requires user confirmation through the UI.",
+      parameters: z.object({
+        query: z
+          .string()
+          .describe(
+            "The SQL query string to execute (e.g., `SELECT * FROM users LIMIT 3`, `INSERT INTO users (name) VALUES ('John')`).",
+          ),
+        dbName: z
+          .string()
+          .describe("The name of the database the query was executed on."),
+        requiresConfirmation: z
+          .boolean()
+          .optional()
+          .describe(
+            "Set to true for non-read-only operations that require user confirmation. Should be true for INSERT, UPDATE, DELETE, ALTER, DROP, etc.",
+          ),
+      }),
+      execute: ({
+        query,
+        requiresConfirmation = false,
+        dbName,
+      }): Promise<{
+        success: boolean;
+        result?: services.SQLResult;
+        error?: string;
+      }> => {
+        console.log(
+          `Tool Call: executeSql (Query: ${query}, dbName: ${dbName})`,
+        );
+
+        return new Promise((resolve) => {
+          const trimmedQuery = query.trim().toUpperCase();
+          const isReadOnly =
+            trimmedQuery.startsWith("SELECT") ||
+            trimmedQuery.startsWith("SHOW") ||
+            trimmedQuery.startsWith("DESCRIBE") ||
+            trimmedQuery.startsWith("EXPLAIN");
+
+          // Auto-detect if confirmation is needed for non-read-only queries
+          const needsConfirmation = requiresConfirmation || !isReadOnly;
+
+          const run = () => {
+            if (needsConfirmation) {
+              toast.dismiss();
+            }
+            return onApplyQueryFromAI(query, dbName)
+              .then((res) => {
+                console.log("Tool Result: executeSql ->", res);
+                return resolve({
+                  success: true,
+                  result: res,
+                });
+              })
+              .catch((err) => {
+                console.log("Tool Error: executeSql ->", err);
+                return resolve({
+                  success: false,
+                  error: err,
+                });
+              });
+          };
+
+          const cancel = () => {
+            if (needsConfirmation) {
+              toast.dismiss();
+            }
+            return resolve({
+              success: false,
+              error: "User denied execution",
+            });
+          };
+
+          if (needsConfirmation) {
+            console.log(
+              `Tool Call: executeSql (Query requires confirmation: ${query})`,
+            );
+
+            toast("Confirm to run this query", {
+              duration: Infinity,
+              action: (
+                <div className="ml-auto">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="text-xs"
+                    onClick={cancel}
+                  >
+                    <XIcon className="size-3" />
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="icon"
+                    className="text-xs ml-2"
+                    onClick={run}
+                  >
+                    <CheckIcon className="size-3" />
+                  </Button>
+                </div>
+              ),
+            });
+          } else {
+            return run();
+          }
+        });
+      },
+    }),
+  };
 
   const {
     handleSubmit: handleSubmitPrompt,
@@ -349,7 +464,7 @@ export const AIPanel = ({
         );
       case "sql":
         return (
-          <div className={`sql ${baseClasses} my-2 force-select-text`}>
+          <div className={`sql ${baseClasses} my-2 force-select-text group`}>
             <div className="markdown-body">
               <div className="rounded relative">
                 <pre className="whitespace-pre-wrap p-2">{message.content}</pre>
@@ -378,7 +493,7 @@ export const AIPanel = ({
                       },
                     );
                   }}
-                  className="absolute bottom-2 right-2 size-5"
+                  className="absolute bottom-2 right-2 size-5 opacity-0 group-hover:opacity-100 transition-opacity"
                   disabled={isExecutingSQLFromAI}
                 >
                   {isExecutingSQLFromAI ? (
