@@ -62,6 +62,7 @@ type ConnectionMetadata struct {
 	ConnectionID   string                      `json:"connectionId"`   // Connection ID for file storage
 	ConnectionName string                      `json:"connectionName"` // Display name
 	LastExtracted  time.Time                   `json:"lastExtracted"`
+	Version        string                      `json:"version,omitempty"` // Database version
 	Databases      map[string]DatabaseMetadata `json:"databases"`
 }
 
@@ -536,20 +537,4 @@ func (s *MetadataService) extractTableMetadata(ctx context.Context, connDetails 
 	}
 
 	return table, nil
-}
-
-// saveMetadataToFile saves metadata to file without locking (internal helper)
-func (s *MetadataService) saveMetadataToFile(metadata *ConnectionMetadata) error {
-	filePath := s.getMetadataFilePath(metadata.ConnectionID)
-	data, err := json.MarshalIndent(metadata, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %w", err)
-	}
-
-	if err := os.WriteFile(filePath, data, 0600); err != nil {
-		return fmt.Errorf("failed to write metadata file: %w", err)
-	}
-
-	LogInfo("Saved metadata to file for connection: %s", metadata.ConnectionID)
-	return nil
 }

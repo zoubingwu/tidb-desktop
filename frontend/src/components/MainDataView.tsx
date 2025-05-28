@@ -240,8 +240,11 @@ const MainDataView = ({
 
     const cleanup2 = EventsOn(
       "metadata:extraction:completed",
-      (metadata: services.ConnectionMetadata) => {
+      async (metadata: services.ConnectionMetadata) => {
         appendActivityLog("Indexing database completed.");
+        if (metadata.version) {
+          appendActivityLog(`Connected to ${metadata.version}`);
+        }
         mergeDatabaseTree(
           Object.keys(metadata.databases).map((dbName) => ({
             dbName,

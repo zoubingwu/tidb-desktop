@@ -104,7 +104,7 @@ func (a *App) startup(ctx context.Context) {
 			if errSave := a.metadataService.SaveMetadata(connectionID); errSave != nil {
 				services.LogError("Failed to save metadata after extraction for connection ID '%s': %v", connectionID, errSave)
 			}
-			runtime.EventsEmit(a.ctx, "metadata:extraction:completed", metadata)
+			a.emitMetadataWithVersion(metadata)
 		}
 	})
 }
@@ -192,7 +192,7 @@ func (a *App) ConnectUsingSaved(connectionID string) (*services.ConnectionDetail
 		runtime.EventsEmit(a.ctx, "metadata:extraction:failed", err.Error())
 	} else if !metadata.LastExtracted.IsZero() {
 		// Only emit completed event if we actually loaded existing metadata from file
-		runtime.EventsEmit(a.ctx, "metadata:extraction:completed", metadata)
+		a.emitMetadataWithVersion(metadata)
 	}
 	// If LastExtracted is zero, it means we created an empty structure - frontend will trigger extraction
 
@@ -291,6 +291,48 @@ func (a *App) ExecuteSQL(query string) (*services.SQLResult, error) {
 	}
 	services.LogInfo("SQL execution completed successfully")
 	return result, nil
+}
+
+// GetVersion retrieves the database version using SELECT VERSION() query.
+func (a *App) GetVersion() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("app context not initialized")
+	}
+	if a.activeConnection == nil {
+		return "", fmt.Errorf("no active database connection established for this session")
+	}
+
+	result, err := a.dbService.ExecuteSQL(a.ctx, *a.activeConnection, "SELECT VERSION();")
+	if err != nil {
+		services.LogInfo("Failed to get database version: %v", err)
+		return "", fmt.Errorf("failed to get database version: %w", err)
+	}
+
+	if len(result.Rows) == 0 {
+		return "", fmt.Errorf("no version information returned from database")
+	}
+
+	// Get the column name from the first row
+	row := result.Rows[0]
+	if len(row) == 0 {
+		return "", fmt.Errorf("empty version result returned from database")
+	}
+
+	// VERSION() returns a single column, get the first value
+	var version string
+	for _, v := range row {
+		if versionStr, ok := v.(string); ok {
+			version = versionStr
+			break
+		}
+	}
+
+	if version == "" {
+		return "", fmt.Errorf("version information is not a string or is empty")
+	}
+
+	services.LogInfo("Database version retrieved: %s", version)
+	return version, nil
 }
 
 // ListDatabases retrieves a list of database/schema names accessible by the connection.
@@ -474,4 +516,19 @@ func (a *App) UpdateAIDescription(dbName string, targetType string, tableName st
 	}
 
 	return nil
+}
+
+func (a *App) emitMetadataWithVersion(metadata *services.ConnectionMetadata) {
+	// Try to get version, but don't fail the emission if it doesn't work
+	if a.activeConnection != nil {
+		version, err := a.GetVersion()
+		if err != nil {
+			services.LogError("Failed to get database version for metadata emission: %v", err)
+			// Still emit without version
+		} else {
+			metadata.Version = version
+		}
+	}
+
+	runtime.EventsEmit(a.ctx, "metadata:extraction:completed", metadata)
 }
