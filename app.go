@@ -70,7 +70,7 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}
 
-	// subscribe to metadata extraction events
+	// Subscribe to metadata extraction events
 	runtime.EventsOn(a.ctx, "metadata:extraction:start", func(optionalData ...interface{}) {
 		connectionID := optionalData[0].(string)
 		force := optionalData[1].(bool)
@@ -86,7 +86,11 @@ func (a *App) startup(ctx context.Context) {
 		var err error
 
 		if force {
-			metadata, err = a.metadataService.ExtractMetadata(a.ctx, connectionID, dbName)
+			if dbName != "" {
+				metadata, err = a.metadataService.ExtractMetadata(a.ctx, connectionID, dbName)
+			} else {
+				metadata, err = a.metadataService.ExtractMetadata(a.ctx, connectionID)
+			}
 		} else {
 			metadata, err = a.metadataService.GetMetadata(a.ctx, connectionID)
 		}
@@ -99,8 +103,6 @@ func (a *App) startup(ctx context.Context) {
 			// Save the freshly extracted/retrieved metadata to disk
 			if errSave := a.metadataService.SaveMetadata(connectionID); errSave != nil {
 				services.LogError("Failed to save metadata after extraction for connection ID '%s': %v", connectionID, errSave)
-				// Optionally, emit a different event or append to the error message for the frontend
-				// For now, the main completion event is still emitted, but we log the save error.
 			}
 			runtime.EventsEmit(a.ctx, "metadata:extraction:completed", metadata)
 		}
@@ -172,11 +174,27 @@ func (a *App) ConnectUsingSaved(connectionID string) (*services.ConnectionDetail
 	a.activeConnectionID = connectionID
 	services.LogInfo("Connection '%s' activated successfully", details.Name)
 
+	// Debug: Log the connectionID and details.ID to check for discrepancies
+	services.LogInfo("DEBUG: connectionID=%s, details.ID=%s, details.Name=%s", connectionID, details.ID, details.Name)
+
 	// Record usage timestamp in config
 	if err := a.configService.RecordConnectionUsage(connectionID); err != nil {
 		// Log the error but don't fail the connection for this
 		services.LogInfo("Warning: Failed to record usage for connection '%s': %v", details.Name, err)
 	}
+
+	// Load metadata into memory for this connection
+	metadata, err := a.metadataService.LoadMetadata(a.ctx, connectionID)
+	if err != nil {
+		// Log the error but don't fail the connection
+		services.LogInfo("Warning: Failed to load metadata for connection '%s': %v", details.Name, err)
+		// Emit extraction failed event to notify UI
+		runtime.EventsEmit(a.ctx, "metadata:extraction:failed", err.Error())
+	} else if !metadata.LastExtracted.IsZero() {
+		// Only emit completed event if we actually loaded existing metadata from file
+		runtime.EventsEmit(a.ctx, "metadata:extraction:completed", metadata)
+	}
+	// If LastExtracted is zero, it means we created an empty structure - frontend will trigger extraction
 
 	// Emit event to notify frontend the active session is ready
 	runtime.EventsEmit(a.ctx, "connection:established", details)
@@ -238,6 +256,12 @@ func (a *App) DeleteSavedConnection(connectionID string) error {
 	err := a.configService.DeleteConnection(connectionID)
 	if err != nil {
 		return err
+	}
+
+	// Delete metadata for this connection
+	if err := a.metadataService.DeleteConnectionMetadata(connectionID); err != nil {
+		// Log the error but don't fail the deletion
+		services.LogInfo("Warning: Failed to delete metadata for connection '%s': %v", connectionName, err)
 	}
 
 	// If the deleted connection was the active one, disconnect the session
@@ -396,7 +420,7 @@ func (a *App) GetDatabaseMetadata() (*services.ConnectionMetadata, error) {
 }
 
 // ExtractDatabaseMetadata forces a fresh extraction of database metadata
-func (a *App) ExtractDatabaseMetadata() (*services.ConnectionMetadata, error) {
+func (a *App) ExtractDatabaseMetadata(dbName ...string) (*services.ConnectionMetadata, error) {
 	if a.ctx == nil {
 		return nil, fmt.Errorf("app context not initialized")
 	}
@@ -404,7 +428,23 @@ func (a *App) ExtractDatabaseMetadata() (*services.ConnectionMetadata, error) {
 		return nil, fmt.Errorf("no active connection")
 	}
 
-	return a.metadataService.ExtractMetadata(a.ctx, a.activeConnectionID)
+	var optionalDbName []string
+	if len(dbName) > 0 && dbName[0] != "" {
+		optionalDbName = dbName
+	}
+
+	metadata, err := a.metadataService.ExtractMetadata(a.ctx, a.activeConnectionID, optionalDbName...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Save the extracted metadata to disk
+	if saveErr := a.metadataService.SaveMetadata(a.activeConnectionID); saveErr != nil {
+		services.LogError("Failed to save metadata after extraction: %v", saveErr)
+		// Don't fail the operation, just log the error
+	}
+
+	return metadata, nil
 }
 
 // UpdateAIDescription updates the AI-generated description for a database component
