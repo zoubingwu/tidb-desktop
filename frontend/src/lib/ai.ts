@@ -277,6 +277,7 @@ export async function* generateSqlAgent(
   userPrompt: string,
   conversationHistory: CoreMessage[] = [],
   tools: Record<string, Tool> = {},
+  abortSignal: AbortSignal,
 ): AsyncGenerator<AgentStreamEvent, void, unknown> {
   const model = await createModel();
   const metadata = await GetDatabaseMetadata();
@@ -413,6 +414,7 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
       tools: agentTools,
       toolChoice: "auto",
       maxSteps: 5,
+      abortSignal,
     });
 
     // --- Process the Stream ---
