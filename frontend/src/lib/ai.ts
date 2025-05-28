@@ -29,7 +29,7 @@ export const AVAILABLE_MODELS = {
     "gpt-4o",
     "gpt-4o-mini",
     "gpt-3.5-turbo",
-  ],
+  ].sort(),
   anthropic: [
     "claude-3-5-sonnet-latest",
     "claude-3-5-haiku-latest",
@@ -37,14 +37,15 @@ export const AVAILABLE_MODELS = {
   ],
   openrouter: [
     "openai/gpt-4.1",
-    "gpt-4o",
+    "openai/gpt-4o",
     "google/gemini-2.5-pro-preview",
     "google/gemini-2.5-flash-preview",
-    "google/gemini-2.0-flash-001",
-    "google/gemini-pro-1.5",
+    "anthropic/claude-opus-4",
+    "anthropic/claude-sonnet-4",
+    "anthropic/claude-3.7-sonnet",
     "anthropic/claude-3.5-sonnet",
-    "anthropic/claude-3-haiku",
-  ],
+    "deepseek/deepseek-r1",
+  ].sort(),
 };
 
 const createModel = async (options?: ProviderConnectionOptions) => {
