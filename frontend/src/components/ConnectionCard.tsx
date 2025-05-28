@@ -29,34 +29,41 @@ import { useState } from "react";
 import { services } from "wailsjs/go/models";
 
 type ConnectionCardProps = {
+  id: string;
   name: string;
   details: services.ConnectionDetails;
-  onConnect: (name: string) => Promise<void>;
-  onDelete: (name: string) => Promise<void>;
-  onEdit: (name: string, details: services.ConnectionDetails) => void;
+  onConnect: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onEdit: (id: string, details: services.ConnectionDetails) => void;
   isConnecting: boolean;
   lastUsed: string;
 };
 
 export const ConnectionCard = ({
+  id,
   name,
   details,
   onConnect,
   onDelete,
+  onEdit,
   isConnecting,
   lastUsed,
-  onEdit,
 }: ConnectionCardProps) => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteConfirm = async () => {
     setIsDeleting(true);
-    await onDelete(name);
-    setIsDeleting(false);
+    try {
+      await onDelete(id);
+    } catch (error) {
+      console.error("Delete error:", error);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleOpenEditForm = () => {
-    onEdit(name, details);
+    onEdit(id, details);
   };
 
   return (
@@ -85,7 +92,7 @@ export const ConnectionCard = ({
       <CardFooter className="flex items-center justify-between gap-2">
         {/* Connect Button */}
         <Button
-          onClick={() => onConnect(name)}
+          onClick={() => onConnect(id)}
           disabled={isConnecting || isDeleting}
           className="flex-grow"
         >

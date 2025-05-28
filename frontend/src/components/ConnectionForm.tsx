@@ -13,13 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { inferConnectionDetails } from "@/lib/ai";
 import { Loader } from "lucide-react";
-import React, { useState, useEffect, FormEvent } from "react";
+import React, { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-  DeleteSavedConnection,
-  SaveConnection,
-  TestConnection,
-} from "wailsjs/go/main/App";
+import { SaveConnection, TestConnection } from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
 import { ClipboardGetText } from "wailsjs/runtime/runtime";
 
@@ -43,15 +39,16 @@ type ConnectionFormDialogProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onConnectionSaved: (
-    name: string,
+    id: string,
     connection: services.ConnectionDetails,
   ) => void;
   defaultValues: {
+    id: string;
     name: string;
     connection: ConnectionFormState;
   } | null;
   isEditing?: boolean;
-  savedConnections: Record<string, services.ConnectionDetails>;
+  savedConnections: Record<string, services.ConnectionDetails>; // key is now connection ID
 };
 
 export function ConnectionFormDialog({
@@ -141,12 +138,15 @@ export function ConnectionFormDialog({
 
     setIsSaving(true);
     try {
-      const isNameTaken =
-        (!isEditing && name in savedConnections) ||
-        (isEditing &&
-          defaultValues?.name &&
-          defaultValues?.name !== name &&
-          name in savedConnections);
+      // Check for name conflicts only with other connections (not the one being edited)
+      const isNameTaken = Object.entries(savedConnections).some(
+        ([id, details]) => {
+          if (isEditing && defaultValues?.id === id) {
+            return false; // Skip the connection being edited
+          }
+          return details.name === name;
+        },
+      );
 
       if (isNameTaken) {
         toast.error("Connection Name Already Exists", {
@@ -155,15 +155,24 @@ export function ConnectionFormDialog({
         return;
       }
 
-      if (isEditing && defaultValues?.name) {
-        await DeleteSavedConnection(defaultValues.name);
-      }
-      await SaveConnection(name, formState);
+      // Prepare connection details to save
+      const connectionToSave: services.ConnectionDetails = {
+        ...formState,
+        name: name,
+        id: isEditing ? defaultValues?.id || "" : "", // Use existing ID if editing, empty for new
+      };
+
+      // SaveConnection now handles everything - no need to manually delete
+      const savedConnectionId = await SaveConnection(connectionToSave);
 
       toast.success("Connection Saved", {
         description: `Connection '${name}' saved successfully.`,
       });
-      onConnectionSaved(name, formState);
+
+      onConnectionSaved(savedConnectionId, {
+        ...connectionToSave,
+        id: savedConnectionId,
+      });
       onOpenChange(false);
     } catch (error: any) {
       toast.error("Save Error", {

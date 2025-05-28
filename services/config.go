@@ -1,6 +1,8 @@
 package services
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -94,9 +96,16 @@ func newDefaultAIProviderSettings() *AIProviderSettings {
 	}
 }
 
+// generateConnectionID creates a random 8-character hex string for connection ID
+func generateConnectionID() string {
+	bytes := make([]byte, 4) // 4 bytes = 8 hex characters
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes)
+}
+
 // ConfigData defines the structure of the entire configuration file.
 type ConfigData struct {
-	Connections        map[string]ConnectionDetails `json:"connections"`
+	Connections        map[string]ConnectionDetails `json:"connections"` // key is now connection ID, not name
 	ThemeSettings      *ThemeSettings               `json:"appearance,omitempty"`
 	AIProviderSettings *AIProviderSettings          `json:"ai,omitempty"`
 	WindowSettings     *WindowSettings              `json:"window,omitempty"`
@@ -283,80 +292,121 @@ func (s *ConfigService) GetAllConnections() (map[string]ConnectionDetails, error
 
 	connectionsCopy := make(map[string]ConnectionDetails)
 	if s.config != nil && s.config.Connections != nil {
-		for name, details := range s.config.Connections {
-			details.Name = name
-			connectionsCopy[name] = details
+		for id, details := range s.config.Connections {
+			details.ID = id // Ensure ID field is set
+			connectionsCopy[id] = details
 		}
 	}
 	return connectionsCopy, nil
 }
 
-// AddOrUpdateConnection adds a new connection or updates an existing one by name.
-func (s *ConfigService) AddOrUpdateConnection(name string, details ConnectionDetails) error {
-	if name == "" {
-		return fmt.Errorf("connection name cannot be empty")
+// AddOrUpdateConnection adds a new connection or updates an existing one.
+// If the connection has no ID, a new random ID will be generated.
+// Returns the connection ID.
+func (s *ConfigService) AddOrUpdateConnection(details ConnectionDetails) (string, error) {
+	if details.Name == "" {
+		return "", fmt.Errorf("connection name cannot be empty")
 	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.config == nil { // Should not happen with NewConfigService initialization
+	if s.config == nil {
 		s.config = &ConfigData{}
 	}
 	if s.config.Connections == nil {
 		s.config.Connections = make(map[string]ConnectionDetails)
 	}
-	s.config.Connections[name] = details
-	return s.saveConfig()
+
+	// Generate ID if not provided (new connection)
+	if details.ID == "" {
+		// Check for name conflicts
+		for _, existing := range s.config.Connections {
+			if existing.Name == details.Name {
+				return "", fmt.Errorf("connection name '%s' already exists", details.Name)
+			}
+		}
+		details.ID = generateConnectionID()
+	} else {
+		// Updating existing connection - check for name conflicts with other connections
+		for id, existing := range s.config.Connections {
+			if id != details.ID && existing.Name == details.Name {
+				return "", fmt.Errorf("connection name '%s' already exists", details.Name)
+			}
+		}
+	}
+
+	s.config.Connections[details.ID] = details
+	err := s.saveConfig()
+	return details.ID, err
 }
 
-// DeleteConnection removes a connection by name.
-func (s *ConfigService) DeleteConnection(name string) error {
+// DeleteConnection removes a connection by ID.
+func (s *ConfigService) DeleteConnection(connectionID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.config == nil || s.config.Connections == nil {
-		return fmt.Errorf("connection '%s' not found (config or connections map is nil)", name)
+		return fmt.Errorf("connection '%s' not found (config or connections map is nil)", connectionID)
 	}
-	if _, exists := s.config.Connections[name]; !exists {
-		return fmt.Errorf("connection '%s' not found", name)
+	if _, exists := s.config.Connections[connectionID]; !exists {
+		return fmt.Errorf("connection '%s' not found", connectionID)
 	}
 
-	delete(s.config.Connections, name)
+	delete(s.config.Connections, connectionID)
 	return s.saveConfig()
 }
 
-// GetConnection retrieves a specific connection by name.
-func (s *ConfigService) GetConnection(name string) (ConnectionDetails, bool, error) {
+// GetConnection retrieves a specific connection by ID.
+func (s *ConfigService) GetConnection(connectionID string) (ConnectionDetails, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if s.config == nil || s.config.Connections == nil {
 		return ConnectionDetails{}, false, nil
 	}
-	details, found := s.config.Connections[name]
+	details, found := s.config.Connections[connectionID]
 	if found {
-		details.Name = name
+		details.ID = connectionID // Ensure ID field is set
 	}
 	return details, found, nil
 }
 
-// RecordConnectionUsage updates the LastUsed timestamp for a connection.
-func (s *ConfigService) RecordConnectionUsage(name string) error {
+// GetConnectionByName retrieves a specific connection by name (for backward compatibility).
+func (s *ConfigService) GetConnectionByName(name string) (ConnectionDetails, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.config == nil || s.config.Connections == nil {
+		return ConnectionDetails{}, false, nil
+	}
+
+	for id, details := range s.config.Connections {
+		if details.Name == name {
+			details.ID = id // Ensure ID field is set
+			return details, true, nil
+		}
+	}
+	return ConnectionDetails{}, false, nil
+}
+
+// RecordConnectionUsage updates the LastUsed timestamp for a connection by ID.
+func (s *ConfigService) RecordConnectionUsage(connectionID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.config == nil || s.config.Connections == nil {
-		LogInfo("Warning: Attempted to record usage for connection '%s' but config or connections map is nil", name)
+		LogInfo("Warning: Attempted to record usage for connection '%s' but config or connections map is nil", connectionID)
 		return nil
 	}
-	details, found := s.config.Connections[name]
+	details, found := s.config.Connections[connectionID]
 	if !found {
-		LogInfo("Warning: Attempted to record usage for non-existent connection '%s'", name)
+		LogInfo("Warning: Attempted to record usage for non-existent connection '%s'", connectionID)
 		return nil
 	}
 
 	details.LastUsed = time.Now().Format(time.RFC3339)
-	s.config.Connections[name] = details
+	s.config.Connections[connectionID] = details
 	return s.saveConfig()
 }
 

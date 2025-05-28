@@ -14,7 +14,8 @@ import (
 
 // ConnectionDetails defines the structure for DB connection info.
 type ConnectionDetails struct {
-	Name     string `json:"name,omitempty"`
+	ID       string `json:"id,omitempty"`   // Unique identifier for the connection
+	Name     string `json:"name,omitempty"` // Display name for the connection
 	Host     string `json:"host"`
 	Port     string `json:"port"`
 	User     string `json:"user"`

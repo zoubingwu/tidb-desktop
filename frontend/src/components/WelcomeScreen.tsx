@@ -23,10 +23,11 @@ const WelcomeScreen = () => {
   );
   const hasConnections = Object.keys(savedConnections).length > 0;
   const [isLoadingConnections, setIsLoadingConnections] = useState(true);
-  const [connectingName, setConnectingName] = useState<string | null>(null);
+  const [connectingId, setConnectingId] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingConnection, setEditingConnection] = useState<{
+    id: string;
     name: string;
     connection: services.ConnectionDetails;
   } | null>(null);
@@ -49,27 +50,29 @@ const WelcomeScreen = () => {
     fetchConnections();
   });
 
-  const handleConnect = async (name: string) => {
-    setConnectingName(name);
+  const handleConnect = async (connectionId: string) => {
+    setConnectingId(connectionId);
     try {
-      await ConnectUsingSaved(name);
+      await ConnectUsingSaved(connectionId);
     } catch (error: any) {
-      console.error(`Connect using ${name} error:`, error);
+      console.error(`Connect using ${connectionId} error:`, error);
       toast.error("Connection Failed", { description: error?.message });
     } finally {
-      setConnectingName(null);
+      setConnectingId(null);
     }
   };
 
-  const handleDelete = async (name: string) => {
+  const handleDelete = async (connectionId: string) => {
     try {
-      await DeleteSavedConnection(name);
+      await DeleteSavedConnection(connectionId);
+      const connectionName =
+        savedConnections[connectionId]?.name || connectionId;
       toast.success("Connection Deleted", {
-        description: `Connection '${name}' was deleted.`,
+        description: `Connection '${connectionName}' was deleted.`,
       });
       fetchConnections();
     } catch (error: any) {
-      console.error(`Delete connection ${name} error:`, error);
+      console.error(`Delete connection ${connectionId} error:`, error);
       toast.error("Delete Failed", { description: error?.message });
     }
   };
@@ -80,9 +83,16 @@ const WelcomeScreen = () => {
     setIsFormOpen(true);
   };
 
-  const handleEdit = (name: string, details: services.ConnectionDetails) => {
+  const handleEdit = (
+    connectionId: string,
+    details: services.ConnectionDetails,
+  ) => {
     setIsEditing(true);
-    setEditingConnection({ name, connection: details });
+    setEditingConnection({
+      id: connectionId,
+      name: details.name || "",
+      connection: details,
+    });
     setIsFormOpen(true);
   };
 
@@ -130,15 +140,16 @@ const WelcomeScreen = () => {
           </div>
         ) : hasConnections ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-            {sortedConnections.map(([name, details]) => (
+            {sortedConnections.map(([connectionId, details]) => (
               <ConnectionCard
-                key={name}
-                name={name}
+                key={connectionId}
+                id={connectionId}
+                name={details.name || "Unnamed Connection"}
                 details={details}
                 onConnect={handleConnect}
                 onDelete={handleDelete}
                 onEdit={handleEdit}
-                isConnecting={connectingName === name}
+                isConnecting={connectingId === connectionId}
                 lastUsed={
                   details.lastUsed
                     ? formatDistanceToNow(new Date(details.lastUsed), {

@@ -10,11 +10,12 @@ import (
 
 // App struct holds application context and services
 type App struct {
-	ctx              context.Context
-	dbService        *services.DatabaseService
-	configService    *services.ConfigService
-	metadataService  *services.MetadataService
-	activeConnection *services.ConnectionDetails
+	ctx                context.Context
+	dbService          *services.DatabaseService
+	configService      *services.ConfigService
+	metadataService    *services.MetadataService
+	activeConnection   *services.ConnectionDetails
+	activeConnectionID string // Store the ID of the active connection
 }
 
 // NewApp creates a new App application struct
@@ -71,33 +72,33 @@ func (a *App) startup(ctx context.Context) {
 
 	// subscribe to metadata extraction events
 	runtime.EventsOn(a.ctx, "metadata:extraction:start", func(optionalData ...interface{}) {
-		connectionName := optionalData[0].(string)
+		connectionID := optionalData[0].(string)
 		force := optionalData[1].(bool)
 		dbName := optionalData[2].(string)
 
-		services.LogInfo("Metadata extraction started for connection '%s' and force extraction: %v", connectionName, force)
+		services.LogInfo("Metadata extraction started for connection ID '%s' and force extraction: %v", connectionID, force)
 
-		if connectionName == "" {
-			connectionName = a.activeConnection.Name
+		if connectionID == "" {
+			connectionID = a.activeConnectionID
 		}
 
 		var metadata *services.ConnectionMetadata
 		var err error
 
 		if force {
-			metadata, err = a.metadataService.ExtractMetadata(a.ctx, connectionName, dbName)
+			metadata, err = a.metadataService.ExtractMetadata(a.ctx, connectionID, dbName)
 		} else {
-			metadata, err = a.metadataService.GetMetadata(a.ctx, connectionName)
+			metadata, err = a.metadataService.GetMetadata(a.ctx, connectionID)
 		}
 
 		if err != nil {
-			services.LogError("Background metadata extraction failed for connection '%s': %v", connectionName, err)
+			services.LogError("Background metadata extraction failed for connection ID '%s': %v", connectionID, err)
 			runtime.EventsEmit(a.ctx, "metadata:extraction:failed", err.Error())
 		} else {
-			services.LogInfo("Background metadata extraction completed for connection '%s'", connectionName)
+			services.LogInfo("Background metadata extraction completed for connection ID '%s'", connectionID)
 			// Save the freshly extracted/retrieved metadata to disk
-			if errSave := a.metadataService.SaveMetadata(connectionName); errSave != nil {
-				services.LogError("Failed to save metadata after extraction for connection '%s': %v", connectionName, errSave)
+			if errSave := a.metadataService.SaveMetadata(connectionID); errSave != nil {
+				services.LogError("Failed to save metadata after extraction for connection ID '%s': %v", connectionID, errSave)
 				// Optionally, emit a different event or append to the error message for the frontend
 				// For now, the main completion event is still emitted, but we log the save error.
 			}
@@ -142,38 +143,39 @@ func (a *App) TestConnection(details services.ConnectionDetails) (bool, error) {
 	return a.dbService.TestConnection(a.ctx, details)
 }
 
-// ConnectUsingSaved establishes the *current active* connection using a saved connection name.
+// ConnectUsingSaved establishes the *current active* connection using a saved connection ID.
 // Returns the connection details on success.
-func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error) {
+func (a *App) ConnectUsingSaved(connectionID string) (*services.ConnectionDetails, error) {
 	if a.ctx == nil {
 		return nil, fmt.Errorf("app context not initialized")
 	}
-	services.LogInfo("Attempting to connect using saved connection: %s", name)
-	details, found, err := a.configService.GetConnection(name)
+	services.LogInfo("Attempting to connect using saved connection ID: %s", connectionID)
+	details, found, err := a.configService.GetConnection(connectionID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve saved connection '%s': %w", name, err)
+		return nil, fmt.Errorf("failed to retrieve saved connection '%s': %w", connectionID, err)
 	}
 	if !found {
-		return nil, fmt.Errorf("saved connection '%s' not found", name)
+		return nil, fmt.Errorf("saved connection '%s' not found", connectionID)
 	}
 
 	// Test the retrieved connection
 	success, err := a.dbService.TestConnection(a.ctx, details)
 	if err != nil {
-		return nil, fmt.Errorf("connection test failed for saved connection '%s': %w", name, err)
+		return nil, fmt.Errorf("connection test failed for saved connection '%s': %w", details.Name, err)
 	}
 	if !success {
-		return nil, fmt.Errorf("connection test reported failure for saved connection '%s'", name)
+		return nil, fmt.Errorf("connection test reported failure for saved connection '%s'", details.Name)
 	}
 
 	// Store as the *active* connection for this session
 	a.activeConnection = &details
-	services.LogInfo("Connection '%s' activated successfully", name)
+	a.activeConnectionID = connectionID
+	services.LogInfo("Connection '%s' activated successfully", details.Name)
 
 	// Record usage timestamp in config
-	if err := a.configService.RecordConnectionUsage(name); err != nil {
+	if err := a.configService.RecordConnectionUsage(connectionID); err != nil {
 		// Log the error but don't fail the connection for this
-		services.LogInfo("Warning: Failed to record usage for connection '%s': %v", name, err)
+		services.LogInfo("Warning: Failed to record usage for connection '%s': %v", details.Name, err)
 	}
 
 	// Emit event to notify frontend the active session is ready
@@ -186,6 +188,7 @@ func (a *App) ConnectUsingSaved(name string) (*services.ConnectionDetails, error
 func (a *App) Disconnect() {
 	services.LogInfo("Disconnecting session...")
 	a.activeConnection = nil
+	a.activeConnectionID = ""
 	// Optionally emit an event if the frontend needs to react specifically
 	runtime.EventsEmit(a.ctx, "connection:disconnected") // Notify frontend
 }
@@ -202,43 +205,47 @@ func (a *App) ListSavedConnections() (map[string]services.ConnectionDetails, err
 	return a.configService.GetAllConnections()
 }
 
-// SaveConnection saves or updates connection details under a given name in the config file.
-func (a *App) SaveConnection(name string, details services.ConnectionDetails) error {
-	if name == "" {
-		return fmt.Errorf("connection name cannot be empty")
+// SaveConnection saves or updates connection details in the config file.
+// Returns the connection ID.
+func (a *App) SaveConnection(details services.ConnectionDetails) (string, error) {
+	if details.Name == "" {
+		return "", fmt.Errorf("connection name cannot be empty")
 	}
-	services.LogInfo("Saving connection details for: %s", name)
-	err := a.configService.AddOrUpdateConnection(name, details)
+	services.LogInfo("Saving connection details for: %s", details.Name)
+	connectionID, err := a.configService.AddOrUpdateConnection(details)
 	if err != nil {
-		services.LogInfo("Failed to save connection '%s': %v", name, err)
-		return err
+		services.LogInfo("Failed to save connection '%s': %v", details.Name, err)
+		return "", err
 	}
-	services.LogInfo("Connection '%s' saved successfully", name)
-	return nil
+	services.LogInfo("Connection '%s' saved successfully with ID: %s", details.Name, connectionID)
+	return connectionID, nil
 }
 
-// DeleteSavedConnection removes a connection from the config file.
-func (a *App) DeleteSavedConnection(name string) error {
-	if name == "" {
-		return fmt.Errorf("connection name cannot be empty")
+// DeleteSavedConnection removes a connection from the config file by ID.
+func (a *App) DeleteSavedConnection(connectionID string) error {
+	if connectionID == "" {
+		return fmt.Errorf("connection ID cannot be empty")
 	}
-	services.LogInfo("Deleting saved connection '%s'\n", name)
-	err := a.configService.DeleteConnection(name)
+
+	// Get connection details for logging before deletion
+	details, found, _ := a.configService.GetConnection(connectionID)
+	connectionName := "unknown"
+	if found {
+		connectionName = details.Name
+	}
+
+	services.LogInfo("Deleting saved connection '%s' (ID: %s)", connectionName, connectionID)
+	err := a.configService.DeleteConnection(connectionID)
 	if err != nil {
 		return err
 	}
+
 	// If the deleted connection was the active one, disconnect the session
-	if a.activeConnection != nil {
-		// This comparison is tricky if details can change subtly.
-		// A better approach might be to store the *name* of the active connection.
-		// For now, just disconnect if *any* deletion happens while active.
-		// Or, compare based on a unique ID if you add one.
-		// Let's keep it simple: if we delete something, ensure active session reflects it
-		// if it happened to be the active one (check name in future refactor).
-		// For now, a simple disconnect might be okay UX, or do nothing.
-		// Let's do nothing for now to avoid complex comparison.
-		// If needed later, store active connection name: a.activeConnectionName string
+	if a.activeConnectionID == connectionID {
+		services.LogInfo("Disconnecting active session as it was deleted")
+		a.Disconnect()
 	}
+
 	return nil
 }
 
@@ -385,7 +392,7 @@ func (a *App) GetDatabaseMetadata() (*services.ConnectionMetadata, error) {
 		return nil, fmt.Errorf("no active connection")
 	}
 
-	return a.metadataService.GetMetadata(a.ctx, a.activeConnection.Name)
+	return a.metadataService.GetMetadata(a.ctx, a.activeConnectionID)
 }
 
 // ExtractDatabaseMetadata forces a fresh extraction of database metadata
@@ -397,7 +404,7 @@ func (a *App) ExtractDatabaseMetadata() (*services.ConnectionMetadata, error) {
 		return nil, fmt.Errorf("no active connection")
 	}
 
-	return a.metadataService.ExtractMetadata(a.ctx, a.activeConnection.Name)
+	return a.metadataService.ExtractMetadata(a.ctx, a.activeConnectionID)
 }
 
 // UpdateAIDescription updates the AI-generated description for a database component
@@ -415,13 +422,13 @@ func (a *App) UpdateAIDescription(dbName string, targetType string, tableName st
 		ColumnName: columnName,
 	}
 
-	err := a.metadataService.UpdateAIDescription(a.ctx, a.activeConnection.Name, dbName, target, description)
+	err := a.metadataService.UpdateAIDescription(a.ctx, a.activeConnectionID, dbName, target, description)
 	if err != nil {
 		return fmt.Errorf("failed to update AI description: %w", err)
 	}
 
 	// Save the updated metadata to disk
-	if saveErr := a.metadataService.SaveMetadata(a.activeConnection.Name); saveErr != nil {
+	if saveErr := a.metadataService.SaveMetadata(a.activeConnectionID); saveErr != nil {
 		services.LogError("Failed to save metadata after AI description update: %v", saveErr)
 		// Don't fail the operation, just log the error
 	}

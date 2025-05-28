@@ -227,7 +227,7 @@ const MainDataView = ({
     appendActivityLog("Indexing database...");
     EventsEmit(
       "metadata:extraction:start",
-      connectionDetails?.name!,
+      connectionDetails?.id!,
       force,
       dbName ?? "",
     );
