@@ -508,18 +508,18 @@ const MainDataView = ({
     if (isModifyingQuery) {
       fetchTables(dbName);
       triggerIndexer(true, dbName);
-    }
 
-    if (
-      currentDb &&
-      currentTable &&
-      sqlQuery.includes(currentDb) &&
-      sqlQuery.includes(currentTable)
-    ) {
-      await queryClient.invalidateQueries({
-        queryKey: ["tableData", currentDb, currentTable],
-      });
-      refetchTableData();
+      if (
+        currentDb &&
+        currentTable &&
+        sqlQuery.includes(currentDb) &&
+        sqlQuery.includes(currentTable)
+      ) {
+        await queryClient.invalidateQueries({
+          queryKey: ["tableData", currentDb, currentTable],
+        });
+        refetchTableData();
+      }
     }
 
     return result;
