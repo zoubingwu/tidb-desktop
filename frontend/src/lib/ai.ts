@@ -467,7 +467,7 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
         case "error":
           // Handle stream-level errors
           console.error("Stream Error:", part.error);
-          yield { type: "error", error: `Stream error: ${part.error}` };
+          yield { type: "error", error: `${part.error}` };
           break;
 
         default:

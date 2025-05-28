@@ -81,6 +81,13 @@ const useGenerateSQLAgent = (tools: Record<string, Tool>) => {
         }
 
         switch (event.type) {
+          case "error":
+            appendDisplayBlock({
+              id: `${uniqueId}-${Date.now()}-error`,
+              type: "error",
+              content: event.error,
+            });
+            break;
           case "step":
             const { text, toolCalls, toolResults } = event.data;
 
