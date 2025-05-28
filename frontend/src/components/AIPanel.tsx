@@ -584,6 +584,7 @@ export const AIPanel = ({
             <Button
               type="submit"
               size="icon"
+              variant="ghost"
               disabled={!isLoading && !inputValue.trim()}
               aria-label="Send message"
               onClick={() => {
