@@ -281,7 +281,11 @@ const MainDataView = ({
   });
 
   // fetch from a specific table
-  const { data: tableData, isFetching: isFetchingTableData } = useQuery({
+  const {
+    data: tableData,
+    isFetching: isFetchingTableData,
+    refetch: refetchTableData,
+  } = useQuery({
     enabled: !!currentDb && !!currentTable,
     queryKey: [
       "tableData",
@@ -512,9 +516,10 @@ const MainDataView = ({
       sqlQuery.includes(currentDb) &&
       sqlQuery.includes(currentTable)
     ) {
-      queryClient.invalidateQueries({
+      await queryClient.invalidateQueries({
         queryKey: ["tableData", currentDb, currentTable],
       });
+      refetchTableData();
     }
 
     return result;
