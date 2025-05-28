@@ -88,14 +88,12 @@ jobs:
         run: |
           echo "Generating changelog between ${{ steps.prev_tag.outputs.previous_tag }} and ${{ steps.vars.outputs.tag }}"
           CHANGELOG_CONTENT=$(git log --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))" ${{ steps.prev_tag.outputs.previous_tag }}...${{ steps.vars.outputs.tag }})
-          # Escape special characters for multiline JSON string in GITHUB_OUTPUT
-          CHANGELOG_CONTENT="${CHANGELOG_CONTENT//'/'''}" # Escape single quotes
-          CHANGELOG_CONTENT="${CHANGELOG_CONTENT//%/%25}"
-          CHANGELOG_CONTENT="${CHANGELOG_CONTENT//$'\n'/%0A}"
-          CHANGELOG_CONTENT="${CHANGELOG_CONTENT//$'\r'/%0D}"
-          echo "changelog_text<<EOF" >> $GITHUB_OUTPUT
-          echo "${CHANGELOG_CONTENT}" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Use heredoc delimiter to preserve newlines properly
+          {
+            echo 'changelog_text<<CHANGELOG_EOF'
+            echo "$CHANGELOG_CONTENT"
+            echo 'CHANGELOG_EOF'
+          } >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Get Existing Release URL
