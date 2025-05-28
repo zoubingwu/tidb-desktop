@@ -503,7 +503,7 @@ export const AIPanel = ({
                       },
                     );
                   }}
-                  className="absolute bottom-2 right-2 size-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute bottom-2 right-2 size-5 invisible group-hover:visible transition-opacity"
                   disabled={isExecutingSQLFromAI}
                 >
                   {isExecutingSQLFromAI ? (
