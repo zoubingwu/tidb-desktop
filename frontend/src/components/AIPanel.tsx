@@ -472,23 +472,33 @@ export const AIPanel = ({
                   size="icon"
                   onClick={() => {
                     toast(
-                      "This action is irreversible, are you really sure you want to execute this query?",
+                      "Are you really sure you want to execute this query?",
                       {
                         action: (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="text-xs"
-                            onClick={() => {
-                              onApplyQueryFromAI(
-                                message.meta.result.query,
-                                message.meta.result.dbName,
-                              );
-                              toast.dismiss();
-                            }}
-                          >
-                            Confirm
-                          </Button>
+                          <div className="flex items-center gap-2 ml-auto">
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              onClick={() => {
+                                toast.dismiss();
+                              }}
+                            >
+                              <XIcon className="size-3" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="destructive"
+                              onClick={() => {
+                                onApplyQueryFromAI(
+                                  message.meta.result.query,
+                                  message.meta.result.dbName,
+                                );
+                                toast.dismiss();
+                              }}
+                            >
+                              <CheckIcon className="size-3" />
+                            </Button>
+                          </div>
                         ),
                       },
                     );
