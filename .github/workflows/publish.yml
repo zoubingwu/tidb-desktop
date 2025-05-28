@@ -83,19 +83,6 @@ jobs:
           echo "Resolved previous tag: ${PREVIOUS_TAG}"
         shell: bash
 
-      - name: Generate Changelog
-        id: changelog
-        run: |
-          echo "Generating changelog between ${{ steps.prev_tag.outputs.previous_tag }} and ${{ steps.vars.outputs.tag }}"
-          CHANGELOG_CONTENT=$(git log --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))" ${{ steps.prev_tag.outputs.previous_tag }}...${{ steps.vars.outputs.tag }})
-          # Use heredoc delimiter to preserve newlines properly
-          {
-            echo 'changelog_text<<CHANGELOG_EOF'
-            echo "$CHANGELOG_CONTENT"
-            echo 'CHANGELOG_EOF'
-          } >> $GITHUB_OUTPUT
-        shell: bash
-
       - name: Get Existing Release URL
         # Tries to get the upload URL for an existing release matching the tag.
         # If this fails (e.g., release doesn't exist), the step fails but the workflow continues.
@@ -138,9 +125,6 @@ jobs:
           release_name: Release ${{ steps.vars.outputs.tag }}
           body: |
             **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.prev_tag.outputs.previous_tag }}...${{ steps.vars.outputs.tag }}
-
-            **Commits:**
-            ${{ steps.changelog.outputs.changelog_text }}
 
             **Commit SHA:** ${{ steps.vars.outputs.commit_hash }}
           draft: false
