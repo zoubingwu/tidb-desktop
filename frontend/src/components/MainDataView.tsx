@@ -18,7 +18,12 @@ import {
   isSystemDatabase,
   mapDbColumnTypeToFilterType,
 } from "@/lib/utils";
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   CellContext,
   ColumnDef,
@@ -83,6 +88,7 @@ const MainDataView = ({
   onClose: () => void;
   connectionDetails: services.ConnectionDetails | null;
 }) => {
+  const queryClient = useQueryClient();
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [databaseTree, setDatabaseTree] = useImmer<DatabaseTreeData>([]);
   const [tableDataPrameters, setTableDataPrameters] = useImmer<{
@@ -498,6 +504,17 @@ const MainDataView = ({
     if (isModifyingQuery) {
       fetchTables(dbName);
       triggerIndexer(true, dbName);
+    }
+
+    if (
+      currentDb &&
+      currentTable &&
+      sqlQuery.includes(currentDb) &&
+      sqlQuery.includes(currentTable)
+    ) {
+      queryClient.invalidateQueries({
+        queryKey: ["tableData", currentDb, currentTable],
+      });
     }
 
     return result;
