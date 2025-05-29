@@ -265,7 +265,7 @@ const MainDataView = ({
     };
   }, []);
 
-  const { mutate: fetchTables } = useMutation({
+  const { mutateAsync: fetchTables } = useMutation({
     mutationFn: (dbName: string) => ListTables(dbName),
     onMutate: (dbName: string) => {
       if (!databaseTree.find((db) => db.name === dbName)?.tables?.length) {
@@ -277,9 +277,7 @@ const MainDataView = ({
     },
     onError: (error, dbName) => {
       mergeDatabaseTree([{ dbName, isLoadingTables: false }]);
-      toast.error("Error fetching tables", {
-        description: error.message,
-      });
+      appendActivityLog(`Error fetching tables: ${error.message}`);
     },
   });
 
