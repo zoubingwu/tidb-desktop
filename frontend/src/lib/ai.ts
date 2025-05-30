@@ -70,7 +70,7 @@ const createModel = async (options?: ProviderConnectionOptions) => {
       apiKey,
       baseURL: options?.baseURL || aiProviderSettings.openai?.baseURL,
     });
-    return openai.chat("gpt-4o");
+    return openai.chat(aiProviderSettings.openai?.model || "gpt-4o");
   }
 
   if (provider === "anthropic") {
@@ -84,7 +84,9 @@ const createModel = async (options?: ProviderConnectionOptions) => {
       apiKey,
       baseURL: options?.baseURL || aiProviderSettings.anthropic?.baseURL,
     });
-    return anthropic.languageModel("claude-3-5-sonnet-latest");
+    return anthropic.languageModel(
+      aiProviderSettings.anthropic?.model || "claude-3-5-sonnet-latest",
+    );
   }
 
   if (provider === "openrouter") {
@@ -97,7 +99,9 @@ const createModel = async (options?: ProviderConnectionOptions) => {
     const openrouter = createOpenRouter({
       apiKey,
     });
-    return openrouter.chat("anthropic/claude-3.5-sonnet");
+    return openrouter.chat(
+      aiProviderSettings.openrouter?.model || "anthropic/claude-3.5-sonnet",
+    );
   }
 
   throw new Error(
@@ -109,6 +113,7 @@ type ProviderConnectionOptions = {
   provider?: services.AIProviderSettings["provider"];
   apiKey?: string;
   baseURL?: string;
+  model?: string;
 };
 
 export const testProviderConnection = async (
