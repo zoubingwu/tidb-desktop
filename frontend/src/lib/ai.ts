@@ -288,7 +288,7 @@ export async function* generateSqlAgent(
 ): AsyncGenerator<AgentStreamEvent, void, unknown> {
   const model = await createModel();
   const metadata = await GetDatabaseMetadata();
-  const version = await GetVersion();
+  const version = metadata.version || (await GetVersion());
 
   const agentTools = {
     ...dbTools,
@@ -371,7 +371,7 @@ ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name
 
    For READ operations (SELECT):
    - Generate efficient queries with appropriate JOINs and WHERE clauses
-   - Use LIMIT when returning large datasets
+   - Try to use LIMIT when returning large datasets unless the user explicitly asks for all rows or it is required for further analysis
    - Execute directly using executeSql tool
 
    For WRITE operations (INSERT/UPDATE/DELETE):
