@@ -557,7 +557,7 @@ export const AIPanel = ({
         );
       case "system":
         return (
-          <div className={`system ${baseClasses} my-2 text-muted text-xs`}>
+          <div className={`system ${baseClasses} my-4 text-muted text-xs`}>
             <div className="text-center">{message.content}</div>
           </div>
         );
