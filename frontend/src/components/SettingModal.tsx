@@ -24,8 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TooltipTrigger } from "@/components/ui/tooltip";
-import { testProviderConnection } from "@/lib/ai";
-import { AVAILABLE_MODELS } from "@/lib/ai";
+import { AVAILABLE_MODELS, testProviderConnection } from "@/lib/ai";
 import { capitalize } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Loader } from "lucide-react";
@@ -126,8 +125,7 @@ function SettingsModal({ children }: SettingsModalProps) {
     const result = await testProviderConnection({
       provider: aiSettings.provider,
       apiKey: aiSettings[aiSettings.provider]?.apiKey,
-      // @ts-ignore
-      baseURL: aiSettings[aiSettings.provider]?.baseURL,
+      model: aiSettings[aiSettings.provider]?.model,
     });
     setIsTestingConnection(false);
     if (result.success) {
