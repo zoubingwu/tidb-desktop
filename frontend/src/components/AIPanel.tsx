@@ -509,7 +509,9 @@ export const AIPanel = ({
           <div className={`sql ${baseClasses} my-2 force-select-text group`}>
             <div className="markdown-body">
               <div className="rounded relative">
-                <pre className="whitespace-pre-wrap p-2">{message.content}</pre>
+                <pre className="whitespace-pre-wrap p-2 max-h-[400px] overflow-auto">
+                  {message.content}
+                </pre>
                 <Button
                   size="icon"
                   onClick={() => {
