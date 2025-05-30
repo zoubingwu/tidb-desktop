@@ -15,6 +15,7 @@ import {
   ExecuteSQL,
   GetAIProviderSettings,
   GetDatabaseMetadata,
+  GetVersion,
   UpdateAIDescription,
 } from "wailsjs/go/main/App";
 import { services } from "wailsjs/go/models";
@@ -282,6 +283,7 @@ export async function* generateSqlAgent(
 ): AsyncGenerator<AgentStreamEvent, void, unknown> {
   const model = await createModel();
   const metadata = await GetDatabaseMetadata();
+  const version = await GetVersion();
 
   const agentTools = {
     ...dbTools,
@@ -294,6 +296,41 @@ You are an expert database AI assistant, specialized in helping users interact w
 Your primary goal is to understand user queries about their database and provide accurate responses through SQL operations. You can perform CRUD operations on the database or simply answer questions about the database structure and data.
 
 You have access to the complete database schema and can explore relationships between tables. Always try to get the most relevant metadata first if needed using tools.
+
+<database_version>
+${version}
+</database_version>
+
+<sql_syntax_guidelines>
+Based on the database version above, follow these SQL syntax rules:
+
+For TiDB (MySQL-compatible):
+- Use backticks (\`) for identifiers (table names, column names)
+- Support for JSON data type and JSON functions (JSON_EXTRACT, JSON_SET, etc.)
+- Use LIMIT for pagination, supports LIMIT offset, count syntax
+- Support for window functions (ROW_NUMBER(), RANK(), etc.)
+- Use AUTO_INCREMENT for auto-incrementing primary keys
+- DateTime functions: NOW(), CURDATE(), DATE_FORMAT(), etc.
+- String functions: CONCAT(), SUBSTRING(), CHAR_LENGTH(), etc.
+- Use UTF8MB4 charset for full Unicode support
+- Support for CTEs (Common Table Expressions) with WITH clause
+- Use ENGINE=InnoDB for transactional tables
+
+For MySQL 5.7+:
+- All TiDB features plus MySQL-specific optimizations
+- Support for generated columns (VIRTUAL/STORED)
+- JSON data type with native JSON functions
+- Use FULLTEXT indexes for text search
+
+For MySQL 8.0+:
+- Window functions fully supported
+- CTEs (WITH RECURSIVE) supported
+- Enhanced JSON functions
+- Support for invisible columns
+- Use utf8mb4_0900_ai_ci collation for better sorting
+
+Always generate SQL that is compatible with the detected database version and avoid using features not available in that version.
+</sql_syntax_guidelines>
 
 <database_metadata>
 ${metadata ? JSON.stringify(Object.values(metadata.databases).map((i) => ({ name: i.name, graph: i.graph }))) : "No database metadata available"}
