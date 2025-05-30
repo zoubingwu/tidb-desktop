@@ -439,7 +439,9 @@ export const AIPanel = ({
     switch (message.type) {
       case "user":
         return (
-          <div className={`user ${baseClasses} bg-muted mb-2 p-2 select-text!`}>
+          <div
+            className={`user ${baseClasses} bg-muted mb-2 p-2 select-text! whitespace-pre-wrap`}
+          >
             {message.content}
           </div>
         );
