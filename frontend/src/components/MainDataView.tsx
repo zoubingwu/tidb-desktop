@@ -349,7 +349,7 @@ const MainDataView = ({
         return res;
       } catch (error: any) {
         const errorMessage = error?.message || String(error);
-        appendActivityLog(`Query failed: ${errorMessage}`);
+        appendActivityLog(`Query failed. ${errorMessage}`);
         throw error;
       }
     },
