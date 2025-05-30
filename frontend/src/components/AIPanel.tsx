@@ -11,6 +11,7 @@ import { type CoreMessage, type Tool, tool } from "ai";
 import {
   CheckCircle2Icon,
   CheckIcon,
+  EraserIcon,
   Loader,
   PlayIcon,
   SendHorizonal,
@@ -33,7 +34,14 @@ import { z } from "zod";
 // Expanded message type to better represent stream states
 type DisplayBlock = {
   id: string;
-  type: "user" | "ai-thinking" | "ai-text" | "ai-tool-call" | "error" | "sql";
+  type:
+    | "user"
+    | "ai-thinking"
+    | "ai-text"
+    | "ai-tool-call"
+    | "error"
+    | "sql"
+    | "system";
   content: string;
   meta?: any;
   status?: "started" | "finished" | "error";
@@ -49,6 +57,15 @@ const useGenerateSQLAgent = (tools: Record<string, Tool>) => {
   });
   const appendDisplayBlock = useMemoizedFn((block: DisplayBlock) => {
     setDisplayBlocks((prev) => [...prev, block]);
+  });
+
+  const clearMessages = useMemoizedFn(() => {
+    setMessages([]);
+    appendDisplayBlock({
+      id: `${uniqueId}-${Date.now()}-session`,
+      type: "system",
+      content: "--- Started a new session ---",
+    });
   });
 
   const handleSubmit = useMemoizedFn(
@@ -233,6 +250,7 @@ const useGenerateSQLAgent = (tools: Record<string, Tool>) => {
     handleSubmit,
     messages: displayBlocks,
     isLoading,
+    clearMessages,
   };
 };
 
@@ -369,6 +387,7 @@ export const AIPanel = ({
     handleSubmit: handleSubmitPrompt,
     messages,
     isLoading,
+    clearMessages,
   } = useGenerateSQLAgent(tools);
 
   useEffect(() => {
@@ -534,6 +553,12 @@ export const AIPanel = ({
             </div>
           </div>
         );
+      case "system":
+        return (
+          <div className={`system ${baseClasses} my-2 text-muted text-xs`}>
+            <div className="text-center">{message.content}</div>
+          </div>
+        );
       default:
         return null;
     }
@@ -578,7 +603,19 @@ export const AIPanel = ({
                 </LoadingTypewriter>
               </div>
             ) : (
-              <div />
+              <div className="flex items-center gap-1">
+                {messages.length > 0 && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={clearMessages}
+                    aria-label="Clear messages"
+                    className="size-6 text-muted-foreground hover:text-foreground"
+                  >
+                    <EraserIcon className="size-3" />
+                  </Button>
+                )}
+              </div>
             )}
 
             <Button
