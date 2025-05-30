@@ -27,6 +27,7 @@ import React, {
 } from "react";
 import Markdown from "react-markdown";
 import TextareaAutosize from "react-textarea-autosize";
+import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { services } from "wailsjs/go/models";
 import { z } from "zod";
@@ -459,7 +460,9 @@ export const AIPanel = ({
           <div
             className={`ai-text ${baseClasses} force-select-text markdown-body`}
           >
-            <Markdown>{message.content as string}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]}>
+              {message.content as string}
+            </Markdown>
           </div>
         );
       case "ai-tool-call":
@@ -498,7 +501,7 @@ export const AIPanel = ({
       case "error":
         return (
           <div className={`error ${baseClasses} my-2`}>
-            <Markdown>{message.content}</Markdown>
+            <div>{message.content}</div>
           </div>
         );
       case "sql":
