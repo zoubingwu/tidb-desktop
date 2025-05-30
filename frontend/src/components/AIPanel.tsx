@@ -555,7 +555,7 @@ export const AIPanel = ({
       </div>
 
       {/* Input container - fixed at bottom */}
-      <div className="px-4 pb-2 flex-shrink-0">
+      <div className="px-4 pb-2 flex-shrink-0 mt-2">
         <div className="bg-background rounded-md overflow-hidden text-sm">
           <TextareaAutosize
             value={inputValue}
