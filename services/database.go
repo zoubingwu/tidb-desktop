@@ -257,7 +257,7 @@ func (s *DatabaseService) ListDatabases(ctx context.Context, details ConnectionD
 
 	if sqlResult == nil || sqlResult.Rows == nil {
 		// This shouldn't happen for SHOW DATABASES unless there's a connection issue masked earlier
-		log.Printf("Debug: Unexpected nil result or nil rows when listing databases.")
+		LogDebug("Unexpected nil result or nil rows when listing databases.")
 		return nil, fmt.Errorf("unexpected result format when listing databases (expected rows)")
 	}
 
@@ -304,7 +304,7 @@ func (s *DatabaseService) ListTables(ctx context.Context, details ConnectionDeta
 
 	if sqlResult == nil || sqlResult.Rows == nil {
 		// SHOW TABLES returns empty result set (not error) if no tables, handle this.
-		log.Printf("Debug: SHOW TABLES for '%s' returned nil result or nil rows. Assuming no tables.", targetDB)
+		LogDebug("SHOW TABLES for '%s' returned nil result or nil rows. Assuming no tables.", targetDB)
 		return []string{}, nil // No tables found is not an error
 	}
 
